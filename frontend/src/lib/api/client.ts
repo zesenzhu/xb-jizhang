@@ -13,7 +13,15 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
 
 export interface ApiClientOptions {
   refreshPath: string;
+  skipRefreshPaths?: string[];
   onRefreshFailure: () => void;
+}
+
+export function shouldSkipAuthRefresh(
+  url: string | undefined,
+  paths: readonly string[],
+): boolean {
+  return paths.some((path) => url === path || url?.startsWith(`${path}?`));
 }
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
@@ -42,13 +50,16 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
       const requestConfig = axios.isAxiosError(error)
         ? (error.config as RetriableRequestConfig | undefined)
         : undefined;
-      const isRefreshRequest = requestConfig?.url === options.refreshPath;
+      const isAuthRequest = shouldSkipAuthRefresh(requestConfig?.url, [
+        options.refreshPath,
+        ...(options.skipRefreshPaths ?? []),
+      ]);
 
       if (
         responseStatus !== 401 ||
         requestConfig === undefined ||
         requestConfig._authRetry === true ||
-        isRefreshRequest
+        isAuthRequest
       ) {
         return Promise.reject(toApiError(error));
       }

@@ -1,8 +1,10 @@
+import * as React from 'react';
+import { UserAuthEntry } from '@/components/auth/UserAuthEntry';
+
 export default function UserRegisterPage(): React.JSX.Element {
   return (
-    <main>
-      <h1>用户注册</h1>
-      <p>注册表单将在认证接口联调后接入。</p>
-    </main>
+    <React.Suspense fallback={<p>正在加载注册页...</p>}>
+      <UserAuthEntry mode="register" />
+    </React.Suspense>
   );
 }

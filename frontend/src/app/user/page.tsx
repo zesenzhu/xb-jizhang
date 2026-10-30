@@ -3,7 +3,10 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, PlusCircle, Shield, Sparkles, User as UserIcon, WalletCards } from 'lucide-react';
+import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
+import { logoutUser } from '@/lib/api/user-auth-api';
 import { useAppStore } from '@/store/useAppStore';
+import { useUserAuthStore } from '@/store/userAuthStore';
 import { AmountDisplay } from '@/components/common/AmountDisplay';
 import { LedgerBadge } from '@/components/common/LedgerBadge';
 import { AmountKeypad } from '@/components/mobile/AmountKeypad';
@@ -12,8 +15,20 @@ import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
 import { Button } from '@/components/ui/button';
 
 export default function UserHomePage(): React.JSX.Element {
+  return (
+    <UserAuthBoundary>
+      <UserHomeContent />
+    </UserAuthBoundary>
+  );
+}
+
+function UserHomeContent(): React.JSX.Element {
   const router = useRouter();
-  const { user, activeLedger, isOnline, logout } = useAppStore();
+  const user = useUserAuthStore((state) => state.currentUser);
+  const clearUser = useUserAuthStore((state) => state.clear);
+  const activeLedger = useAppStore((state) => state.activeLedger);
+  const isOnline = useAppStore((state) => state.isOnline);
+  const setActiveLedger = useAppStore((state) => state.setActiveLedger);
 
   const [activeTab, setActiveTab] = React.useState<NavTab>('home');
   const [keypadAmount, setKeypadAmount] = React.useState('0');
@@ -23,8 +38,13 @@ export default function UserHomePage(): React.JSX.Element {
   const handleLogout = async (): Promise<void> => {
     try {
       setIsLoggingOut(true);
-      await logout();
-      router.replace('/login');
+      try {
+        await logoutUser();
+      } finally {
+        clearUser();
+        setActiveLedger(null);
+        router.replace('/user/login');
+      }
     } finally {
       setIsLoggingOut(false);
     }

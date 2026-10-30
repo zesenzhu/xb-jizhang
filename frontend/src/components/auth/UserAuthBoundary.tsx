@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/api/user-auth-api';
+import { getLoginRedirectUrl } from '@/lib/routing/routes';
 import { useUserAuthStore } from '@/store/userAuthStore';
 
 export function UserAuthBoundary({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   const router = useRouter();
+  const pathname = usePathname();
   const status = useUserAuthStore((state) => state.status);
   const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser);
   const setStatus = useUserAuthStore((state) => state.setStatus);
@@ -23,13 +25,18 @@ export function UserAuthBoundary({ children }: Readonly<{ children: React.ReactN
       .catch(() => {
         if (!active) return;
         clear();
-        router.replace('/user/login');
       });
 
     return () => {
       active = false;
     };
   }, [clear, router, setCurrentUser, setStatus, status]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace(getLoginRedirectUrl('user', pathname));
+    }
+  }, [pathname, router, status]);
 
   if (status !== 'authenticated') {
     return <p>正在验证用户登录状态...</p>;

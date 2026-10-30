@@ -1,8 +1,74 @@
 @import 'tailwindcss';
 
+@theme {
+  /* ========================================================
+   * iOS 科技蓝与极简暗黑主题设计系统 (Apple HIG Dark Palette)
+   * ======================================================== */
+
+  /* 核心科技蓝 (iOS System Blue - Dark) */
+  --color-ios-blue: #0a84ff;
+  --color-ios-blue-hover: #0071e3;
+  --color-ios-blue-active: #0062c4;
+  --color-ios-blue-subtle: rgba(10, 132, 255, 0.15);
+
+  /* 通用主色映射 (Primary 默认绑定为科技蓝) */
+  --color-primary: #0a84ff;
+  --color-primary-hover: #0071e3;
+  --color-primary-subtle: rgba(10, 132, 255, 0.15);
+
+  /* 截图中悬浮记账核心黄色 (iOS System Amber / Yellow) */
+  --color-ios-yellow: #ffcc00;
+  --color-ios-yellow-hover: #e5b800;
+  --color-ios-yellow-subtle: rgba(255, 204, 0, 0.15);
+
+  /* 背景与卡片层级系统 (OLED 纯黑 + Grouped Table 卡片) */
+  --color-ios-bg: #000000;
+  --color-ios-bg-secondary: #0c0c0e;
+  --color-ios-card: #1c1c1e;
+  --color-ios-card-elevated: #2c2c2e;
+  --color-ios-card-hover: #3a3a3c;
+
+  /* 极细微弱边框与分割线 (微通透发光感) */
+  --color-ios-border: rgba(255, 255, 255, 0.08);
+  --color-ios-border-active: rgba(255, 255, 255, 0.16);
+  --color-ios-divider: rgba(255, 255, 255, 0.12);
+
+  /* 文本阶梯 */
+  --color-ios-text: #ffffff;
+  --color-ios-text-secondary: #8e8e93;
+  --color-ios-text-tertiary: #636366;
+  --color-ios-text-quaternary: #48484a;
+
+  /* 功能语义色彩 */
+  --color-ios-green: #30d158;
+  --color-ios-red: #ff453a;
+  --color-ios-orange: #ff9f0a;
+
+  /* iOS 大圆角阶梯 */
+  --radius-ios-sm: 10px;
+  --radius-ios-md: 14px;
+  --radius-ios-lg: 18px;
+  --radius-ios-xl: 22px;
+  --radius-ios-2xl: 28px;
+  --radius-ios-pill: 9999px;
+}
+
 :root {
-  color-scheme: light;
-  font-family: Arial, Helvetica, sans-serif;
+  color-scheme: dark light;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* CSS 自定义属性导出，方便原生样式与内联样式直接使用 */
+  --theme-blue: #0a84ff;
+  --theme-blue-subtle: rgba(10, 132, 255, 0.15);
+  --theme-yellow: #ffcc00;
+  --theme-bg: #000000;
+  --theme-card: #1c1c1e;
+  --theme-card-elevated: #2c2c2e;
+  --theme-border: rgba(255, 255, 255, 0.08);
+  --theme-divider: rgba(255, 255, 255, 0.12);
 }
 
 * {
@@ -12,8 +78,21 @@
 body {
   margin: 0;
   min-width: 320px;
+  /* 允许在桌面端居中自适应，移动端保持贴合 */
+  background-color: var(--theme-bg);
+  color: #ffffff;
 }
 
 button {
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 移动端 iOS 安全区域工具类 */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 20px);
 }

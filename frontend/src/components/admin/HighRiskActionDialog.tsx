@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 export interface HighRiskActionDialogProps {
   open: boolean;
@@ -43,16 +44,16 @@ export function HighRiskActionDialog({
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  // 弹窗关闭时重置状态
-  React.useEffect(() => {
-    if (!open) {
+  const isReasonValid = reason.trim().length >= minReasonLength;
+
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) {
       setReason('');
       setErrorMessage(null);
       setIsLoading(false);
     }
-  }, [open]);
-
-  const isReasonValid = reason.trim().length >= minReasonLength;
+    onOpenChange(nextOpen);
+  };
 
   const handleConfirm = async (): Promise<void> => {
     if (!isReasonValid) {
@@ -73,8 +74,8 @@ export function HighRiskActionDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogCloseButton onClose={() => onOpenChange(false)} />
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogCloseButton onClose={() => handleOpenChange(false)} />
 
       <DialogHeader>
         <div className="flex items-center gap-2 text-rose-600">
@@ -130,7 +131,7 @@ export function HighRiskActionDialog({
       <DialogFooter>
         <Button
           variant="outline"
-          onClick={() => onOpenChange(false)}
+          onClick={() => handleOpenChange(false)}
           disabled={isLoading}
         >
           取消

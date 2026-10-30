@@ -1,17 +1,28 @@
-'use client';
+'use client'
 
-import * as React from 'react';
-import { Eye, EyeOff, Lock, Mail, ShieldCheck, Sparkles, User, WalletCards } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useAppStore } from '@/store/useAppStore';
-import { cn } from '@/lib/utils';
-import axios from 'axios';
+import * as React from 'react'
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  User,
+  WalletCards,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ApiRequestError } from '@/lib/api/errors'
+import { loginUser, registerUser } from '@/lib/api/user-auth-api'
+import { useAppStore } from '@/store/useAppStore'
+import { useUserAuthStore } from '@/store/userAuthStore'
+import { cn } from '@/lib/utils'
 
 export interface AuthCardProps {
-  onSuccess?: () => void;
-  defaultMode?: 'login' | 'register';
-  className?: string;
+  onSuccess?: () => void
+  defaultMode?: 'login' | 'register'
+  className?: string
 }
 
 export function AuthCard({
@@ -19,85 +30,83 @@ export function AuthCard({
   defaultMode = 'login',
   className,
 }: AuthCardProps): React.JSX.Element {
-  const [mode, setMode] = React.useState<'login' | 'register'>(defaultMode);
-  const { login, register } = useAppStore();
+  const [mode, setMode] = React.useState<'login' | 'register'>(defaultMode)
+  const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser)
+  const setActiveLedger = useAppStore((state) => state.setActiveLedger)
 
   // 表单状态
-  const [username, setUsername] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [nickname, setNickname] = React.useState('');
-  const [email, setEmail] = React.useState('');
+  const [username, setUsername] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [nickname, setNickname] = React.useState('')
+  const [email, setEmail] = React.useState('')
 
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
 
   // 模式切换时清理错误
   const switchMode = (targetMode: 'login' | 'register'): void => {
-    setMode(targetMode);
-    setErrorMessage(null);
-  };
+    setMode(targetMode)
+    setErrorMessage(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    setErrorMessage(null);
+    e.preventDefault()
+    setErrorMessage(null)
 
     // 基础客户端校验
-    const cleanUsername = username.trim();
+    const cleanUsername = username.trim()
     if (cleanUsername.length < 3 || cleanUsername.length > 32) {
-      setErrorMessage('用户名长度必须在 3 到 32 个字符之间');
-      return;
+      setErrorMessage('用户名长度必须在 3 到 32 个字符之间')
+      return
     }
 
     if (mode === 'register') {
       if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-        setErrorMessage('用户名只允许包含字母、数字和下划线');
-        return;
+        setErrorMessage('用户名只允许包含字母、数字和下划线')
+        return
       }
       if (password.length < 8 || password.length > 72) {
-        setErrorMessage('密码长度至少需要 8 个字符（最长 72 字符）');
-        return;
+        setErrorMessage('密码长度至少需要 8 个字符（最长 72 字符）')
+        return
       }
     } else {
       if (!password) {
-        setErrorMessage('请输入密码');
-        return;
+        setErrorMessage('请输入密码')
+        return
       }
     }
 
     try {
-      setIsLoading(true);
+      setIsLoading(true)
       if (mode === 'login') {
-        await login({
+        const result = await loginUser({
           username: cleanUsername,
           password,
-        });
+        })
+        setCurrentUser(result.user)
+        setActiveLedger(result.ledgers[0] ?? null)
       } else {
-        await register({
+        const result = await registerUser({
           username: cleanUsername,
           password,
           nickname: nickname.trim() || undefined,
           email: email.trim() || undefined,
-        });
+        })
+        setCurrentUser(result.user)
+        setActiveLedger(result.defaultLedger)
       }
-      onSuccess?.();
+      onSuccess?.()
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response?.data) {
-        const data = err.response.data as { message?: string | string[] };
-        if (Array.isArray(data.message)) {
-          setErrorMessage(data.message.join('；'));
-        } else if (typeof data.message === 'string') {
-          setErrorMessage(data.message);
-        } else {
-          setErrorMessage(mode === 'login' ? '用户名或密码不正确' : '注册失败，请更换用户名重试');
-        }
+      if (err instanceof ApiRequestError) {
+        setErrorMessage(err.message)
       } else {
-        setErrorMessage('网络请求异常，请检查后端服务');
+        setErrorMessage('网络请求异常，请检查后端服务')
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div
@@ -108,7 +117,7 @@ export function AuthCard({
     >
       {/* 头部品牌图标与标题 */}
       <div className="flex flex-col items-center text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-600/30">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-ios-blue to-blue-600 text-white shadow-lg shadow-ios-blue/30">
           <WalletCards size={28} />
         </div>
         <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">
@@ -129,7 +138,7 @@ export function AuthCard({
           className={cn(
             'flex-1 rounded-xl py-2 text-xs font-semibold transition-all',
             mode === 'login'
-              ? 'bg-white text-emerald-700 shadow-xs'
+              ? 'bg-white text-ios-blue shadow-xs'
               : 'text-slate-500 hover:text-slate-800',
           )}
         >
@@ -141,7 +150,7 @@ export function AuthCard({
           className={cn(
             'flex-1 rounded-xl py-2 text-xs font-semibold transition-all',
             mode === 'register'
-              ? 'bg-white text-emerald-700 shadow-xs'
+              ? 'bg-white text-ios-blue shadow-xs'
               : 'text-slate-500 hover:text-slate-800',
           )}
         >
@@ -165,7 +174,9 @@ export function AuthCard({
           <Input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder={mode === 'login' ? '输入用户名' : '3-32位（英文/数字/下划线）'}
+            placeholder={
+              mode === 'login' ? '输入用户名' : '3-32位（英文/数字/下划线）'
+            }
             autoComplete="username"
             startIcon={<User size={16} />}
             disabled={isLoading}
@@ -176,7 +187,10 @@ export function AuthCard({
         {mode === 'register' && (
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">
-              昵称 <span className="text-slate-400 font-normal">（选填，在账本中向好友展示）</span>
+              昵称{' '}
+              <span className="text-slate-400 font-normal">
+                （选填，在账本中向好友展示）
+              </span>
             </label>
             <Input
               value={nickname}
@@ -191,7 +205,10 @@ export function AuthCard({
         {mode === 'register' && (
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">
-              安全邮箱 <span className="text-slate-400 font-normal">（选填，用于找回账本）</span>
+              安全邮箱{' '}
+              <span className="text-slate-400 font-normal">
+                （选填，用于找回账本）
+              </span>
             </label>
             <Input
               type="email"
@@ -213,8 +230,12 @@ export function AuthCard({
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={mode === 'login' ? '输入密码' : '设置密码（至少 8 位）'}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            placeholder={
+              mode === 'login' ? '输入密码' : '设置密码（至少 8 位）'
+            }
+            autoComplete={
+              mode === 'login' ? 'current-password' : 'new-password'
+            }
             startIcon={<Lock size={16} />}
             endIcon={
               <button
@@ -235,7 +256,7 @@ export function AuthCard({
           type="submit"
           variant="default"
           size="lg"
-          className="w-full mt-4 h-12 rounded-2xl text-base shadow-emerald-600/25"
+          className="w-full mt-4 h-12 rounded-2xl text-base shadow-ios-blue/25"
           isLoading={isLoading}
           loadingText={mode === 'login' ? '正在登录...' : '正在注册账号...'}
         >
@@ -245,10 +266,9 @@ export function AuthCard({
 
       {/* 底部隐私与安全微标 */}
       <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-        <ShieldCheck size={14} className="text-emerald-600" />
+        <ShieldCheck size={14} className="text-ios-blue" />
         <span>HttpOnly 级安全会话保护 · 离线自动同步</span>
       </div>
     </div>
-  );
+  )
 }
-

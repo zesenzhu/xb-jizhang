@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "pnpm run test:contract",
     "lint": "eslint .",
-    "test:contract": "tsx test/store.contract.test.ts && tsx test/amount.test.ts"
+    "test:contract": "tsx test/store.contract.test.ts && tsx test/routes.contract.test.ts && tsx test/auth-store.contract.test.ts && tsx test/client-state.contract.test.ts && tsx test/api-client.contract.test.ts && tsx test/auth-api.contract.test.ts && tsx test/amount.test.ts"
   },
   "dependencies": {
     "axios": "^1.8.4",

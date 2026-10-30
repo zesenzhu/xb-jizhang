@@ -7,7 +7,7 @@ export default function AdminError({
   return (
     <main>
       <h1>管理端加载失败</h1>
-      <p>{error.message}</p>
+      <p>管理端暂时无法加载，请稍后重试。</p>
       <button type="button" onClick={reset}>
         重试
       </button>

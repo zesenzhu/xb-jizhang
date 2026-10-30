@@ -13,7 +13,7 @@ export interface LedgerSummary {
   id: string;
   name: string;
   type: 'PERSONAL' | 'SHARED';
-  defaultCurrency: string;
+  defaultCurrency?: string;
   icon?: string | null;
   color?: string | null;
   isArchived?: boolean;

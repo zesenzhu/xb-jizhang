@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { loginAdmin } from '../src/lib/api/admin-auth-api';
 import { adminClient } from '../src/lib/api/admin-client';
-import { loginUser } from '../src/lib/api/user-auth-api';
+import { getCurrentUser, loginUser } from '../src/lib/api/user-auth-api';
 import { userClient } from '../src/lib/api/user-client';
 
 const user = {
@@ -31,11 +31,18 @@ void (async () => {
   const originalAdminAdapter = adminClient.defaults.adapter;
   let userRequest: { method?: string; url?: string; data?: unknown } | undefined;
   let adminRequest: { method?: string; url?: string; data?: unknown } | undefined;
+  let currentUserRequest: { method?: string; url?: string; data?: unknown } | undefined;
 
   userClient.defaults.adapter = async (config) => {
-    userRequest = config;
+    if (config.url === '/users/me') {
+      currentUserRequest = config;
+    } else {
+      userRequest = config;
+    }
     return {
-      data: { success: true, code: 0, message: '操作成功', data: { user, ledgers: [] } },
+      data: config.url === '/users/me'
+        ? { success: true, code: 0, message: '操作成功', data: user }
+        : { success: true, code: 0, message: '操作成功', data: { user, ledgers: [] } },
       status: 200,
       statusText: 'OK',
       headers: {},
@@ -55,12 +62,16 @@ void (async () => {
 
   try {
     const userResult = await loginUser({ username: 'xiaobao', password: 'password' });
+    const currentUserResult = await getCurrentUser();
     const adminResult = await loginAdmin({ username: 'operator', password: 'password' });
 
     assert.equal(userResult.user.id, 'user-1');
+    assert.equal(currentUserResult.id, 'user-1');
     assert.equal(adminResult.id, 'admin-1');
     assert.equal(userRequest?.method, 'post');
     assert.equal(userRequest?.url, '/auth/login');
+    assert.equal(currentUserRequest?.method, 'get');
+    assert.equal(currentUserRequest?.url, '/users/me');
     assert.deepEqual(JSON.parse(String(userRequest?.data)), {
       username: 'xiaobao',
       password: 'password',

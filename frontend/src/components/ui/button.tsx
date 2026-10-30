@@ -24,16 +24,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none';
+      'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ios-blue focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none';
 
     const variantStyles = {
-      default: 'bg-emerald-600 text-white shadow hover:bg-emerald-700 active:bg-emerald-800',
-      destructive: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:bg-rose-800',
+      default: 'bg-ios-blue text-white shadow-xs hover:bg-ios-blue-hover active:bg-ios-blue-active',
+      destructive: 'bg-rose-600 text-white shadow-xs hover:bg-rose-700 active:bg-rose-800',
       outline:
-        'border border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 text-slate-700',
+        'border border-slate-200 bg-white shadow-xs hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 text-slate-700',
       secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200 active:bg-slate-300',
       ghost: 'hover:bg-slate-100 hover:text-slate-900 text-slate-700 active:bg-slate-200',
-      link: 'text-emerald-600 underline-offset-4 hover:underline p-0 h-auto active:scale-100',
+      link: 'text-ios-blue underline-offset-4 hover:underline p-0 h-auto active:scale-100',
     };
 
     const sizeStyles = {
@@ -58,4 +58,3 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = 'Button';
-

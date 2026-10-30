@@ -39,7 +39,7 @@ export function MobileBottomNav({
         {tabs.map((tab) => {
           const Icon = tab.icon;
 
-          if (tab.isAction) {
+          if (tab.key === 'quickAdd') {
             return (
               <div key={tab.key} className="relative -top-3 flex flex-col items-center">
                 <button
