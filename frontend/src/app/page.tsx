@@ -1,10 +1,5 @@
-import { AppShell } from '@/components/layout/AppShell';
-import { FoundationDashboard } from '@/components/FoundationDashboard';
+import { redirect } from 'next/navigation';
 
-export default function HomePage(): React.JSX.Element {
-  return (
-    <AppShell>
-      <FoundationDashboard />
-    </AppShell>
-  );
+export default function HomePage(): never {
+  redirect('/user');
 }

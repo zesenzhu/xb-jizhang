@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { useAppStore } from '../src/store/useAppStore';
+import './routes.contract.test';
+import './auth-store.contract.test';
+import './api-client.contract.test';
+import './auth-api.contract.test';
+import './client-state.contract.test';
 
 const ledger = {
   id: 'ledger-1',
