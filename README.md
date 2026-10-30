@@ -17,7 +17,7 @@
 
 前置条件：Node.js 22、pnpm、Docker Desktop。
 
-首次使用时可以准备环境变量文件，用于覆盖开发默认值：
+首次使用时可以准备环境变量文件；文件存在时，Prisma、NestJS 和 Next.js 会按各自的 dotenv 规则原生加载：
 
 ```bash
 cp backend/.env.example backend/.env
@@ -26,7 +26,7 @@ pnpm --dir backend install
 pnpm --dir frontend install
 ```
 
-如果不需要自定义配置，可以直接执行 `pnpm dev`；脚本会使用与 `.env.example` 一致的本地开发默认值。不要把真实密码、Token 或生产配置写入仓库。
+如果不需要自定义配置，可以直接执行 `pnpm dev`；仅当对应环境文件不存在时，脚本才会注入与 `.env.example` 一致的本地开发默认值。Shell 环境变量仍然优先于环境文件。不要把真实密码、Token 或生产配置写入仓库。
 
 启动开发环境：
 

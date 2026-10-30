@@ -20,6 +20,21 @@ function spawnProcess(command, args, options = {}) {
   return child;
 }
 
+function signalProcessGroup(child, signal) {
+  if (child.exitCode !== null) return;
+
+  if (process.platform !== 'win32' && child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // 子进程组可能已经退出，继续执行单进程兜底。
+    }
+  }
+
+  child.kill(signal);
+}
+
 function runOnce(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawnProcess(command, args);
@@ -40,12 +55,12 @@ function stopChildren(exitCode = 0) {
   isShuttingDown = true;
 
   for (const child of children) {
-    if (!child.killed) child.kill('SIGTERM');
+    signalProcessGroup(child, 'SIGTERM');
   }
 
   setTimeout(() => {
     for (const child of children) {
-      if (!child.killed) child.kill('SIGKILL');
+      signalProcessGroup(child, 'SIGKILL');
     }
     process.exit(exitCode);
   }, 1500).unref();
@@ -66,9 +81,11 @@ async function main() {
 
   const backend = spawnProcess('pnpm', ['--dir', 'backend', 'run', 'start:dev'], {
     env: developmentEnvironments.backend,
+    detached: process.platform !== 'win32',
   });
   const frontend = spawnProcess('pnpm', ['--dir', 'frontend', 'run', 'dev'], {
     env: developmentEnvironments.frontend,
+    detached: process.platform !== 'win32',
   });
 
   backend.once('exit', (code) => {
