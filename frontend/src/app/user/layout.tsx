@@ -1,5 +1,10 @@
+import * as React from 'react';
+import { UserAuthGuard } from '@/components/auth/UserAuthGuard';
+
 export default function UserLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
-  return <section data-application="user">{children}</section>;
+}: {
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return <UserAuthGuard>{children}</UserAuthGuard>;
 }
