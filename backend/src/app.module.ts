@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { HealthController } from './health/health.controller';
 import { HealthService } from './health/health.service';
 import { AuthModule } from './modules/auth/auth.module';
+import { AccountModule } from './modules/account/account.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { LedgerMemberModule } from './modules/ledger-member/ledger-member.module';
@@ -15,6 +16,7 @@ import { UserModule } from './modules/user/user.module';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    AccountModule,
     AdminModule,
     LedgerModule,
     LedgerMemberModule,

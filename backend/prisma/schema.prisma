@@ -37,6 +37,15 @@ enum AccountVisibility {
   PRIVATE
 }
 
+enum AccountType {
+  CASH
+  BANK_CARD
+  CREDIT_CARD
+  ALIPAY
+  WECHAT
+  OTHER
+}
+
 enum TransactionType {
   EXPENSE
   INCOME
@@ -165,7 +174,7 @@ model Account {
   ledgerId            String            @map("ledger_id")
   ownerId             String?           @map("owner_id")
   name                String
-  type                String
+  type                AccountType
   visibility          AccountVisibility @default(SHARED)
   initialBalanceCents Int               @default(0) @map("initial_balance_cents")
   currentBalanceCents Int               @default(0) @map("current_balance_cents")
