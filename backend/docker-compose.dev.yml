@@ -15,6 +15,9 @@ services:
       JWT_ACCESS_SECRET: development-only-change-this-secret
       ACCESS_TOKEN_TTL_SECONDS: 900
       REFRESH_SESSION_TTL_SECONDS: 2592000
+      JWT_ADMIN_ACCESS_SECRET: development-only-change-this-admin-secret
+      ADMIN_ACCESS_TOKEN_TTL_SECONDS: 900
+      ADMIN_REFRESH_SESSION_TTL_SECONDS: 2592000
       CORS_ORIGINS: http://localhost:8090
     extra_hosts:
       - "host.docker.internal:host-gateway"
