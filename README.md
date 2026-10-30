@@ -7,17 +7,67 @@
 - `backend/`：NestJS API、Prisma 数据模型和 PostgreSQL 访问层
 - `frontend/`：Next.js App Router、Zustand 和 PWA 前端
 - `docs/`：技术方向、需求基础和实现计划
-- `docker-compose.yml`：本地 PostgreSQL、Redis、NestJS 后端和 Next.js 前端完整开发环境
+- `docker-compose.infra.yml`：本地 PostgreSQL 和 Redis 基础设施
+- `docker-compose.yml`：后端、前端和基础设施的完整容器链路
+- `scripts/dev.mjs`：本地开发进程编排脚本
 
 ## 本地启动
 
-### 1. 启动完整 Docker 开发环境
+### 1. 推荐：本地热更新开发
+
+前置条件：Node.js 22、pnpm、Docker Desktop。
+
+首次使用时准备环境变量：
 
 ```bash
-docker compose up -d --build
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+pnpm --dir backend install
+pnpm --dir frontend install
 ```
 
-启动后：
+启动开发环境：
+
+```bash
+pnpm dev
+```
+
+该命令会自动完成：
+
+- 启动 Docker 中的 PostgreSQL 和 Redis；
+- 执行待应用的 Prisma Migration；
+- 启动 NestJS `start:dev`，监听后端源码变化；
+- 启动 Next.js `dev`，支持前端热更新。
+
+访问地址：
+
+- 前端：`http://localhost:8090`
+- 后端：`http://localhost:8091`
+- 健康检查：`http://localhost:8091/api/health`
+- PostgreSQL：`localhost:5439`
+- Redis：`localhost:6389`
+
+按 `Ctrl+C` 会停止本次启动的前后端进程，PostgreSQL 和 Redis 会继续运行。停止基础设施：
+
+```bash
+pnpm docker:infra:down
+```
+
+如果只需要启动基础设施：
+
+```bash
+pnpm docker:infra:up
+```
+
+### 2. 完整 Docker 链路验证
+
+```bash
+pnpm docker:full:up
+```
+
+该命令会构建并启动 PostgreSQL、Redis、NestJS 和 Next.js 容器，适合验证容器链路或模拟部署环境。它使用构建后的镜像，不会像 `pnpm dev` 一样实时读取源码变化。
+
+查看容器地址：
 
 - 前端：`http://localhost:8090`
 - 后端：`http://localhost:8091`
@@ -28,45 +78,25 @@ docker compose up -d --build
 查看日志：
 
 ```bash
-docker compose logs -f backend frontend
+pnpm docker:full:logs
 ```
 
 停止环境：
 
 ```bash
-docker compose down
+pnpm docker:full:down
 ```
 
-如果需要前端或后端热更新，再使用各自目录中的 `pnpm run dev`；根目录 Docker Compose 默认运行构建后的服务，便于验证完整容器链路。
-
-### 2. 本地非 Docker 开发
-
-先启动 PostgreSQL 和 Redis：
+从完整 Docker 链路切换到 `pnpm dev` 前，先停止完整链路，避免端口和容器名称冲突：
 
 ```bash
-docker compose up -d postgres redis
-```
-
-然后分别启动后端和前端：
-
-```bash
-cd backend
-pnpm install
-cp .env.example .env
-pnpm exec prisma generate
-pnpm run start:dev
-```
-
-```bash
-cd frontend
-pnpm install
-cp .env.example .env.local
-pnpm run dev
+pnpm docker:full:down
+pnpm dev
 ```
 
 ## 当前范围
 
-当前阶段只搭建基础框架、健康检查、多账本 Prisma 数据模型、Zustand 状态边界和 PWA 壳层。登录、账本接口、邀请、账单和离线同步将在基础框架稳定后分阶段实现。
+当前已完成基础框架、健康检查、普通用户认证、账本成员角色、邀请流程、Zustand 状态边界和 PWA 壳层。账户、分类、账单和离线同步按 `docs/` 中的需求和技术设计分阶段实现。
 
 ## 文档
 
@@ -74,4 +104,8 @@ pnpm run dev
 - [技术方向](docs/技术方向.md)
 - [需求基础](docs/需求基础.md)
 - [用户与成员角色需求](docs/requirements/用户与成员角色需求.md)
+- [账户与分类需求](docs/requirements/账户与分类需求.md)
+- [账单需求](docs/requirements/账单需求.md)
+- [账户与分类接口](docs/api/账户与分类接口.md)
+- [账单接口](docs/api/账单接口.md)
 - [基础框架搭建计划](docs/superpowers/plans/2026-10-30-基础框架搭建计划.md)
