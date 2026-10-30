@@ -1,0 +1,15 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8091/api
+    container_name: jizhang-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      NODE_ENV: development
+      PORT: 8090
+      HOSTNAME: 0.0.0.0

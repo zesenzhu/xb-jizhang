@@ -1,0 +1,446 @@
+# 小宝记账 App 技术方向基础文档
+
+> 文档版本：v0.2
+> 创建日期：2026-10-30
+> 项目定位：支持个人账本与多人共享账本的 PWA 记账应用
+
+## 1. 文档目的
+
+本文档用于统一小宝记账 App 的技术方向、工程边界和部署方式，作为后续项目搭建、代码开发、接口设计和部署配置的共同依据。
+
+第一阶段即采用多账本和成员关系模型。用户注册后自动拥有个人账本，也可以创建或加入共享账本。个人账本是共享账本模型的一种特殊实例，不单独设计另一套数据结构。
+
+## 2. 参考项目与复用策略
+
+参考项目：
+
+- 后端：`/Users/xiaobao/Desktop/code/个人/xbnestjs/backend`
+- 前端：`/Users/xiaobao/Desktop/code/个人/xbnestjs/frontend`
+
+### 2.1 建议复用
+
+- NestJS 模块化组织方式
+- Prisma 数据访问方式
+- PostgreSQL 数据库方案
+- DTO、ValidationPipe 和统一异常处理
+- JWT Access Token + Refresh Token 鉴权方式
+- Swagger/Scalar 接口文档方式
+- Next.js App Router 目录组织方式
+- Zustand 状态管理和持久化方式
+- Axios 请求封装与 401 自动刷新机制
+- Docker 多阶段构建方式
+- GitHub Actions 镜像构建和服务器部署方式
+- 中文注释、严格 TypeScript 和模块化开发规范
+
+### 2.2 不建议直接复用
+
+旧项目中的以下业务属于设备控制系统领域，不应复制到记账项目：
+
+- 注册码和设备授权
+- MQTT、TCP Socket 和设备心跳
+- 脚本日志和设备监控
+- AI Agent 管理
+- 旧项目的管理员/终端用户双端业务模型
+
+新项目应保持业务模块精简，优先围绕用户、账本、账本成员、账户、分类、账单和统计展开。
+
+## 3. 总体架构
+
+采用前后端分离架构：
+
+```text
+浏览器 / 手机 PWA
+        │ HTTPS
+        ▼
+      Nginx
+   ┌────┴─────────────┐
+   │                  │
+   ▼                  ▼
+Next.js 前端       NestJS API
+   │                  │
+   │                  ├── Prisma
+   │                  │      │
+   │                  │      ▼
+   │                  │  PostgreSQL
+   │                  │
+   │                  └── Redis（按需启用）
+   │
+   └── IndexedDB / Service Worker
+```
+
+### 3.1 技术栈
+
+| 层级 | 技术方向 |
+| --- | --- |
+| 后端框架 | NestJS 11 + TypeScript |
+| 数据访问 | Prisma |
+| 主数据库 | PostgreSQL |
+| 缓存与同步辅助 | Redis，第一版按需启用 |
+| 前端框架 | Next.js App Router |
+| 前端状态 | Zustand |
+| 请求库 | Axios |
+| 表单校验 | React Hook Form + Zod，或沿用项目统一方案 |
+| UI | Tailwind CSS + shadcn/ui；复杂表格可按需引入 Ant Design |
+| 图表 | Recharts |
+| PWA | Service Worker + Web App Manifest + IndexedDB |
+| 部署 | Docker Compose + Nginx |
+| CI/CD | GitHub Actions |
+
+## 4. 项目目录方向
+
+建议当前项目最终组织为：
+
+```text
+xiaobao-jizhang/
+├── backend/
+│   ├── prisma/
+│   ├── src/
+│   │   ├── common/
+│   │   ├── modules/
+│   │   │   ├── auth/
+│   │   │   ├── user/
+│   │   │   ├── ledger/
+│   │   │   ├── ledger-member/
+│   │   │   ├── account/
+│   │   │   ├── category/
+│   │   │   ├── transaction/
+│   │   │   ├── statistics/
+│   │   │   ├── budget/
+│   │   │   └── backup/
+│   │   └── main.ts
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── frontend/
+│   ├── public/
+│   │   ├── manifest.webmanifest
+│   │   └── icons/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── store/
+│   │   └── types/
+│   ├── Dockerfile
+│   └── next.config.ts
+├── docs/
+│   ├── technical-direction.md
+│   └── requirements-baseline.md
+└── docker/
+    └── nginx/
+```
+
+前后端建议作为两个独立应用目录管理。这样可以分别安装依赖、构建镜像、运行测试和部署。
+
+## 5. 后端技术设计
+
+### 5.1 模块边界
+
+- `auth`：登录、退出、Token 刷新、密码修改
+- `user`：用户资料和个人设置
+- `ledger`：个人账本、共享账本、账本切换和账本生命周期
+- `ledger-member`：邀请、加入、成员角色、移除成员和所有权转移
+- `account`：属于账本的现金、银行卡、支付宝等资金账户
+- `category`：属于账本的收入和支出分类
+- `transaction`：属于账本的收入、支出、转账和账单查询
+- `statistics`：按账本、时间、分类、账户和成员聚合统计
+- `budget`：属于账本的月度预算和分类预算
+- `backup`：导入、导出和数据备份
+
+每个模块包含 Controller、Service、DTO 和必要的类型定义。Controller 只负责参数接收和调用 Service，业务规则放在 Service 中。
+
+### 5.2 多账本与成员关系
+
+核心数据归属关系为：
+
+```text
+User
+  └── LedgerMember ── Ledger
+                         ├── Account
+                         ├── Category
+                         ├── Transaction
+                         └── Budget
+```
+
+所有账户、分类、账单和预算都属于 `Ledger`，不直接只属于用户。用户通过 `LedgerMember` 访问账本，个人账本也必须经过成员关系校验。
+
+建议的账本成员角色：
+
+- `OWNER`：管理账本、成员和全部数据
+- `EDITOR`：查看、新增和编辑账单
+- `VIEWER`：只能查看账单和统计
+
+账单至少记录 `createdById`、`updatedById` 和 `payerId`，分别表示创建人、最后修改人和实际付款人。这样可以区分“谁录入”和“谁付款”。
+
+### 5.3 账户可见性
+
+共享账本同时支持公共账户和私人账户：
+
+- `SHARED`：账本成员可见、可按权限使用
+- `PRIVATE`：默认只对账户所有者可见
+
+账户需要保存 `ledgerId`，私人账户额外保存 `ownerId`。后端必须在查询、创建账单和统计时校验账户可见性。
+
+### 5.4 金额存储规则
+
+所有金额使用“整数分”存储，不使用浮点数：
+
+```text
+12.50 元 = 1250 分
+```
+
+接口层可以接收元字符串或数字，但进入业务层前必须转换为整数分。响应层再根据前端约定转换为展示格式。
+
+### 5.5 数据删除规则
+
+账单属于财务数据，默认不直接物理删除，建议采用软删除：
+
+- `deletedAt = null`：正常数据
+- `deletedAt != null`：回收站或已删除数据
+
+分类和账户也建议优先停用，不直接删除存在历史关联的数据。
+
+### 5.6 数据库迁移规则
+
+生产环境使用 Prisma Migration：
+
+```bash
+prisma migrate deploy
+```
+
+不使用生产启动命令执行 `prisma db push --accept-data-loss`。部署前需要明确执行迁移并进行数据库备份。
+
+## 6. 前端技术设计
+
+### 6.1 路由方向
+
+建议采用面向账本协作的路由：
+
+```text
+/login                  登录
+/(app)/                  记账首页
+/(app)/ledgers           账本列表和账本切换
+/(app)/ledgers/[id]      当前账本空间
+/(app)/members           成员与邀请管理
+/(app)/transactions      账单列表
+/(app)/transactions/new  新增账单
+/(app)/accounts          账户管理
+/(app)/categories        分类管理
+/(app)/statistics        统计分析
+/(app)/budgets           预算管理
+/(app)/settings          设置
+```
+
+不建议复制旧项目的 `/admin` 与 `/user` 双端路由，除非后续明确需要管理员后台和普通用户端分离。
+
+### 6.2 Zustand 使用边界
+
+Zustand 负责客户端状态，不代替数据库：
+
+- 用户登录状态
+- 当前账本、成员角色和筛选条件
+- 当前月份
+- 主题和界面偏好
+- 最近使用分类和账户
+- 离线同步队列状态
+- 网络状态
+
+大量账单数据放在 IndexedDB 或通过接口分页获取，不建议全部长期存储在 Zustand 中。
+
+### 6.3 PWA 使用边界
+
+第一阶段实现：
+
+- 可安装到桌面或手机主屏幕
+- Manifest 配置
+- Service Worker 缓存静态资源
+- 最近账单离线查看
+- 离线新增账单
+- 恢复网络后同步
+- 离线/同步状态提示
+
+离线数据使用 IndexedDB 保存，Zustand 只保存同步状态和当前页面需要的状态。
+
+多人共享场景下，离线同步必须以账本为边界。新增账单使用客户端幂等 ID；同一账单并发编辑时使用版本号或 `updatedAt` 检测冲突。第一阶段不做复杂的实时协同编辑，服务端数据作为最终权威，并把冲突记录展示给用户处理。
+
+## 7. 鉴权与安全方向
+
+- 使用 Access Token + Refresh Token
+- Refresh Token 建议使用 HttpOnly Cookie
+- API 请求统一携带凭证
+- 前端只在必要时保存短期状态，不长期暴露 Refresh Token
+- 所有接口按“当前用户是否为账本成员”做数据隔离
+- 所有账本业务接口都必须校验 `ledgerId` 和成员角色
+- Service 层不能只依赖前端传入的用户 ID 或账本 ID
+- Owner、Editor、Viewer 权限必须在后端统一判断
+- 金额、账户归属、分类归属都必须在后端校验
+- 生产环境只通过 HTTPS 访问
+- 数据库不直接暴露公网
+- 导出文件需要鉴权，并限制导出范围
+- 登录、导入和备份接口需要限流
+
+## 8. 与旧项目共存的部署方案
+
+### 8.1 推荐域名
+
+建议使用独立子域名：
+
+```text
+旧系统前端：xiaobao.work
+旧系统 API：xiaobao.work/api
+
+记账前端：jizhang.xiaobao.work
+记账 API：jizhang-api.xiaobao.work
+```
+
+如果希望前后端同源，也可以使用：
+
+```text
+jizhang.xiaobao.work       → Next.js
+jizhang.xiaobao.work/api   → NestJS
+```
+
+第一种前后端独立子域名更清晰；第二种同源方式对 Cookie 和 CORS 更简单。推荐新项目优先采用第二种：`jizhang.xiaobao.work` 同时承载前端和 `/api` 后端代理。
+
+### 8.2 端口规划
+
+```text
+旧系统后端：8081
+旧系统前端：8080 或现有生产端口
+
+记账后端：8091
+记账前端：8090
+```
+
+这些端口只在服务器内部使用，由 Nginx 对外提供 80/443。
+
+### 8.3 容器和数据库命名
+
+新项目使用独立命名：
+
+```text
+jizhang-backend-prod
+jizhang-frontend-prod
+jizhang-db-prod
+```
+
+数据库建议至少使用独立数据库名：
+
+```text
+旧系统：xbnest
+记账系统：jizhang
+```
+
+Redis 如果共用，需要使用 `jizhang:` 前缀隔离 Key。
+
+### 8.4 Nginx 分流
+
+以同源方案为例：
+
+```nginx
+server {
+    server_name jizhang.xiaobao.work;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8091/api/;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8090;
+    }
+}
+```
+
+PWA 的 Manifest、Service Worker 和页面都位于同一个记账子域名下，避免与旧系统缓存和 Service Worker 互相影响。
+
+## 9. 部署与发布原则
+
+部署流程建议：
+
+```text
+提交代码
+  ↓
+GitHub Actions 执行检查
+  ↓
+构建后端和前端镜像
+  ↓
+上传或推送镜像
+  ↓
+服务器备份数据库
+  ↓
+执行 Prisma migrate deploy
+  ↓
+滚动重启记账服务
+  ↓
+健康检查
+  ↓
+Nginx reload
+```
+
+必须提供至少两个健康检查：
+
+- 后端 `/api/health`
+- 前端首页或专用状态页
+
+发布失败时不能影响旧系统容器和旧系统数据库。
+
+## 10. 技术实现阶段
+
+### 阶段一：工程基础
+
+- 创建前后端目录
+- 初始化 NestJS、Next.js
+- 接入 Prisma 和 PostgreSQL
+- 建立登录鉴权
+- 建立统一请求和响应结构
+- 配置 Zustand
+- 配置基础 PWA
+- 配置 Docker 本地环境
+
+### 阶段二：记账 MVP
+
+- 默认个人账本初始化
+- 共享账本创建和切换
+- 成员邀请和角色管理
+- 账单新增、编辑、删除
+- 收入和支出
+- 分类管理
+- 账户管理
+- 创建人、修改人和实际付款人
+- 共享账户和私人账户基础规则
+- 首页汇总
+- 账单列表和筛选
+
+### 阶段三：完整账本能力
+
+- 转账
+- 标签
+- 预算
+- 统计图表
+- 导入导出
+- 数据备份
+
+### 阶段四：离线增强
+
+- IndexedDB 离线账单
+- 同步队列
+- 自动重试
+- 冲突提示
+- 离线导入和附件能力
+
+## 11. 当前架构决策
+
+当前默认决策如下：
+
+1. 从第一版开始采用多账本模型。
+2. 用户注册后自动创建个人账本，也可以创建和加入共享账本。
+3. 所有业务数据属于账本，用户通过账本成员关系访问数据。
+4. 共享账本第一版使用 Owner、Editor、Viewer 三种角色。
+5. 账单记录创建人、修改人和实际付款人。
+6. 账户同时支持共享账户和私人账户。
+7. AA 分摊、实时协同编辑和复杂冲突合并暂不进入第一版，但模型预留扩展。
+8. 新项目与旧项目独立部署、独立数据库、独立容器。
+9. 使用独立记账子域名，推荐前端和 `/api` 同源。
+10. 生产数据库使用 Prisma Migration，不使用允许数据丢失的自动 `db push`。
+11. 金额统一使用整数分。
+12. PWA 先实现基础离线能力，再逐步增强同步冲突处理。

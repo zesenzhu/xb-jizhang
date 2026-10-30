@@ -1,0 +1,259 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+enum LedgerType {
+  PERSONAL
+  SHARED
+}
+
+enum LedgerMemberRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum LedgerMemberStatus {
+  ACTIVE
+  LEFT
+  REMOVED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+  DECLINED
+}
+
+enum AccountVisibility {
+  SHARED
+  PRIVATE
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+enum TransactionSource {
+  MANUAL
+  IMPORT
+  RECURRING
+  OFFLINE_SYNC
+}
+
+enum CategoryType {
+  EXPENSE
+  INCOME
+}
+
+model User {
+  id                  String                @id @default(uuid())
+  username            String                @unique
+  passwordHash        String                @map("password_hash")
+  nickname            String?
+  email               String?               @unique
+  avatar              String?
+  isActive            Boolean               @default(true) @map("is_active")
+  ledgersCreated      Ledger[]              @relation("LedgerCreator")
+  ledgerMemberships   LedgerMember[]
+  sentInvitations     LedgerInvitation[]    @relation("InvitationSender")
+  createdTransactions Transaction[]         @relation("TransactionCreator")
+  updatedTransactions Transaction[]         @relation("TransactionUpdater")
+  paidTransactions    Transaction[]         @relation("TransactionPayer")
+  ownedAccounts       Account[]             @relation("AccountOwner")
+  auditLogs           TransactionAuditLog[] @relation("AuditOperator")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  @@map("user")
+}
+
+model Ledger {
+  id              String                @id @default(uuid())
+  name            String
+  type            LedgerType            @default(PERSONAL)
+  creatorId       String                @map("creator_id")
+  defaultCurrency String                @default("CNY") @map("default_currency")
+  icon            String?
+  color           String?
+  isArchived      Boolean               @default(false) @map("is_archived")
+  creator         User                  @relation("LedgerCreator", fields: [creatorId], references: [id])
+  members         LedgerMember[]
+  invitations     LedgerInvitation[]
+  accounts        Account[]
+  categories      Category[]
+  transactions    Transaction[]
+  budgets         Budget[]
+  auditLogs       TransactionAuditLog[]
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@index([creatorId])
+  @@map("ledger")
+}
+
+model LedgerMember {
+  id           String             @id @default(uuid())
+  ledgerId     String             @map("ledger_id")
+  userId       String             @map("user_id")
+  role         LedgerMemberRole   @default(VIEWER)
+  status       LedgerMemberStatus @default(ACTIVE)
+  joinedAt     DateTime           @default(now()) @map("joined_at")
+  lastActiveAt DateTime?          @map("last_active_at")
+  ledger       Ledger             @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ledgerId, userId])
+  @@index([userId, status])
+  @@map("ledger_member")
+}
+
+model LedgerInvitation {
+  id          String           @id @default(uuid())
+  ledgerId    String           @map("ledger_id")
+  inviterId   String           @map("inviter_id")
+  targetEmail String?          @map("target_email")
+  token       String           @unique
+  role        LedgerMemberRole @default(EDITOR)
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime         @map("expires_at")
+  acceptedAt  DateTime?        @map("accepted_at")
+  ledger      Ledger           @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  inviter     User             @relation("InvitationSender", fields: [inviterId], references: [id])
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([ledgerId, status])
+  @@index([targetEmail, status])
+  @@map("ledger_invitation")
+}
+
+model Account {
+  id                  String            @id @default(uuid())
+  ledgerId            String            @map("ledger_id")
+  ownerId             String?           @map("owner_id")
+  name                String
+  type                String
+  visibility          AccountVisibility @default(SHARED)
+  initialBalanceCents Int               @default(0) @map("initial_balance_cents")
+  currentBalanceCents Int               @default(0) @map("current_balance_cents")
+  includeInAssets     Boolean           @default(true) @map("include_in_assets")
+  icon                String?
+  color               String?
+  isActive            Boolean           @default(true) @map("is_active")
+  ledger              Ledger            @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  owner               User?             @relation("AccountOwner", fields: [ownerId], references: [id])
+  transactions        Transaction[]     @relation("TransactionAccount")
+  outgoingTransfers   Transaction[]     @relation("TransactionFromAccount")
+  incomingTransfers   Transaction[]     @relation("TransactionToAccount")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  @@index([ledgerId, isActive])
+  @@index([ownerId, visibility])
+  @@map("account")
+}
+
+model Category {
+  id           String        @id @default(uuid())
+  ledgerId     String        @map("ledger_id")
+  type         CategoryType
+  name         String
+  icon         String?
+  color        String?
+  sortOrder    Int           @default(0) @map("sort_order")
+  isSystem     Boolean       @default(false) @map("is_system")
+  isActive     Boolean       @default(true) @map("is_active")
+  ledger       Ledger        @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@unique([ledgerId, type, name])
+  @@index([ledgerId, type, isActive])
+  @@map("category")
+}
+
+model Transaction {
+  id              String                @id @default(uuid())
+  ledgerId        String                @map("ledger_id")
+  type            TransactionType
+  amountCents     Int                   @map("amount_cents")
+  occurredAt      DateTime              @map("occurred_at")
+  title           String?
+  note            String?
+  categoryId      String?               @map("category_id")
+  accountId       String?               @map("account_id")
+  fromAccountId   String?               @map("from_account_id")
+  toAccountId     String?               @map("to_account_id")
+  transferGroupId String?               @map("transfer_group_id")
+  source          TransactionSource     @default(MANUAL)
+  clientRequestId String                @map("client_request_id")
+  createdById     String                @map("created_by_id")
+  updatedById     String                @map("updated_by_id")
+  payerId         String?               @map("payer_id")
+  version         Int                   @default(1)
+  deletedAt       DateTime?             @map("deleted_at")
+  ledger          Ledger                @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  category        Category?             @relation(fields: [categoryId], references: [id])
+  account         Account?              @relation("TransactionAccount", fields: [accountId], references: [id])
+  fromAccount     Account?              @relation("TransactionFromAccount", fields: [fromAccountId], references: [id])
+  toAccount       Account?              @relation("TransactionToAccount", fields: [toAccountId], references: [id])
+  createdBy       User                  @relation("TransactionCreator", fields: [createdById], references: [id])
+  updatedBy       User                  @relation("TransactionUpdater", fields: [updatedById], references: [id])
+  payer           User?                 @relation("TransactionPayer", fields: [payerId], references: [id])
+  auditLogs       TransactionAuditLog[]
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@unique([ledgerId, clientRequestId])
+  @@index([ledgerId, occurredAt])
+  @@index([ledgerId, type, occurredAt])
+  @@index([ledgerId, categoryId, occurredAt])
+  @@index([ledgerId, payerId, occurredAt])
+  @@map("transaction")
+}
+
+model TransactionAuditLog {
+  id            String      @id @default(uuid())
+  ledgerId      String      @map("ledger_id")
+  transactionId String      @map("transaction_id")
+  operatorId    String      @map("operator_id")
+  action        String
+  beforeData    Json?       @map("before_data")
+  afterData     Json?       @map("after_data")
+  ledger        Ledger      @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  operator      User        @relation("AuditOperator", fields: [operatorId], references: [id])
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@index([ledgerId, createdAt])
+  @@index([transactionId, createdAt])
+  @@map("transaction_audit_log")
+}
+
+model Budget {
+  id          String    @id @default(uuid())
+  ledgerId    String    @map("ledger_id")
+  categoryId  String?   @map("category_id")
+  periodStart DateTime  @map("period_start")
+  periodEnd   DateTime  @map("period_end")
+  amountCents Int       @map("amount_cents")
+  ledger      Ledger    @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([ledgerId, categoryId, periodStart, periodEnd])
+  @@index([ledgerId, periodStart, periodEnd])
+  @@map("budget")
+}
