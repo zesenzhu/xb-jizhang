@@ -4,6 +4,9 @@ import { HealthController } from './health/health.controller';
 import { HealthService } from './health/health.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
+import { LedgerMemberModule } from './modules/ledger-member/ledger-member.module';
+import { InvitationModule } from './modules/invitation/invitation.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 
@@ -13,6 +16,9 @@ import { UserModule } from './modules/user/user.module';
     PrismaModule,
     AuthModule,
     AdminModule,
+    LedgerModule,
+    LedgerMemberModule,
+    InvitationModule,
     UserModule,
   ],
   controllers: [HealthController],
