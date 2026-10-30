@@ -6,6 +6,8 @@
     "dev": "next dev -p 8090",
     "build": "next build",
     "start": "next start -p 8090",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run test:contract",
     "lint": "eslint .",
     "test:contract": "tsx test/store.contract.test.ts"
   },

@@ -1,0 +1,12 @@
+{
+  "name": "xiaobao-jizhang",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "pnpm --dir backend typecheck && pnpm --dir frontend typecheck",
+    "test": "pnpm --dir backend test && pnpm --dir frontend test",
+    "lint": "pnpm --dir backend lint && pnpm --dir frontend lint",
+    "test:coverage": "pnpm --dir backend test:cov",
+    "build": "pnpm --dir backend build && pnpm --dir frontend build"
+  }
+}

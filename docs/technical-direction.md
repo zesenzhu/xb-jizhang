@@ -444,3 +444,16 @@ Nginx reload
 10. 生产数据库使用 Prisma Migration，不使用允许数据丢失的自动 `db push`。
 11. 金额统一使用整数分。
 12. PWA 先实现基础离线能力，再逐步增强同步冲突处理。
+
+## 12. 工程质量与测试
+
+项目将自动化测试作为行为开发的硬性门槛。新增或修改后端接口、权限规则、数据访问、前端 Store、组件交互或离线同步行为时，必须在同一改动中补充或更新测试。
+
+默认验证命令为：
+
+```bash
+pnpm typecheck
+pnpm test
+```
+
+后端使用 Jest 和 `@nestjs/testing`，重点覆盖 DTO、Service、Controller、Guard、账本成员权限、跨账本隔离、账单幂等和并发版本；前端当前保留轻量 Store 合约测试，出现组件和跨路由流程后再按需引入 Vitest、React Testing Library 或 Playwright。测试规则详见 `.agent/skills/testing-standard/SKILL.md`。
