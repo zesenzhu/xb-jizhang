@@ -39,6 +39,10 @@ services:
       PORT: 8091
       DATABASE_URL: postgresql://${DB_USER:-jizhang}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-jizhang}?schema=public
       REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_SESSION_TTL_SECONDS: ${REFRESH_SESSION_TTL_SECONDS:-2592000}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
     depends_on:
       postgres:
         condition: service_healthy

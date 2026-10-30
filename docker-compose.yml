@@ -49,6 +49,10 @@ services:
       PORT: 8091
       DATABASE_URL: postgresql://jizhang:jizhang_dev_password@postgres:5432/jizhang?schema=public
       REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-development-only-change-this-secret}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_SESSION_TTL_SECONDS: ${REFRESH_SESSION_TTL_SECONDS:-2592000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
     command: ["sh", "-c", "./node_modules/.bin/prisma db push && node dist/src/main.js"]
     depends_on:
       postgres:
