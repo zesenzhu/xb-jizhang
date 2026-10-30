@@ -17,7 +17,7 @@
 
 前置条件：Node.js 22、pnpm、Docker Desktop。
 
-首次使用时准备环境变量：
+首次使用时可以准备环境变量文件，用于覆盖开发默认值：
 
 ```bash
 cp backend/.env.example backend/.env
@@ -25,6 +25,8 @@ cp frontend/.env.example frontend/.env.local
 pnpm --dir backend install
 pnpm --dir frontend install
 ```
+
+如果不需要自定义配置，可以直接执行 `pnpm dev`；脚本会使用与 `.env.example` 一致的本地开发默认值。不要把真实密码、Token 或生产配置写入仓库。
 
 启动开发环境：
 

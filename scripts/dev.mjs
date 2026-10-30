@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
+import { createDevelopmentEnvironments } from './dev-config.mjs';
 
 const rootDirectory = process.cwd();
+const developmentEnvironments = createDevelopmentEnvironments(rootDirectory);
 const children = new Set();
 let isShuttingDown = false;
 
@@ -62,8 +64,12 @@ async function main() {
     throw new Error('PostgreSQL/Redis 启动失败，请检查 Docker Desktop 状态');
   }
 
-  const backend = spawnProcess('pnpm', ['--dir', 'backend', 'run', 'start:dev']);
-  const frontend = spawnProcess('pnpm', ['--dir', 'frontend', 'run', 'dev']);
+  const backend = spawnProcess('pnpm', ['--dir', 'backend', 'run', 'start:dev'], {
+    env: developmentEnvironments.backend,
+  });
+  const frontend = spawnProcess('pnpm', ['--dir', 'frontend', 'run', 'dev'], {
+    env: developmentEnvironments.frontend,
+  });
 
   backend.once('exit', (code) => {
     if (!isShuttingDown) {

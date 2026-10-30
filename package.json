@@ -9,8 +9,9 @@
     "docker:full:up": "docker compose up -d --build",
     "docker:full:down": "docker compose down",
     "docker:full:logs": "docker compose logs -f backend frontend",
+    "test:dev": "node --test scripts/*.test.mjs",
     "typecheck": "pnpm --dir backend typecheck && pnpm --dir frontend typecheck",
-    "test": "pnpm --dir backend test && pnpm --dir frontend test",
+    "test": "pnpm test:dev && pnpm --dir backend test && pnpm --dir frontend test",
     "lint": "pnpm --dir backend lint && pnpm --dir frontend lint",
     "test:coverage": "pnpm --dir backend test:cov",
     "build": "pnpm --dir backend build && pnpm --dir frontend build"
