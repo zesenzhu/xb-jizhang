@@ -27,6 +27,7 @@
 - 修改 NestJS、Prisma、认证、账本接口或同步逻辑：阅读 `backend-dev-guide` 和 `typescript-type-convention`。
 - 修改 Next.js 页面、Axios、Zustand、PWA 或离线队列：阅读 `frontend-dev-guide` 和 `typescript-type-convention`。
 - 新增或重构代码时：阅读 `commenting-convention`。
+- 编写或维护 `docs/` 中的需求、技术、API、UI 或 ADR 文档时：阅读 `documentation-standard`。
 - 准备提交时：阅读 `commit-convention`，并根据实际 diff 编写提交正文。
 - 用户要求在逻辑变更完成后提交时：阅读 `commit-after-change`；默认只提交，不自动推送。
 
