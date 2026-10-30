@@ -70,6 +70,8 @@ pnpm run dev
 
 ## 文档
 
-- [技术方向](docs/technical-direction.md)
-- [需求基础](docs/requirements-baseline.md)
-- [基础框架实现计划](docs/superpowers/plans/2026-10-30-foundation-scaffold.md)
+- [文档索引](docs/文档索引.md)
+- [技术方向](docs/技术方向.md)
+- [需求基础](docs/需求基础.md)
+- [用户与成员角色需求](docs/requirements/用户与成员角色需求.md)
+- [基础框架搭建计划](docs/superpowers/plans/2026-10-30-基础框架搭建计划.md)
