@@ -40,7 +40,7 @@ version: 0.1
 owner: 小宝
 updatedAt: 2026-10-30
 related:
-  - ../requirements-baseline.md
+  - ../需求基础.md
 ---
 ```
 
