@@ -1,12 +1,17 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN npm install -g pnpm
+RUN pnpm config set minimum-release-age 0
+RUN printf 'dangerouslyAllowAllBuilds: true\nnodeLinker: hoisted\n' > pnpm-workspace.yaml
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM node:22-alpine AS builder
 WORKDIR /app
+RUN npm install -g pnpm
+RUN pnpm config set minimum-release-age 0
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY package.json pnpm-lock.yaml ./
 COPY . .
 ARG NEXT_PUBLIC_API_URL=/api

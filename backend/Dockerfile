@@ -2,6 +2,8 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 RUN npm install -g pnpm
+RUN pnpm config set minimum-release-age 0
+RUN printf 'dangerouslyAllowAllBuilds: true\nnodeLinker: hoisted\n' > pnpm-workspace.yaml
 
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
@@ -28,4 +30,4 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 USER nestjs
 EXPOSE 8091
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/src/main.js"]

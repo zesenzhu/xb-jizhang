@@ -29,7 +29,7 @@
 
 - [x] **Step 1: Write the project metadata**
 
-Add ignore rules for dependency directories, build output, environment files, local databases, and runtime uploads. Document the two application directories and the local Docker services/ports. Define a root Compose file that starts PostgreSQL and Redis only, so backend and frontend can run in watch mode outside Docker.
+Add ignore rules for dependency directories, build output, environment files, local databases, and runtime uploads. Document the two application directories and the local Docker services/ports. Define a root Compose file that starts PostgreSQL, Redis, NestJS, and Next.js as one complete development environment, while keeping watch-mode commands available outside Docker.
 
 - [x] **Step 2: Verify metadata**
 
