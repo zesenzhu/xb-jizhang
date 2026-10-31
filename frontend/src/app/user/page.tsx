@@ -2,13 +2,17 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, PlusCircle, Shield, Sparkles, User as UserIcon, WalletCards } from 'lucide-react';
+import { LogOut, Plus, Shield, Sparkles, WalletCards } from 'lucide-react';
 import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
 import { logoutUser } from '@/lib/api/user-auth-api';
 import { useAppStore } from '@/store/useAppStore';
 import { useUserAuthStore } from '@/store/userAuthStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import { getLedger, getLedgers } from '@/lib/api/ledger-api';
+import type { LedgerSummary } from '@/lib/api/ledger-types';
+import { ApiRequestError } from '@/lib/api/errors';
+import { resolveInitialLedgerId } from '@/lib/ledger/ledger-form';
 import { AmountDisplay } from '@/components/common/AmountDisplay';
-import { LedgerBadge } from '@/components/common/LedgerBadge';
 import { AmountKeypad } from '@/components/mobile/AmountKeypad';
 import { MobileBottomNav, type NavTab } from '@/components/mobile/MobileBottomNav';
 import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
@@ -26,14 +30,56 @@ function UserHomeContent(): React.JSX.Element {
   const router = useRouter();
   const user = useUserAuthStore((state) => state.currentUser);
   const clearUser = useUserAuthStore((state) => state.clear);
-  const activeLedger = useAppStore((state) => state.activeLedger);
   const isOnline = useAppStore((state) => state.isOnline);
-  const setActiveLedger = useAppStore((state) => state.setActiveLedger);
+  const currentLedgerId = useWorkspaceStore((state) => state.currentLedgerId);
+  const clearCurrentLedger = useWorkspaceStore((state) => state.clear);
 
   const [activeTab, setActiveTab] = React.useState<NavTab>('home');
   const [keypadAmount, setKeypadAmount] = React.useState('0');
-  const [showKeypadDrawer, setShowKeypadDrawer] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [activeLedger, setActiveLedger] = React.useState<LedgerSummary | null>(null);
+  const [ledgerError, setLedgerError] = React.useState<string | null>(null);
+  const displayedLedger = currentLedgerId && activeLedger?.id === currentLedgerId ? activeLedger : null;
+
+  React.useEffect(() => {
+    if (!currentLedgerId) return;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      setLedgerError(null);
+      return getLedger(currentLedgerId)
+        .then((ledger) => {
+          if (active) setActiveLedger(ledger);
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setActiveLedger(null);
+          setLedgerError(error instanceof ApiRequestError ? error.message : '账本加载失败，请稍后重试');
+        });
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentLedgerId]);
+
+  React.useEffect(() => {
+    if (currentLedgerId) return;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      return getLedgers()
+        .then((result) => {
+          const initialLedgerId = resolveInitialLedgerId(result.items, currentLedgerId);
+          if (active && initialLedgerId) useWorkspaceStore.getState().setCurrentLedgerId(initialLedgerId);
+        })
+        .catch(() => {
+          // 首页允许在账本列表暂时不可用时继续展示登录后的基础操作。
+        });
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentLedgerId]);
 
   const handleLogout = async (): Promise<void> => {
     try {
@@ -42,7 +88,7 @@ function UserHomeContent(): React.JSX.Element {
         await logoutUser();
       } finally {
         clearUser();
-        setActiveLedger(null);
+        clearCurrentLedger();
         router.replace('/user/login');
       }
     } finally {
@@ -58,7 +104,6 @@ function UserHomeContent(): React.JSX.Element {
     }
     alert(`成功记录一笔：¥${keypadAmount}`);
     setKeypadAmount('0');
-    setShowKeypadDrawer(false);
   };
 
   // 用户首字头像
@@ -114,12 +159,12 @@ function UserHomeContent(): React.JSX.Element {
               <div>
                 <p className="text-xs text-emerald-100 font-medium">当前活跃账本</p>
                 <h2 className="text-lg font-bold tracking-tight">
-                  {activeLedger?.name || '默认个人账本'}
+                  {displayedLedger?.name || '还没有选择账本'}
                 </h2>
               </div>
             </div>
             <div className="bg-white/20 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-medium text-white">
-              {activeLedger?.type === 'SHARED' ? '共享账本' : '个人账本'}
+              {displayedLedger ? (displayedLedger.type === 'SHARED' ? '共享账本' : '个人账本') : '请选择账本'}
             </div>
           </div>
 
@@ -138,6 +183,23 @@ function UserHomeContent(): React.JSX.Element {
               </div>
             </div>
           </div>
+        </section>
+
+        {ledgerError && (
+          <p role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {ledgerError}
+          </p>
+        )}
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          <Button variant="outline" onClick={() => router.push('/user/ledger')}>
+            <WalletCards size={16} />
+            管理我的账本
+          </Button>
+          <Button onClick={() => router.push('/user/ledger/new')}>
+            <Plus size={16} />
+            新建账本
+          </Button>
         </section>
 
         {/* 快捷记账模块 */}

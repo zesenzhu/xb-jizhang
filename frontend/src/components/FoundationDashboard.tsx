@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowRight, Cloud, CloudOff, ShieldAlert, Users } from 'lucide-react';
+import { Cloud, CloudOff, ShieldAlert, Users } from 'lucide-react';
 import { getHealth } from '@/lib/api';
 import { useAppStore } from '@/store/useAppStore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AmountDisplay } from '@/components/common/AmountDisplay';
-import { LedgerBadge } from '@/components/common/LedgerBadge';
 import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
 import { AmountKeypad } from '@/components/mobile/AmountKeypad';
 import { HighRiskActionDialog } from '@/components/admin/HighRiskActionDialog';
@@ -15,7 +14,7 @@ import { MaskedField } from '@/components/admin/MaskedField';
 import { TableFilterBar } from '@/components/admin/TableFilterBar';
 
 export function FoundationDashboard(): React.JSX.Element {
-  const { activeLedger, isOnline, setActiveLedger, setIsOnline } = useAppStore();
+  const { isOnline, setIsOnline } = useAppStore();
   const [backendStatus, setBackendStatus] = useState<'checking' | 'ok' | 'offline'>('checking');
 
   // 组件预览状态
@@ -73,38 +72,14 @@ export function FoundationDashboard(): React.JSX.Element {
             <div>
               <p className="text-sm font-medium text-slate-500">当前账本</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-950">
-                {activeLedger?.name ?? '还没有选择账本'}
+                账本由用户端工作区加载
               </h2>
               <div className="mt-2 flex items-center gap-2">
-                {activeLedger ? (
-                  <>
-                    <LedgerBadge type={activeLedger.type} />
-                    <LedgerBadge role={activeLedger.role} />
-                  </>
-                ) : (
-                  <span className="text-sm text-slate-600">基础状态已就绪，等待账本模块接入</span>
-                )}
+                <span className="text-sm text-slate-600">摘要由服务端按当前成员权限返回</span>
               </div>
             </div>
             <Users className="text-emerald-600" size={22} aria-hidden="true" />
           </div>
-          {!activeLedger && (
-            <button
-              type="button"
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700"
-              onClick={() =>
-                setActiveLedger({
-                  id: 'local-foundation-ledger',
-                  name: '我的个人账本',
-                  type: 'PERSONAL',
-                  role: 'OWNER',
-                })
-              }
-            >
-              设置本地账本状态
-              <ArrowRight size={16} aria-hidden="true" />
-            </button>
-          )}
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

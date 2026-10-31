@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ApiRequestError } from '@/lib/api/errors'
 import { loginUser, registerUser } from '@/lib/api/user-auth-api'
-import { useAppStore } from '@/store/useAppStore'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useUserAuthStore } from '@/store/userAuthStore'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +32,7 @@ export function AuthCard({
 }: AuthCardProps): React.JSX.Element {
   const [mode, setMode] = React.useState<'login' | 'register'>(defaultMode)
   const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser)
-  const setActiveLedger = useAppStore((state) => state.setActiveLedger)
+  const setCurrentLedgerId = useWorkspaceStore((state) => state.setCurrentLedgerId)
 
   // 表单状态
   const [username, setUsername] = React.useState('')
@@ -85,7 +85,7 @@ export function AuthCard({
           password,
         })
         setCurrentUser(result.user)
-        setActiveLedger(result.ledgers[0] ?? null)
+        setCurrentLedgerId(result.ledgers[0]?.id ?? null)
       } else {
         const result = await registerUser({
           username: cleanUsername,
@@ -94,7 +94,7 @@ export function AuthCard({
           email: email.trim() || undefined,
         })
         setCurrentUser(result.user)
-        setActiveLedger(result.defaultLedger)
+        setCurrentLedgerId(result.defaultLedger.id)
       }
       onSuccess?.()
     } catch (err: unknown) {
