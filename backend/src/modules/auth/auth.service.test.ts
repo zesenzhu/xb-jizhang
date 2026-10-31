@@ -23,6 +23,7 @@ describe('AuthService', () => {
       user: { create: jest.fn(), update: jest.fn() },
       ledger: { create: jest.fn() },
       ledgerMember: { create: jest.fn() },
+      category: { createMany: jest.fn() },
       refreshSession: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     };
     const prisma = {
@@ -85,6 +86,7 @@ describe('AuthService', () => {
     dependencies.transactionClient.ledgerMember.create.mockResolvedValue({
       id: 'member-1',
     });
+    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 4 });
     dependencies.transactionClient.refreshSession.create.mockResolvedValue({
       id: 'session-1',
     });
@@ -113,6 +115,14 @@ describe('AuthService', () => {
           role: 'OWNER',
           status: 'ACTIVE',
         }),
+      }),
+    );
+    expect(dependencies.transactionClient.category.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ ledgerId: 'ledger-1', type: 'EXPENSE', isSystem: true }),
+          expect.objectContaining({ ledgerId: 'ledger-1', type: 'INCOME', isSystem: true }),
+        ]),
       }),
     );
     expect(dependencies.transactionClient.refreshSession.create).toHaveBeenCalled();

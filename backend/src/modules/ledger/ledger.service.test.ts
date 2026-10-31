@@ -23,6 +23,7 @@ describe('LedgerService', () => {
     const transactionClient = {
       ledger: { create: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
       ledgerMember: { create: jest.fn() },
+      category: { createMany: jest.fn() },
     };
     const prisma = {
       ledger: { findMany: jest.fn(), count: jest.fn(), findUnique: jest.fn() },
@@ -70,6 +71,7 @@ describe('LedgerService', () => {
       role: 'OWNER',
       joinedAt: updatedAt,
     });
+    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 4 });
 
     const result = await dependencies.service.create(userId, {
       name: ' 家庭账本 ',
@@ -90,6 +92,14 @@ describe('LedgerService', () => {
     expect(dependencies.transactionClient.ledgerMember.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { ledgerId: 'ledger-1', userId, role: 'OWNER', status: 'ACTIVE' },
+      }),
+    );
+    expect(dependencies.transactionClient.category.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ ledgerId: 'ledger-1', type: 'EXPENSE', isSystem: true }),
+          expect.objectContaining({ ledgerId: 'ledger-1', type: 'INCOME', isSystem: true }),
+        ]),
       }),
     );
     expect(result).toEqual(expect.objectContaining({ id: 'ledger-1', memberRole: 'OWNER' }));

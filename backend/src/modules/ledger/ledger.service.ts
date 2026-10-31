@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getDefaultCategoryData } from '../category/category.constants';
 import type {
   CreateLedgerInput,
   LedgerQuery,
@@ -91,6 +92,7 @@ export class LedgerService {
         data: { ledgerId: ledger.id, userId, role: 'OWNER', status: 'ACTIVE' },
         select: { role: true, joinedAt: true },
       });
+      await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
       return toLedgerSummary(ledger, membership.role, membership.joinedAt);
     });
   }

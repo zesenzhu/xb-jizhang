@@ -21,6 +21,7 @@ import {
   toSafeUser,
 } from './auth.types';
 import { PasswordService } from './password.service';
+import { getDefaultCategoryData } from '../category/category.constants';
 
 const safeUserSelect = {
   id: true,
@@ -93,6 +94,7 @@ export class AuthService {
             status: 'ACTIVE',
           },
         });
+        await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
         await this.createRefreshSession(transaction, user.id, refreshToken, metadata);
 
         return { user, ledger };
