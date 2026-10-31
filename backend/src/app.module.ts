@@ -11,6 +11,7 @@ import { LedgerMemberModule } from './modules/ledger-member/ledger-member.module
 import { InvitationModule } from './modules/invitation/invitation.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
+import { TransactionModule } from './modules/transaction/transaction.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UserModule } from './modules/user/user.module';
     LedgerMemberModule,
     InvitationModule,
     UserModule,
+    TransactionModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
