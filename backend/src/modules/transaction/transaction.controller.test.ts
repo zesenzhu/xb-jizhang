@@ -43,4 +43,14 @@ describe('TransactionController', () => {
 
     expect(service.getDetail).toHaveBeenCalledWith('user-1', 'ledger-1', 'transaction-1');
   });
+
+  it('给定账单列表请求，当 Controller 接收筛选参数，则把用户、账本和查询条件传入 Service', async () => {
+    const service = { list: jest.fn().mockResolvedValue({ items: [], total: 0 }) };
+    const controller = new TransactionController(service as unknown as TransactionService);
+    const query = { page: 2, pageSize: 10, type: 'INCOME' as const, keyword: '工资' };
+
+    await controller.list({ id: 'user-1' }, 'ledger-1', query);
+
+    expect(service.list).toHaveBeenCalledWith('user-1', 'ledger-1', query);
+  });
 });

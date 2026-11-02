@@ -64,6 +64,8 @@ describe('TransactionService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
       },
       account: { updateMany: jest.fn() },
       transactionAuditLog: { create: jest.fn() },
@@ -72,7 +74,12 @@ describe('TransactionService', () => {
       ledgerMember: { findUnique: jest.fn() },
       account: { findFirst: jest.fn() },
       category: { findFirst: jest.fn() },
-      transaction: { findFirst: jest.fn(), findUnique: jest.fn() },
+      transaction: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+      },
       $transaction: jest.fn(async (callback: (client: typeof transactionClient) => unknown) =>
         callback(transactionClient),
       ),
@@ -256,6 +263,86 @@ describe('TransactionService', () => {
 
     expect(result).toEqual(expect.objectContaining({ id: transactionId }));
     expect(dependencies.transactionClient.account.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('给定活跃成员查询账单，当包含筛选条件，则按账本、可见账户和时间倒序分页返回', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([transaction]);
+    dependencies.prisma.transaction.count.mockResolvedValue(1);
+
+    const result = await dependencies.service.list(userId, ledgerId, {
+      page: 2,
+      pageSize: 10,
+      type: 'EXPENSE',
+      categoryId,
+      accountId,
+      payerId,
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-11-01T00:00:00.000Z',
+      keyword: ' 早餐 ',
+    });
+
+    expect(dependencies.prisma.transaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          ledgerId,
+          deletedAt: null,
+          type: 'EXPENSE',
+          categoryId,
+          accountId,
+          payerId,
+          occurredAt: {
+            gte: new Date('2026-10-01T00:00:00.000Z'),
+            lt: new Date('2026-11-01T00:00:00.000Z'),
+          },
+          account: {
+            OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }],
+          },
+          OR: [{ title: { contains: '早餐', mode: 'insensitive' } }, { note: { contains: '早餐', mode: 'insensitive' } }],
+        },
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+        skip: 10,
+        take: 10,
+        select: expect.any(Object),
+      }),
+    );
+    expect(result).toEqual({
+      items: [transaction],
+      total: 1,
+      page: 2,
+      pageSize: 10,
+      hasNextPage: false,
+    });
+  });
+
+  it('给定没有账单，当成员查询列表，则返回空分页结果', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([]);
+    dependencies.prisma.transaction.count.mockResolvedValue(0);
+
+    const result = await dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 20, hasNextPage: false });
+  });
+
+  it('给定时间范围无效，当查询账单列表，则返回参数错误且不查询数据库', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+
+    await expect(
+      dependencies.service.list(userId, ledgerId, {
+        page: 1,
+        pageSize: 20,
+        from: '2026-11-01T00:00:00.000Z',
+        to: '2026-10-01T00:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
   });
 
   it('给定数据库返回非幂等冲突，当创建账单，则保留冲突异常', async () => {

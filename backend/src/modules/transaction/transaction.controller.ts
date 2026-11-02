@@ -1,15 +1,25 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AuthUser } from '../../common/auth/authenticated-request';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { TransactionService } from './transaction.service';
-import type { CreateTransactionInput } from './transaction.types';
+import type { CreateTransactionInput, TransactionQuery } from './transaction.types';
 
 @Controller('ledgers/:ledgerId/transactions')
 @UseGuards(AuthGuard)
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
+
+  @Get()
+  list(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+    @Query() query: QueryTransactionsDto,
+  ) {
+    return this.transactionService.list(user.id, ledgerId, query as TransactionQuery);
+  }
 
   @Post()
   create(

@@ -12,6 +12,18 @@ export interface CreateTransactionInput {
   note?: string | null;
 }
 
+export interface TransactionQuery {
+  page: number;
+  pageSize: number;
+  type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
+  categoryId?: string;
+  accountId?: string;
+  payerId?: string;
+  from?: string;
+  to?: string;
+  keyword?: string;
+}
+
 export interface TransactionSummary {
   id: string;
   ledgerId: string;

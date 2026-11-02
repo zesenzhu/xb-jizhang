@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateTransactionInput, TransactionSummary } from './transaction.types';
+import type {
+  CreateTransactionInput,
+  TransactionQuery,
+  TransactionSummary,
+} from './transaction.types';
 
 const transactionSelect = {
   id: true,
@@ -154,6 +158,55 @@ export class TransactionService {
     return this.toSummary(record);
   }
 
+  async list(userId: string, ledgerId: string, query: TransactionQuery) {
+    const member = await this.getMembership(userId, ledgerId);
+    if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
+
+    const page = Math.max(1, query.page);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize));
+    const occurredAt = this.buildDateRange(query.from, query.to);
+    const keyword = query.keyword?.trim();
+    const where: Prisma.TransactionWhereInput = {
+      ledgerId,
+      deletedAt: null,
+      ...(query.type === undefined ? {} : { type: query.type }),
+      ...(query.categoryId === undefined ? {} : { categoryId: query.categoryId }),
+      ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
+      ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
+      ...(occurredAt === undefined ? {} : { occurredAt }),
+      account: {
+        OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }],
+      },
+      ...(keyword
+        ? {
+            OR: [
+              { title: { contains: keyword, mode: 'insensitive' } },
+              { note: { contains: keyword, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [transactions, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: transactionSelect,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return {
+      items: transactions.map((item) => this.toSummary(item)),
+      total,
+      page,
+      pageSize,
+      hasNextPage: page * pageSize < total,
+    };
+  }
+
   private async readDetailRecord(
     userId: string,
     ledgerId: string,
@@ -180,6 +233,19 @@ export class TransactionService {
       where: { ledgerId, clientRequestId, deletedAt: null },
       select: transactionSelect,
     });
+  }
+
+  private buildDateRange(from?: string, to?: string): Prisma.DateTimeFilter | undefined {
+    if (from === undefined && to === undefined) return undefined;
+    const range: Prisma.DateTimeFilter = {};
+    const fromDate = from === undefined ? undefined : new Date(from);
+    const toDate = to === undefined ? undefined : new Date(to);
+    if (fromDate && Number.isNaN(fromDate.getTime())) throw this.invalidInputException();
+    if (toDate && Number.isNaN(toDate.getTime())) throw this.invalidInputException();
+    if (fromDate) range.gte = fromDate;
+    if (toDate) range.lt = toDate;
+    if (fromDate && toDate && fromDate >= toDate) throw this.invalidInputException();
+    return range;
   }
 
   private async getMembership(userId: string, ledgerId: string) {
