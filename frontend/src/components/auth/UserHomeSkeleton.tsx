@@ -3,9 +3,13 @@
 import * as React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
+/**
+ * 首页（明细/记账工作台）专属骨架屏
+ * 1:1 还原当前活跃账本大卡片 + 操作按钮 + 触控记账键盘
+ */
 export function UserHomeSkeleton(): React.JSX.Element {
   return (
-    <div className="min-h-screen bg-app-bg text-text-main pb-24 select-none">
+    <div className="select-none">
       {/* 离线状态条占位 */}
       <div className="px-4 pt-3 max-w-md mx-auto">
         <Skeleton className="h-4 w-32 rounded-full opacity-0" />
@@ -55,18 +59,6 @@ export function UserHomeSkeleton(): React.JSX.Element {
               <Skeleton key={idx} className="h-14 rounded-2xl bg-app-card-subtle" />
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* 底部固定导航栏骨架 */}
-      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-app-border bg-app-card/95 pb-safe sm:hidden">
-        <div className="flex h-16 items-center justify-around px-2">
-          {Array.from({ length: 5 }).map((_, idx) => (
-            <div key={idx} className="flex flex-col items-center gap-1">
-              <Skeleton className="size-5 rounded-full" />
-              <Skeleton className="h-2 w-6 rounded-md" />
-            </div>
-          ))}
         </div>
       </div>
     </div>

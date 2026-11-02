@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Sparkles, WalletCards } from 'lucide-react';
 import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
+import { UserHomeSkeleton } from '@/components/auth/UserHomeSkeleton';
 import { useAppStore } from '@/store/useAppStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { getLedger, getLedgers } from '@/lib/api/ledger-api';
@@ -17,7 +18,7 @@ import { Button } from '@/components/ui/button';
 
 export default function UserHomePage(): React.JSX.Element {
   return (
-    <UserAuthBoundary>
+    <UserAuthBoundary fallback={<UserHomeSkeleton />}>
       <UserHomeContent />
     </UserAuthBoundary>
   );
