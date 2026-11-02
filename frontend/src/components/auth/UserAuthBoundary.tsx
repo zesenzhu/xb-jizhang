@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/api/user-auth-api';
+import { initializeAuthSession } from '@/lib/auth/initialize-auth';
 import { getLoginRedirectUrl } from '@/lib/routing/routes';
 import { useUserAuthStore } from '@/store/userAuthStore';
 
@@ -18,14 +19,18 @@ export function UserAuthBoundary({ children }: Readonly<{ children: React.ReactN
     if (status !== 'unknown') return;
     let active = true;
     setStatus('refreshing');
-    void getCurrentUser()
-      .then((user) => {
-        if (active) setCurrentUser(user);
-      })
-      .catch(() => {
-        if (!active) return;
+    void initializeAuthSession({
+      load: getCurrentUser,
+      isActive: () => active,
+      onAuthenticated: (user) => {
+        setCurrentUser(user);
+        setStatus('authenticated');
+      },
+      onUnauthenticated: () => {
         clear();
-      });
+        setStatus('unauthenticated');
+      },
+    });
 
     return () => {
       active = false;

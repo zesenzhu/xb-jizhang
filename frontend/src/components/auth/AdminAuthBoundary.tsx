@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentAdmin } from '@/lib/api/admin-auth-api';
+import { initializeAuthSession } from '@/lib/auth/initialize-auth';
 import { getLoginRedirectUrl } from '@/lib/routing/routes';
 import { useAdminAuthStore } from '@/store/adminAuthStore';
 
@@ -18,14 +19,18 @@ export function AdminAuthBoundary({ children }: Readonly<{ children: React.React
     if (status !== 'unknown') return;
     let active = true;
     setStatus('refreshing');
-    void getCurrentAdmin()
-      .then((admin) => {
-        if (active) setCurrentAdmin(admin);
-      })
-      .catch(() => {
-        if (!active) return;
+    void initializeAuthSession({
+      load: getCurrentAdmin,
+      isActive: () => active,
+      onAuthenticated: (admin) => {
+        setCurrentAdmin(admin);
+        setStatus('authenticated');
+      },
+      onUnauthenticated: () => {
         clear();
-      });
+        setStatus('unauthenticated');
+      },
+    });
 
     return () => {
       active = false;

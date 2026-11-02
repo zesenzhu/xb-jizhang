@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiRequestError } from '@/lib/api/errors';
 import { getCurrentAdmin, loginAdmin } from '@/lib/api/admin-auth-api';
+import { initializeAuthSession } from '@/lib/auth/initialize-auth';
 import { getSafeRedirectTarget } from '@/lib/routing/routes';
 import { useAdminAuthStore } from '@/store/adminAuthStore';
 
@@ -24,13 +25,18 @@ export default function AdminLoginPage(): React.JSX.Element {
     if (status !== 'unknown') return;
     let active = true;
     setStatus('refreshing');
-    void getCurrentAdmin()
-      .then((admin) => {
-        if (active) setCurrentAdmin(admin);
-      })
-      .catch(() => {
-        if (active) clear();
-      });
+    void initializeAuthSession({
+      load: getCurrentAdmin,
+      isActive: () => active,
+      onAuthenticated: (admin) => {
+        setCurrentAdmin(admin);
+        setStatus('authenticated');
+      },
+      onUnauthenticated: () => {
+        clear();
+        setStatus('unauthenticated');
+      },
+    });
 
     return () => {
       active = false;

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { AuthCard } from '@/components/auth/AuthCard';
 import { getCurrentUser } from '@/lib/api/user-auth-api';
+import { initializeAuthSession } from '@/lib/auth/initialize-auth';
 import { getSafeRedirectTarget } from '@/lib/routing/routes';
 import { useUserAuthStore } from '@/store/userAuthStore';
 
@@ -28,15 +29,18 @@ export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
     if (status !== 'unknown') return;
     let active = true;
     setStatus('refreshing');
-    void getCurrentUser()
-      .then((user) => {
-        if (active) setCurrentUser(user);
+    void initializeAuthSession({
+      load: getCurrentUser,
+      isActive: () => active,
+      onAuthenticated: (user) => {
+        setCurrentUser(user);
         setStatus('authenticated');
-      })
-      .catch(() => {
-        if (active) clear();
+      },
+      onUnauthenticated: () => {
+        clear();
         setStatus('unauthenticated');
-      });
+      },
+    });
 
     return () => {
       active = false;
