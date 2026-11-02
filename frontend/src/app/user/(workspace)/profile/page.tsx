@@ -9,19 +9,13 @@ import {
   Shield,
   Smartphone,
 } from 'lucide-react';
-import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
-import { UserProfileSkeleton } from '@/components/skeleton/UserProfileSkeleton';
 import { logoutUser } from '@/lib/api/user-auth-api';
 import { useUserAuthStore } from '@/store/userAuthStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { Button } from '@/components/ui/button';
 
 export default function UserProfilePage(): React.JSX.Element {
-  return (
-    <UserAuthBoundary fallback={<UserProfileSkeleton />}>
-      <UserProfileContent />
-    </UserAuthBoundary>
-  );
+  return <UserProfileContent />;
 }
 
 function UserProfileContent(): React.JSX.Element {
