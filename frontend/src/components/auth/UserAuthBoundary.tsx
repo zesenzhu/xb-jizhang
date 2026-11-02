@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/api/user-auth-api';
 import { initializeAuthSession } from '@/lib/auth/initialize-auth';
@@ -14,14 +14,21 @@ export function UserAuthBoundary({ children }: Readonly<{ children: React.ReactN
   const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser);
   const setStatus = useUserAuthStore((state) => state.setStatus);
   const clear = useUserAuthStore((state) => state.clear);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== 'unknown') return;
-    let active = true;
     setStatus('refreshing');
     void initializeAuthSession({
       load: getCurrentUser,
-      isActive: () => active,
+      isActive: () => mountedRef.current,
       onAuthenticated: (user) => {
         setCurrentUser(user);
         setStatus('authenticated');
@@ -32,9 +39,6 @@ export function UserAuthBoundary({ children }: Readonly<{ children: React.ReactN
       },
     });
 
-    return () => {
-      active = false;
-    };
   }, [clear, router, setCurrentUser, setStatus, status]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCurrentAdmin } from '@/lib/api/admin-auth-api';
 import { initializeAuthSession } from '@/lib/auth/initialize-auth';
@@ -14,14 +14,21 @@ export function AdminAuthBoundary({ children }: Readonly<{ children: React.React
   const setCurrentAdmin = useAdminAuthStore((state) => state.setCurrentAdmin);
   const setStatus = useAdminAuthStore((state) => state.setStatus);
   const clear = useAdminAuthStore((state) => state.clear);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== 'unknown') return;
-    let active = true;
     setStatus('refreshing');
     void initializeAuthSession({
       load: getCurrentAdmin,
-      isActive: () => active,
+      isActive: () => mountedRef.current,
       onAuthenticated: (admin) => {
         setCurrentAdmin(admin);
         setStatus('authenticated');
@@ -32,9 +39,6 @@ export function AdminAuthBoundary({ children }: Readonly<{ children: React.React
       },
     });
 
-    return () => {
-      active = false;
-    };
   }, [clear, router, setCurrentAdmin, setStatus, status]);
 
   useEffect(() => {

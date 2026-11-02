@@ -20,14 +20,21 @@ export default function AdminLoginPage(): React.JSX.Element {
   const [password, setPassword] = React.useState('');
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const mountedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (status !== 'unknown') return;
-    let active = true;
     setStatus('refreshing');
     void initializeAuthSession({
       load: getCurrentAdmin,
-      isActive: () => active,
+      isActive: () => mountedRef.current,
       onAuthenticated: (admin) => {
         setCurrentAdmin(admin);
         setStatus('authenticated');
@@ -38,9 +45,6 @@ export default function AdminLoginPage(): React.JSX.Element {
       },
     });
 
-    return () => {
-      active = false;
-    };
   }, [clear, setCurrentAdmin, setStatus, status]);
 
   React.useEffect(() => {

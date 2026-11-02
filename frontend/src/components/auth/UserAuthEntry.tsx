@@ -24,14 +24,21 @@ export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
   const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser);
   const setStatus = useUserAuthStore((state) => state.setStatus);
   const clear = useUserAuthStore((state) => state.clear);
+  const mountedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (status !== 'unknown') return;
-    let active = true;
     setStatus('refreshing');
     void initializeAuthSession({
       load: getCurrentUser,
-      isActive: () => active,
+      isActive: () => mountedRef.current,
       onAuthenticated: (user) => {
         setCurrentUser(user);
         setStatus('authenticated');
@@ -42,9 +49,6 @@ export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
       },
     });
 
-    return () => {
-      active = false;
-    };
   }, [clear, setCurrentUser, setStatus, status]);
 
   React.useEffect(() => {
