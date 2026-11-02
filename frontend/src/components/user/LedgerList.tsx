@@ -2,11 +2,13 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Plus, RefreshCw, WalletCards } from 'lucide-react';
 import { ApiRequestError } from '@/lib/api/errors';
-import { getLedgers } from '@/lib/api/ledger-api';
+import { createLedger, getLedgers } from '@/lib/api/ledger-api';
 import type { LedgerSummary } from '@/lib/api/ledger-types';
 import { validateLedgerName } from '@/lib/ledger/ledger-form';
+import { queryKeys, queryStaleTime } from '@/lib/query/query-config';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,27 +23,18 @@ export function LedgerList(): React.JSX.Element {
   const router = useRouter();
   const currentLedgerId = useWorkspaceStore((state) => state.currentLedgerId);
   const setCurrentLedgerId = useWorkspaceStore((state) => state.setCurrentLedgerId);
-  const [ledgers, setLedgers] = React.useState<LedgerSummary[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-
-  const loadLedgers = React.useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const result = await getLedgers();
-      setLedgers(result.items);
-      if (!currentLedgerId && result.items[0]) setCurrentLedgerId(result.items[0].id);
-    } catch (error: unknown) {
-      setErrorMessage(error instanceof ApiRequestError ? error.message : '账本加载失败，请稍后重试');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentLedgerId, setCurrentLedgerId]);
-
-  React.useEffect(() => {
-    void Promise.resolve().then(() => loadLedgers());
-  }, [loadLedgers]);
+  const ledgersQuery = useQuery({
+    queryKey: queryKeys.ledgers.list(),
+    queryFn: () => getLedgers(),
+    staleTime: queryStaleTime.ledgers,
+  });
+  const ledgers = ledgersQuery.data?.items ?? [];
+  const isLoading = ledgersQuery.isPending && !ledgersQuery.data;
+  const errorMessage = ledgersQuery.isError && !ledgersQuery.data
+    ? ledgersQuery.error instanceof ApiRequestError
+      ? ledgersQuery.error.message
+      : '账本加载失败，请稍后重试'
+    : null;
 
   const selectLedger = (ledger: LedgerSummary): void => {
     setCurrentLedgerId(ledger.id);
@@ -94,7 +87,7 @@ export function LedgerList(): React.JSX.Element {
         {!isLoading && errorMessage && (
           <section role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-800 space-y-3">
             <p className="text-sm">{errorMessage}</p>
-            <Button variant="outline" size="sm" onClick={() => void loadLedgers()} className="gap-1.5 border-rose-200">
+            <Button variant="outline" size="sm" onClick={() => void ledgersQuery.refetch()} className="gap-1.5 border-rose-200">
               <RefreshCw size={14} />
               重新加载
             </Button>
@@ -156,28 +149,33 @@ export function CreateLedgerForm(): React.JSX.Element {
   const setCurrentLedgerId = useWorkspaceStore((state) => state.setCurrentLedgerId);
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState<'PERSONAL' | 'SHARED'>('PERSONAL');
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [isSaving, setIsSaving] = React.useState(false);
+  const [validationError, setValidationError] = React.useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const createMutation = useMutation({
+    mutationFn: createLedger,
+    onSuccess: (ledger) => {
+      setCurrentLedgerId(ledger.id);
+      queryClient.setQueryData(queryKeys.ledgers.detail(ledger.id), ledger);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ledgers.all });
+      router.replace(`/user/ledger/${encodeURIComponent(ledger.id)}`);
+    },
+  });
+  const errorMessage = validationError ?? (createMutation.error instanceof ApiRequestError
+    ? createMutation.error.message
+    : createMutation.isError
+      ? '创建账本失败，请稍后重试'
+      : null);
 
-  const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const submit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    const validationError = validateLedgerName(name);
-    if (validationError) {
-      setErrorMessage(validationError);
+    const nameError = validateLedgerName(name);
+    if (nameError) {
+      setValidationError(nameError);
       return;
     }
-    setErrorMessage(null);
-    setIsSaving(true);
-    try {
-      const { createLedger } = await import('@/lib/api/ledger-api');
-      const ledger = await createLedger({ name: name.trim(), type });
-      setCurrentLedgerId(ledger.id);
-      router.replace(`/user/ledger/${encodeURIComponent(ledger.id)}`);
-    } catch (error: unknown) {
-      setErrorMessage(error instanceof ApiRequestError ? error.message : '创建账本失败，请稍后重试');
-    } finally {
-      setIsSaving(false);
-    }
+    setValidationError(null);
+    createMutation.reset();
+    createMutation.mutate({ name: name.trim(), type });
   };
 
   return (
@@ -196,7 +194,7 @@ export function CreateLedgerForm(): React.JSX.Element {
             <p className="mt-1 text-xs text-text-muted">创建后你会自动成为 Owner，之后可以邀请其他成员协作记账。</p>
           </div>
 
-          {errorMessage && (
+        {errorMessage && (
             <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 border border-rose-200">
               {errorMessage}
             </p>
@@ -212,7 +210,7 @@ export function CreateLedgerForm(): React.JSX.Element {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="例如：家庭账本、合租记账"
-                disabled={isSaving}
+                disabled={createMutation.isPending}
                 required
               />
             </div>
@@ -225,7 +223,7 @@ export function CreateLedgerForm(): React.JSX.Element {
                 id="ledger-type"
                 value={type}
                 onChange={(event) => setType(event.target.value as 'PERSONAL' | 'SHARED')}
-                disabled={isSaving}
+                disabled={createMutation.isPending}
                 className="h-10 w-full rounded-xl border border-app-border bg-app-card px-3 text-sm text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
               >
                 <option value="PERSONAL">个人账本（仅自己可见）</option>
@@ -234,10 +232,10 @@ export function CreateLedgerForm(): React.JSX.Element {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSaving}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={createMutation.isPending}>
                 取消
               </Button>
-              <Button type="submit" isLoading={isSaving} loadingText="创建中...">
+              <Button type="submit" isLoading={createMutation.isPending} loadingText="创建中...">
                 确认创建
               </Button>
             </div>

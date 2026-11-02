@@ -25,9 +25,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               'flex h-10 w-full rounded-xl border border-app-border bg-app-card px-3 py-2 text-sm text-text-main placeholder:text-text-muted transition-colors',
               'focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
               'disabled:cursor-not-allowed disabled:bg-app-card-subtle disabled:text-text-muted',
-              startIcon && 'pl-9',
-              endIcon && 'pr-9',
-              error && 'border-rose-500 focus-visible:border-rose-500 focus-visible:ring-rose-500/20',
+              startIcon ? 'pl-9' : undefined,
+              endIcon ? 'pr-9' : undefined,
+              error ? 'border-rose-500 focus-visible:border-rose-500 focus-visible:ring-rose-500/20' : undefined,
               className,
             )}
             {...props}

@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
 
 export type NavTab = 'home' | 'transactions' | 'stats' | 'profile';
 
+type NavigationItem =
+  | { key: NavTab; label: string; icon: typeof Home; route: string }
+  | { key: 'quickAdd'; label: string; icon: typeof Plus; isAction: true };
+
 export interface MobileBottomNavProps {
   activeTab: NavTab;
   onTabChange?: (tab: NavTab) => void;
@@ -20,7 +24,7 @@ export function MobileBottomNav({
   onQuickAdd,
   className,
 }: MobileBottomNavProps): React.JSX.Element {
-  const tabs = [
+  const tabs: NavigationItem[] = [
     { key: 'home' as const, label: '明细', icon: Home, route: '/user' },
     { key: 'transactions' as const, label: '账本', icon: ReceiptText, route: '/user/ledger' },
     { key: 'quickAdd' as const, label: '记账', icon: Plus, isAction: true },
@@ -40,7 +44,7 @@ export function MobileBottomNav({
         {tabs.map((tab) => {
           const Icon = tab.icon;
 
-          if (tab.isAction) {
+          if ('isAction' in tab) {
             return (
               <div key={tab.key} className="relative -top-3 flex flex-col items-center">
                 <button
