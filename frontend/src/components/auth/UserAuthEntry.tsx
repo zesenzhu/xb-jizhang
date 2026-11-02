@@ -15,7 +15,10 @@ export interface UserAuthEntryProps {
 export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = getSafeRedirectTarget(searchParams.get('redirect'), 'user');
+  const redirectTarget = getSafeRedirectTarget(
+    searchParams.get('redirect'),
+    'user',
+  );
   const status = useUserAuthStore((state) => state.status);
   const setCurrentUser = useUserAuthStore((state) => state.setCurrentUser);
   const setStatus = useUserAuthStore((state) => state.setStatus);
@@ -28,9 +31,11 @@ export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
     void getCurrentUser()
       .then((user) => {
         if (active) setCurrentUser(user);
+        setStatus('authenticated');
       })
       .catch(() => {
         if (active) clear();
+        setStatus('unauthenticated');
       });
 
     return () => {
@@ -44,17 +49,24 @@ export function UserAuthEntry({ mode }: UserAuthEntryProps): React.JSX.Element {
     }
   }, [redirectTarget, router, status]);
 
-  if (status === 'unknown' || status === 'refreshing' || status === 'authenticated') {
+  if (
+    status === 'unknown' ||
+    status === 'refreshing' ||
+    status === 'authenticated'
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="size-8 animate-spin text-emerald-600" />
+        <Loader2 className="size-8 animate-spin text-ios-blue" />
       </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col justify-center px-4 py-8 sm:py-12 bg-gradient-to-b from-slate-50 via-emerald-50/20 to-slate-100">
-      <AuthCard defaultMode={mode} onSuccess={() => router.replace(redirectTarget)} />
+    <main className="flex min-h-screen flex-col justify-center px-4 py-8 sm:py-12 bg-gradient-to-b from-slate-50 via-ios-blue/10 to-slate-100">
+      <AuthCard
+        defaultMode={mode}
+        onSuccess={() => router.replace(redirectTarget)}
+      />
     </main>
   );
 }

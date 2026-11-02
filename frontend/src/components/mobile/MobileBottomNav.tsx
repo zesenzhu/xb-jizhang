@@ -39,18 +39,18 @@ export function MobileBottomNav({
         {tabs.map((tab) => {
           const Icon = tab.icon;
 
-          if (tab.key === 'quickAdd') {
+          if (tab.isAction) {
             return (
               <div key={tab.key} className="relative -top-3 flex flex-col items-center">
                 <button
                   type="button"
                   onClick={onQuickAdd}
-                  className="flex size-13 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 transition-all active:scale-95 active:bg-emerald-700"
+                  className="flex size-13 items-center justify-center rounded-full bg-ios-yellow text-slate-950 shadow-lg shadow-ios-yellow/30 transition-all active:scale-95 active:bg-ios-yellow-hover"
                   aria-label="快速记一笔"
                 >
-                  <Plus size={26} strokeWidth={2.5} />
+                  <Plus size={26} strokeWidth={2.6} />
                 </button>
-                <span className="mt-1 text-[10px] font-medium text-slate-500">{tab.label}</span>
+                <span className="mt-1 text-[10px] font-semibold text-slate-700">{tab.label}</span>
               </div>
             );
           }
@@ -63,11 +63,11 @@ export function MobileBottomNav({
               onClick={() => onTabChange(tab.key)}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center py-1 transition-colors',
-                isActive ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600',
+                isActive ? 'text-ios-blue' : 'text-slate-400 hover:text-slate-600',
               )}
             >
-              <Icon size={20} strokeWidth={isActive ? 2.3 : 1.8} />
-              <span className={cn('mt-1 text-[11px]', isActive ? 'font-semibold' : 'font-normal')}>
+              <Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} />
+              <span className={cn('mt-1 text-[11px]', isActive ? 'font-semibold text-ios-blue' : 'font-normal')}>
                 {tab.label}
               </span>
             </button>
@@ -77,4 +77,3 @@ export function MobileBottomNav({
     </nav>
   );
 }
-

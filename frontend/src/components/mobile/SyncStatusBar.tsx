@@ -26,12 +26,11 @@ export function SyncStatusBar({
   onRetry,
   className,
 }: SyncStatusBarProps): React.JSX.Element | null {
-  // 如果完全在线、无待同步项、无正在同步且无冲突，则不占用空间
   if (isOnline && pendingCount === 0 && !isSyncing && !hasConflict) {
     return null;
   }
 
-  // 1. 同步冲突或失败状态
+  // 1. 同步冲突或失败
   if (hasConflict) {
     return (
       <div
@@ -63,17 +62,17 @@ export function SyncStatusBar({
     return (
       <div
         className={cn(
-          'flex items-center gap-2.5 rounded-2xl bg-blue-50 px-4 py-2.5 text-xs text-blue-800 border border-blue-200/60 shadow-xs animate-in fade-in',
+          'flex items-center gap-2.5 rounded-2xl bg-blue-50 px-4 py-2.5 text-xs text-ios-blue border border-blue-200/60 shadow-xs animate-in fade-in',
           className,
         )}
       >
-        <Loader2 size={16} className="animate-spin text-blue-600 shrink-0" aria-hidden="true" />
+        <Loader2 size={16} className="animate-spin text-ios-blue shrink-0" aria-hidden="true" />
         <span>正在同步 {pendingCount > 0 ? `${pendingCount} 笔` : ''} 离线账单至云端...</span>
       </div>
     );
   }
 
-  // 3. 处于离线模式
+  // 3. 离线模式
   if (!isOnline) {
     return (
       <div
@@ -93,24 +92,24 @@ export function SyncStatusBar({
     );
   }
 
-  // 4. 在线但有待同步队列尚未触发
+  // 4. 在线但有待同步队列
   if (pendingCount > 0) {
     return (
       <div
         className={cn(
-          'flex items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800 border border-emerald-200/60 shadow-xs animate-in fade-in',
+          'flex items-center justify-between gap-3 rounded-2xl bg-blue-50 px-4 py-2.5 text-xs text-ios-blue border border-blue-200/60 shadow-xs animate-in fade-in',
           className,
         )}
       >
         <div className="flex items-center gap-2">
-          <RefreshCw size={16} className="text-emerald-600 shrink-0" aria-hidden="true" />
+          <RefreshCw size={16} className="text-ios-blue shrink-0" aria-hidden="true" />
           <span>发现 {pendingCount} 笔本地未同步记录</span>
         </div>
         {onRetry && (
           <button
             type="button"
             onClick={onRetry}
-            className="font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+            className="font-semibold text-ios-blue underline underline-offset-2 hover:opacity-80"
           >
             立即同步
           </button>
@@ -121,4 +120,3 @@ export function SyncStatusBar({
 
   return null;
 }
-

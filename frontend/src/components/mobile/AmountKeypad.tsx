@@ -60,20 +60,16 @@ export function AmountKeypad({
       return;
     }
 
-    // 处理数字键输入
-    // 若当前为 "0"，直接替换为该数字（除非输入小数点）
     if (value === '0') {
       onChange(key);
       return;
     }
 
-    // 限制小数位最多 2 位（记账金额精度：分）
     const parts = value.split('.');
     if (parts.length === 2 && parts[1].length >= 2) {
       return;
     }
 
-    // 限制最大长度，防止溢出
     if (value.length >= 10) {
       return;
     }
@@ -124,7 +120,7 @@ export function AmountKeypad({
         <RotateCcw size={18} />
       </button>
 
-      {/* 7, 8, 9, 占位/右侧确定跨行 */}
+      {/* 7, 8, 9, 提交 */}
       <button type="button" onClick={() => handleKeyPress('7')} className={keyBaseClass}>
         7
       </button>
@@ -142,7 +138,7 @@ export function AmountKeypad({
           onSubmit?.();
         }}
         className={cn(
-          'row-span-2 flex items-center justify-center rounded-2xl bg-emerald-600 text-white font-semibold shadow-md shadow-emerald-600/20 active:scale-[0.97] active:bg-emerald-700 disabled:opacity-50 select-none text-base',
+          'row-span-2 flex items-center justify-center rounded-2xl bg-ios-blue text-white font-semibold shadow-md shadow-ios-blue/25 active:scale-[0.97] active:bg-ios-blue-active disabled:opacity-50 select-none text-base',
         )}
       >
         <div className="flex flex-col items-center gap-1">
@@ -151,7 +147,7 @@ export function AmountKeypad({
         </div>
       </button>
 
-      {/* 0 (占2列), 小数点 */}
+      {/* 0, 小数点 */}
       <button
         type="button"
         onClick={() => handleKeyPress('0')}
@@ -165,4 +161,3 @@ export function AmountKeypad({
     </div>
   );
 }
-

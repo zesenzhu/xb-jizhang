@@ -120,7 +120,7 @@ function UserHomeContent(): React.JSX.Element {
         {/* 顶部个人栏 */}
         <header className="flex items-center justify-between rounded-3xl bg-white p-4 shadow-xs border border-slate-200/80">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-base shadow-sm">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-ios-blue to-blue-600 text-white font-bold text-base shadow-sm">
               {avatarText}
             </div>
             <div>
@@ -128,7 +128,7 @@ function UserHomeContent(): React.JSX.Element {
                 <p className="text-sm font-semibold text-slate-900">
                   {user?.nickname || user?.username}
                 </p>
-                <span className="text-[10px] rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 font-medium border border-emerald-200/60">
+                <span className="text-[10px] rounded-full bg-blue-50 px-2 py-0.5 text-ios-blue font-medium border border-blue-200/60">
                   已登录
                 </span>
               </div>
@@ -150,14 +150,14 @@ function UserHomeContent(): React.JSX.Element {
         </header>
 
         {/* 当前账本卡片 */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 p-5 text-white shadow-lg shadow-emerald-700/20">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 p-5 text-white shadow-xl shadow-blue-950/20 border border-white/10">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-xl bg-white/15 backdrop-blur-xs">
                 <WalletCards size={18} />
               </div>
               <div>
-                <p className="text-xs text-emerald-100 font-medium">当前活跃账本</p>
+                <p className="text-xs text-slate-300 font-medium">当前活跃账本</p>
                 <h2 className="text-lg font-bold tracking-tight">
                   {displayedLedger?.name || '还没有选择账本'}
                 </h2>
@@ -171,15 +171,15 @@ function UserHomeContent(): React.JSX.Element {
           {/* 本月结余简要看板 */}
           <div className="mt-6 grid grid-cols-2 gap-4 border-t border-white/15 pt-4">
             <div>
-              <p className="text-xs text-emerald-100/80">本月支出</p>
+              <p className="text-xs text-slate-300">本月支出</p>
               <div className="mt-0.5 text-xl font-bold font-mono">
                 <AmountDisplay amount={-25800} currency="¥" className="text-white" />
               </div>
             </div>
             <div>
-              <p className="text-xs text-emerald-100/80">本月收入</p>
+              <p className="text-xs text-slate-300">本月收入</p>
               <div className="mt-0.5 text-xl font-bold font-mono">
-                <AmountDisplay amount={150000} currency="¥" className="text-emerald-200" />
+                <AmountDisplay amount={150000} currency="¥" className="text-ios-blue" />
               </div>
             </div>
           </div>
@@ -206,7 +206,7 @@ function UserHomeContent(): React.JSX.Element {
         <section className="rounded-3xl bg-white p-5 shadow-xs border border-slate-200/80 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-emerald-600" />
+              <Sparkles size={16} className="text-ios-blue" />
               <h3 className="text-sm font-semibold text-slate-900">快速记一笔</h3>
             </div>
             <span className="text-xs text-slate-400">PWA 定制数字键盘</span>
@@ -236,7 +236,7 @@ function UserHomeContent(): React.JSX.Element {
         {/* 账户与安全信息卡片 */}
         <section className="rounded-3xl bg-white p-4 shadow-xs border border-slate-200/80 text-xs text-slate-500 space-y-2">
           <div className="flex items-center gap-1.5 font-medium text-slate-700">
-            <Shield size={14} className="text-emerald-600" />
+            <Shield size={14} className="text-ios-blue" />
             <span>会话安全提示</span>
           </div>
           <p className="leading-relaxed">
@@ -250,11 +250,9 @@ function UserHomeContent(): React.JSX.Element {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onQuickAdd={() => {
-          // 点击突出记账按钮聚焦数字键盘
           window.scrollTo({ top: 120, behavior: 'smooth' });
         }}
       />
     </div>
   );
 }
-
