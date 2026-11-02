@@ -7,6 +7,8 @@ import {
   isAdminRoute,
   isUserRoute,
   shouldProtectRoute,
+  isUserPrimaryTabRoute,
+  getUserPrimaryTab,
 } from '../src/lib/routing/routes';
 
 assert.equal(isUserRoute('/user'), true);
@@ -36,5 +38,24 @@ assert.equal(shouldProtectRoute('/user/login'), false);
 assert.equal(shouldProtectRoute('/user/register'), false);
 assert.equal(shouldProtectRoute('/admin'), true);
 assert.equal(shouldProtectRoute('/admin/login'), false);
+
+// 一级 Tab 路由判定与映射断言（一级页面常驻底栏，二级页面自动隐藏）
+assert.equal(isUserPrimaryTabRoute('/user'), true);
+assert.equal(isUserPrimaryTabRoute('/user/'), true);
+assert.equal(isUserPrimaryTabRoute('/user/ledger'), true);
+assert.equal(isUserPrimaryTabRoute('/user/ledger/'), true);
+assert.equal(isUserPrimaryTabRoute('/user/profile'), true);
+assert.equal(isUserPrimaryTabRoute('/user/profile/'), true);
+
+assert.equal(getUserPrimaryTab('/user'), 'home');
+assert.equal(getUserPrimaryTab('/user/ledger'), 'transactions');
+assert.equal(getUserPrimaryTab('/user/profile'), 'profile');
+
+// 二级或深层子页面不得判定为一级 Tab
+assert.equal(isUserPrimaryTabRoute('/user/ledger/new'), false);
+assert.equal(isUserPrimaryTabRoute('/user/ledger/abc-123'), false);
+assert.equal(isUserPrimaryTabRoute('/user/login'), false);
+assert.equal(isUserPrimaryTabRoute('/user/register'), false);
+assert.equal(getUserPrimaryTab('/user/ledger/new'), null);
 
 console.log('route contract passed');

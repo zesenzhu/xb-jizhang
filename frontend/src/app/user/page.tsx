@@ -12,7 +12,6 @@ import { ApiRequestError } from '@/lib/api/errors';
 import { resolveInitialLedgerId } from '@/lib/ledger/ledger-form';
 import { AmountDisplay } from '@/components/common/AmountDisplay';
 import { AmountKeypad } from '@/components/mobile/AmountKeypad';
-import { MobileBottomNav, type NavTab } from '@/components/mobile/MobileBottomNav';
 import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
 import { Button } from '@/components/ui/button';
 
@@ -29,7 +28,6 @@ function UserHomeContent(): React.JSX.Element {
   const isOnline = useAppStore((state) => state.isOnline);
   const currentLedgerId = useWorkspaceStore((state) => state.currentLedgerId);
 
-  const [activeTab, setActiveTab] = React.useState<NavTab>('home');
   const [keypadAmount, setKeypadAmount] = React.useState('0');
   const [activeLedger, setActiveLedger] = React.useState<LedgerSummary | null>(null);
   const [ledgerError, setLedgerError] = React.useState<string | null>(null);
@@ -86,7 +84,7 @@ function UserHomeContent(): React.JSX.Element {
   };
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-main pb-24 select-none">
+    <div className="select-none">
       {/* 离线状态提示 */}
       <div className="px-4 pt-3 max-w-md mx-auto">
         <SyncStatusBar isOnline={isOnline} />
@@ -185,15 +183,6 @@ function UserHomeContent(): React.JSX.Element {
           />
         </section>
       </div>
-
-      {/* 移动端固定底部导航 */}
-      <MobileBottomNav
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onQuickAdd={() => {
-          window.scrollTo({ top: 120, behavior: 'smooth' });
-        }}
-      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { BarChart3, Home, Plus, ReceiptText, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,8 +20,6 @@ export function MobileBottomNav({
   onQuickAdd,
   className,
 }: MobileBottomNavProps): React.JSX.Element {
-  const router = useRouter();
-
   const tabs = [
     { key: 'home' as const, label: '明细', icon: Home, route: '/user' },
     { key: 'transactions' as const, label: '账本', icon: ReceiptText, route: '/user/ledger' },
@@ -30,19 +28,10 @@ export function MobileBottomNav({
     { key: 'profile' as const, label: '我的', icon: User, route: '/user/profile' },
   ];
 
-  const handleTabClick = (tab: (typeof tabs)[number]): void => {
-    if (onTabChange) {
-      onTabChange(tab.key as NavTab);
-    }
-    if (tab.route && tab.key !== activeTab) {
-      router.push(tab.route);
-    }
-  };
-
   return (
     <nav
       className={cn(
-        'fixed bottom-0 inset-x-0 z-40 border-t border-app-border bg-app-card/95 backdrop-blur-md pb-safe select-none sm:hidden',
+        'fixed bottom-0 inset-x-0 z-40 border-t border-app-border bg-app-card/95 backdrop-blur-md pb-safe select-none sm:hidden transition-all',
         className,
       )}
       aria-label="移动端底部导航"
@@ -57,7 +46,7 @@ export function MobileBottomNav({
                 <button
                   type="button"
                   onClick={onQuickAdd}
-                  className="flex size-13 items-center justify-center rounded-full bg-accent-fab text-slate-950 shadow-lg shadow-accent-fab/30 transition-all active:scale-95 hover:opacity-90"
+                  className="flex size-13 items-center justify-center rounded-full bg-accent-fab text-slate-950 shadow-lg shadow-accent-fab/30 transition-all active:scale-95 hover:opacity-90 cursor-pointer"
                   aria-label="快速记一笔"
                 >
                   <Plus size={26} strokeWidth={2.6} />
@@ -69,10 +58,15 @@ export function MobileBottomNav({
 
           const isActive = activeTab === tab.key;
           return (
-            <button
+            <Link
               key={tab.key}
-              type="button"
-              onClick={() => handleTabClick(tab)}
+              href={tab.route}
+              prefetch={true}
+              onClick={() => {
+                if (onTabChange) {
+                  onTabChange(tab.key as NavTab);
+                }
+              }}
               className={cn(
                 'flex flex-1 flex-col items-center justify-center py-1 transition-colors',
                 isActive ? 'text-primary' : 'text-text-muted hover:text-text-main',
@@ -82,7 +76,7 @@ export function MobileBottomNav({
               <span className={cn('mt-1 text-[11px]', isActive ? 'font-semibold text-primary' : 'font-normal')}>
                 {tab.label}
               </span>
-            </button>
+            </Link>
           );
         })}
       </div>

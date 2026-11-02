@@ -3,22 +3,16 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronLeft,
-  ChevronRight,
-  Info,
   LogOut,
   Moon,
   Palette,
   Shield,
   Smartphone,
-  User as UserIcon,
-  WalletCards,
 } from 'lucide-react';
 import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
 import { logoutUser } from '@/lib/api/user-auth-api';
 import { useUserAuthStore } from '@/store/userAuthStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { Button } from '@/components/ui/button';
 
 export default function UserProfilePage(): React.JSX.Element {
@@ -67,20 +61,11 @@ function UserProfileContent(): React.JSX.Element {
     : '近期加入';
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-main pb-24 select-none">
+    <div className="select-none">
       <div className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {/* 顶部简易导航栏 */}
-        <div className="flex items-center justify-between py-1">
-          <button
-            type="button"
-            onClick={() => router.push('/user')}
-            className="inline-flex items-center gap-1 text-sm font-medium text-text-muted hover:text-text-main"
-          >
-            <ChevronLeft size={18} />
-            <span>返回记账</span>
-          </button>
-          <h1 className="text-base font-semibold text-text-main">个人中心</h1>
-          <div className="w-16" />
+        {/* 一级页面顶部大标题（规范：无返回按钮，通过底部 Tab 切换） */}
+        <div className="pt-2 pb-1">
+          <h1 className="text-2xl font-bold tracking-tight text-text-main">个人中心</h1>
         </div>
 
         {/* 1. 个人资料卡片 */}
@@ -104,32 +89,7 @@ function UserProfileContent(): React.JSX.Element {
           </div>
         </section>
 
-        {/* 2. 账本管理 Group */}
-        <section className="rounded-3xl bg-app-card shadow-xs border border-app-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-app-border/60">
-            <span className="text-xs font-semibold text-text-muted">账本与财务空间</span>
-          </div>
-          <div className="divide-y divide-app-border/50">
-            <button
-              type="button"
-              onClick={() => router.push('/user/ledger')}
-              className="flex w-full items-center justify-between p-4 text-left transition hover:bg-app-card-subtle/50 active:bg-app-card-subtle"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-primary">
-                  <WalletCards size={18} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-main">账本管理</p>
-                  <p className="text-xs text-text-muted">切换活跃账本或邀请成员协作</p>
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-text-tertiary" />
-            </button>
-          </div>
-        </section>
-
-        {/* 3. 外观与主题偏好 Group（为后续主题切换预留） */}
+        {/* 2. 外观与主题偏好 */}
         <section className="rounded-3xl bg-app-card shadow-xs border border-app-border overflow-hidden">
           <div className="px-4 py-3 border-b border-app-border/60">
             <span className="text-xs font-semibold text-text-muted">外观与个性化</span>
@@ -166,7 +126,7 @@ function UserProfileContent(): React.JSX.Element {
           </div>
         </section>
 
-        {/* 4. 应用与关于 Group */}
+        {/* 3. 关于与版本 */}
         <section className="rounded-3xl bg-app-card shadow-xs border border-app-border overflow-hidden">
           <div className="divide-y divide-app-border/50">
             <div className="flex items-center justify-between p-4">
@@ -197,7 +157,7 @@ function UserProfileContent(): React.JSX.Element {
           </div>
         </section>
 
-        {/* 5. 退出登录按钮（经典 iOS 醒目通栏设计） */}
+        {/* 4. 退出登录按钮 */}
         <div className="pt-2">
           <Button
             variant="destructive"
@@ -214,15 +174,6 @@ function UserProfileContent(): React.JSX.Element {
           </p>
         </div>
       </div>
-
-      {/* 底部导航栏（高亮“我的”Tab） */}
-      <MobileBottomNav
-        activeTab="profile"
-        onQuickAdd={() => {
-          router.push('/user');
-        }}
-      />
     </div>
   );
 }
-

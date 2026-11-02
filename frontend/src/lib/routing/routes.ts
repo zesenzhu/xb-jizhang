@@ -60,3 +60,22 @@ export function shouldProtectRoute(pathname: string): boolean {
   }
   return false;
 }
+
+export type UserPrimaryTab = 'home' | 'transactions' | 'profile';
+
+export const USER_PRIMARY_TAB_ROUTES: Record<string, UserPrimaryTab> = {
+  '/user': 'home',
+  '/user/ledger': 'transactions',
+  '/user/profile': 'profile',
+};
+
+export function isUserPrimaryTabRoute(pathname: string): boolean {
+  const normalized = pathname.replace(/\/$/, '') || '/';
+  return Object.prototype.hasOwnProperty.call(USER_PRIMARY_TAB_ROUTES, normalized);
+}
+
+export function getUserPrimaryTab(pathname: string): UserPrimaryTab | null {
+  const normalized = pathname.replace(/\/$/, '') || '/';
+  return USER_PRIMARY_TAB_ROUTES[normalized] ?? null;
+}
+
