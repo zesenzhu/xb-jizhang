@@ -78,10 +78,10 @@ export function AmountKeypad({
   };
 
   const keyBaseClass =
-    'flex h-14 items-center justify-center rounded-2xl bg-white text-xl font-medium text-slate-800 shadow-xs transition-all active:scale-[0.96] active:bg-slate-100 select-none';
+    'flex h-14 items-center justify-center rounded-2xl bg-app-card text-xl font-medium text-text-main shadow-xs transition-all active:scale-[0.96] active:bg-app-card-subtle select-none border border-app-border/40';
 
   return (
-    <div className={cn('grid grid-cols-4 gap-2 rounded-3xl bg-slate-100/90 p-3 pb-safe', className)}>
+    <div className={cn('grid grid-cols-4 gap-2 rounded-3xl bg-app-card-subtle/80 p-3 pb-safe border border-app-border/40', className)}>
       {/* 1, 2, 3, 退格 */}
       <button type="button" onClick={() => handleKeyPress('1')} className={keyBaseClass}>
         1
@@ -95,7 +95,7 @@ export function AmountKeypad({
       <button
         type="button"
         onClick={() => handleKeyPress('BACKSPACE')}
-        className={cn(keyBaseClass, 'bg-slate-200/80 text-slate-600 active:bg-slate-300')}
+        className={cn(keyBaseClass, 'bg-app-card-subtle/80 text-text-muted active:bg-app-card-subtle')}
         aria-label="退格"
       >
         <Delete size={22} />
@@ -114,7 +114,7 @@ export function AmountKeypad({
       <button
         type="button"
         onClick={() => handleKeyPress('CLEAR')}
-        className={cn(keyBaseClass, 'bg-slate-200/80 text-slate-600 active:bg-slate-300 text-sm font-semibold')}
+        className={cn(keyBaseClass, 'bg-app-card-subtle/80 text-text-muted active:bg-app-card-subtle text-sm font-semibold')}
         aria-label="清空"
       >
         <RotateCcw size={18} />
@@ -138,7 +138,7 @@ export function AmountKeypad({
           onSubmit?.();
         }}
         className={cn(
-          'row-span-2 flex items-center justify-center rounded-2xl bg-ios-blue text-white font-semibold shadow-md shadow-ios-blue/25 active:scale-[0.97] active:bg-ios-blue-active disabled:opacity-50 select-none text-base',
+          'row-span-2 flex items-center justify-center rounded-2xl bg-primary text-white font-semibold shadow-md shadow-primary/25 active:scale-[0.97] active:bg-primary-active disabled:opacity-50 select-none text-base hover:bg-primary-hover',
         )}
       >
         <div className="flex flex-col items-center gap-1">

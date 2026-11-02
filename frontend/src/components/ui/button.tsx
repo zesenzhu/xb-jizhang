@@ -24,16 +24,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ios-blue focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none';
+      'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none';
 
     const variantStyles = {
-      default: 'bg-ios-blue text-white shadow-xs hover:bg-ios-blue-hover active:bg-ios-blue-active',
+      default: 'bg-primary text-white shadow-xs hover:bg-primary-hover active:bg-primary-active',
       destructive: 'bg-rose-600 text-white shadow-xs hover:bg-rose-700 active:bg-rose-800',
       outline:
-        'border border-slate-200 bg-white shadow-xs hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 text-slate-700',
-      secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200 active:bg-slate-300',
-      ghost: 'hover:bg-slate-100 hover:text-slate-900 text-slate-700 active:bg-slate-200',
-      link: 'text-ios-blue underline-offset-4 hover:underline p-0 h-auto active:scale-100',
+        'border border-app-border bg-app-card shadow-xs hover:bg-app-card-subtle hover:text-text-main text-text-main active:bg-app-card-subtle/80',
+      secondary: 'bg-app-card-subtle text-text-main hover:opacity-90 active:opacity-80',
+      ghost: 'hover:bg-app-card-subtle hover:text-text-main text-text-muted active:opacity-80',
+      link: 'text-primary underline-offset-4 hover:underline p-0 h-auto active:scale-100',
     };
 
     const sizeStyles = {

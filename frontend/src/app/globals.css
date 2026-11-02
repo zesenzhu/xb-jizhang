@@ -2,49 +2,37 @@
 
 @theme {
   /* ========================================================
-   * iOS 科技蓝与极简暗黑主题设计系统 (Apple HIG Dark Palette)
+   * 语义化主题变量映射层 (Semantic Theme Tokens)
+   * 业务组件只消费语义类名，实现与具体颜色彻底解耦
    * ======================================================== */
 
-  /* 核心科技蓝 (iOS System Blue - Dark) */
-  --color-ios-blue: #0a84ff;
-  --color-ios-blue-hover: #0071e3;
-  --color-ios-blue-active: #0062c4;
-  --color-ios-blue-subtle: rgba(10, 132, 255, 0.15);
+  /* 应用背景与卡片层级 */
+  --color-app-bg: var(--bg-app);
+  --color-app-card: var(--bg-card);
+  --color-app-card-elevated: var(--bg-card-elevated);
+  --color-app-card-subtle: var(--bg-card-subtle);
 
-  /* 通用主色映射 (Primary 默认绑定为科技蓝) */
-  --color-primary: #0a84ff;
-  --color-primary-hover: #0071e3;
-  --color-primary-subtle: rgba(10, 132, 255, 0.15);
-
-  /* 截图中悬浮记账核心黄色 (iOS System Amber / Yellow) */
-  --color-ios-yellow: #ffcc00;
-  --color-ios-yellow-hover: #e5b800;
-  --color-ios-yellow-subtle: rgba(255, 204, 0, 0.15);
-
-  /* 背景与卡片层级系统 (OLED 纯黑 + Grouped Table 卡片) */
-  --color-ios-bg: #000000;
-  --color-ios-bg-secondary: #0c0c0e;
-  --color-ios-card: #1c1c1e;
-  --color-ios-card-elevated: #2c2c2e;
-  --color-ios-card-hover: #3a3a3c;
-
-  /* 极细微弱边框与分割线 (微通透发光感) */
-  --color-ios-border: rgba(255, 255, 255, 0.08);
-  --color-ios-border-active: rgba(255, 255, 255, 0.16);
-  --color-ios-divider: rgba(255, 255, 255, 0.12);
+  /* 边框与分割线 */
+  --color-app-border: var(--border-subtle);
+  --color-app-divider: var(--border-divider);
 
   /* 文本阶梯 */
-  --color-ios-text: #ffffff;
-  --color-ios-text-secondary: #8e8e93;
-  --color-ios-text-tertiary: #636366;
-  --color-ios-text-quaternary: #48484a;
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-text-tertiary: var(--text-tertiary);
 
-  /* 功能语义色彩 */
-  --color-ios-green: #30d158;
-  --color-ios-red: #ff453a;
-  --color-ios-orange: #ff9f0a;
+  /* 主题主色 (Primary - 科技蓝为主色，支持动态覆盖) */
+  --color-primary: var(--theme-primary);
+  --color-primary-hover: var(--theme-primary-hover);
+  --color-primary-active: var(--theme-primary-active);
+  --color-primary-subtle: var(--theme-primary-subtle);
 
-  /* iOS 大圆角阶梯 */
+  /* 业务财务语义色彩 */
+  --color-financial-income: var(--color-income);
+  --color-financial-expense: var(--color-expense);
+  --color-accent-fab: var(--color-fab);
+
+  /* iOS 大圆角系统 */
   --radius-ios-sm: 10px;
   --radius-ios-md: 14px;
   --radius-ios-lg: 18px;
@@ -54,21 +42,76 @@
 }
 
 :root {
-  color-scheme: dark light;
+  color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
     'Helvetica Neue', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* CSS 自定义属性导出，方便原生样式与内联样式直接使用 */
-  --theme-blue: #0a84ff;
-  --theme-blue-subtle: rgba(10, 132, 255, 0.15);
-  --theme-yellow: #ffcc00;
-  --theme-bg: #000000;
-  --theme-card: #1c1c1e;
-  --theme-card-elevated: #2c2c2e;
-  --theme-border: rgba(255, 255, 255, 0.08);
-  --theme-divider: rgba(255, 255, 255, 0.12);
+  /* ========================================================
+   * 默认主题变量定义：iOS 科技蓝 + 极简明暗语义
+   * 后续做主题切换时，只需改变以下 CSS 变量或切 data-theme 属性即可全局生效
+   * ======================================================== */
+
+  /* 1. 主题核心色 (默认：iOS System Blue 科技蓝) */
+  --theme-primary: #0a84ff;
+  --theme-primary-hover: #0071e3;
+  --theme-primary-active: #0062c4;
+  --theme-primary-subtle: rgba(10, 132, 255, 0.12);
+
+  /* 2. 记账黄色大悬浮球 */
+  --color-fab: #ffcc00;
+  --color-fab-hover: #e5b800;
+
+  /* 3. 收支财务语义色 */
+  --color-income: #30d158;   /* iOS 鲜活绿 */
+  --color-expense: #ff453a;  /* iOS 鲜活红 */
+
+  /* 4. 浅色界面基础变量 (Light Baseline) */
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-elevated: #ffffff;
+  --bg-card-subtle: #f1f5f9;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-divider: rgba(0, 0, 0, 0.05);
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-tertiary: #94a3b8;
+
+  /* 5. 账本大卡片沉浸深邃背景与高对比文字 */
+  --ledger-card-bg: #18181b;
+  --ledger-card-border: rgba(255, 255, 255, 0.12);
+  --ledger-text-main: #ffffff;
+  --ledger-text-sub: rgba(255, 255, 255, 0.65);
+}
+
+/* ========================================================
+ * 预留：暗黑模式与主题预设配置（支持 data-theme 扩展）
+ * ======================================================== */
+[data-theme='dark'] {
+  --bg-app: #000000;
+  --bg-card: #1c1c1e;
+  --bg-card-elevated: #2c2c2e;
+  --bg-card-subtle: #2c2c2e;
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-divider: rgba(255, 255, 255, 0.06);
+  --text-main: #ffffff;
+  --text-muted: #8e8e93;
+  --text-tertiary: #636366;
+}
+
+/* 预留扩展示例：薄荷绿主题 */
+[data-theme='mint'] {
+  --theme-primary: #10b981;
+  --theme-primary-hover: #059669;
+  --theme-primary-subtle: rgba(16, 185, 129, 0.12);
+}
+
+/* 预留扩展示例：温暖琥珀橙主题 */
+[data-theme='amber'] {
+  --theme-primary: #f59e0b;
+  --theme-primary-hover: #d97706;
+  --theme-primary-subtle: rgba(245, 158, 11, 0.12);
 }
 
 * {
@@ -78,9 +121,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  /* 允许在桌面端居中自适应，移动端保持贴合 */
-  background-color: var(--theme-bg);
-  color: #ffffff;
+  background-color: var(--bg-app);
+  color: var(--text-main);
 }
 
 button {
@@ -88,7 +130,6 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 移动端 iOS 安全区域工具类 */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 20px);
 }

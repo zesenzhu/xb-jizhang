@@ -10,7 +10,7 @@ export interface AmountDisplayProps extends React.HTMLAttributes<HTMLSpanElement
   type?: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'NEUTRAL';
   /** 是否显式展示正号 '+'（负数始终展示 '-'） */
   showSign?: boolean;
-  /** 颜色语义：'colored' 会对收入着翡翠绿/红，支出着暗色/玫瑰红；'neutral' 为常规字体颜色 */
+  /** 颜色语义：'colored' 会对收入着鲜活绿，支出着玫瑰红；'neutral' 为继承外层颜色 */
   colorSemantic?: 'colored' | 'neutral';
   /** 字号 */
   size?: 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
@@ -38,20 +38,20 @@ export function AmountDisplay({
     '3xl': 'text-3xl font-black tracking-tight',
   };
 
-  let colorStyle = 'text-slate-900';
+  let colorStyle = '';
   if (colorSemantic === 'colored') {
     if (type === 'INCOME' || (type === 'NEUTRAL' && amount > 0)) {
-      colorStyle = 'text-emerald-600';
+      colorStyle = 'text-emerald-400';
     } else if (type === 'EXPENSE' || (type === 'NEUTRAL' && amount < 0)) {
-      colorStyle = 'text-rose-600';
+      colorStyle = 'text-rose-400';
     } else {
-      colorStyle = 'text-slate-700';
+      colorStyle = 'text-text-muted';
     }
   }
 
   return (
     <span
-      className={cn('inline-flex items-baseline font-mono tabular-nums', sizeStyles[size], colorStyle, className)}
+      className={cn('inline-flex items-baseline font-mono tabular-nums text-current', sizeStyles[size], colorStyle, className)}
       {...props}
     >
       {currency && <span className="mr-0.5 text-[0.8em] font-sans font-normal opacity-80">{currency}</span>}
@@ -59,4 +59,3 @@ export function AmountDisplay({
     </span>
   );
 }
-
