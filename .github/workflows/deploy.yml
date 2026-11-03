@@ -165,7 +165,7 @@ jobs:
           REFRESH_SESSION_TTL_SECONDS: ${{ vars.REFRESH_SESSION_TTL_SECONDS || '2592000' }}
           ADMIN_ACCESS_TOKEN_TTL_SECONDS: ${{ vars.ADMIN_ACCESS_TOKEN_TTL_SECONDS || '900' }}
           ADMIN_REFRESH_SESSION_TTL_SECONDS: ${{ vars.ADMIN_REFRESH_SESSION_TTL_SECONDS || '2592000' }}
-          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS || 'https://jizhang.xiaobao.work' }}
           BACKEND_PORT: ${{ vars.BACKEND_PORT || '8091' }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8090' }}
         run: |
@@ -173,7 +173,6 @@ jobs:
           : "${DB_PASSWORD:?GitHub Environment 缺少 DB_PASSWORD}"
           : "${JWT_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ACCESS_SECRET}"
           : "${JWT_ADMIN_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ADMIN_ACCESS_SECRET}"
-          : "${CORS_ORIGINS:?GitHub Environment 缺少 CORS_ORIGINS}"
           umask 077
           {
             printf 'DB_USER=%s\n' "$DB_USER"
