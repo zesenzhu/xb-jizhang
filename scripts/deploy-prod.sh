@@ -122,8 +122,9 @@ if [ "$BACKEND_CHANGED" = "true" ]; then
     BACKUP_SCRIPT="$ROOT_DIRECTORY/scripts/backup-prod.sh"
   fi
   sh "$BACKUP_SCRIPT"
-  compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 fi
+
+compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 
 if [ "$DEPLOYMENT_CHANGED" = "true" ] || [ "$CONFIG_CHANGED" = "true" ]; then
   compose up -d --no-build backend frontend
