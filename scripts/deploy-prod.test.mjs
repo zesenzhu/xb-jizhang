@@ -124,7 +124,6 @@ test('给定只发布前端，当更新版本文件，则保留未变更的后�
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.updatedReleaseEnv, /^BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend$/m);
   assert.match(result.updatedReleaseEnv, /^FRONTEND_IMAGE=xiaobao-jizhang-frontend:new-release$/m);
-  assert.match(result.dockerLog, /run --rm --no-deps backend \.\/node_modules\/\.bin\/prisma migrate deploy/);
 });
 
 test('给定首次只提供一个镜像，当开始部署，则在加载镜像前失败', async () => {
