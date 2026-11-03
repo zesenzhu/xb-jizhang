@@ -1,35 +1,139 @@
-# 记账应用独立子域名示例。
-# 旧项目继续使用原有 server 配置，不与本配置共用容器或端口。
+# ============================================================
+# 小宝记账 · jizhang.example.com 站点配置示例
+#
+# 部署位置：/www/server/panel/vhost/nginx/jizhang.xiaobao.work.conf
+#           （独立文件，不要写进旧项目 xiaobao.work.conf，避免被面板重写）
+#
+# 端口约定：前端 Next.js 127.0.0.1:8090  后端 NestJS 127.0.0.1:8091
+# 证书约定：/etc/nginx/certs/<域名>.pem 与 <域名>.key（fullchain + 私钥）
+#
+# 生效前必须：nginx -t && nginx -s reload
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. HTTP 入口：只做两件事——ACME 验证 + 跳转 HTTPS
+# ------------------------------------------------------------
 server {
     listen 80;
-    server_name jizhang.xiaobao.work;
+    listen [::]:80;
+    server_name jizhang.example.com www.jizhang.example.com;
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:8091/api/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_http_version 1.1;
-        proxy_buffering off;
-    }
-
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:8091;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # 为将来切换 Let's Encrypt 自动续期预留；当前阿里云证书不依赖此路径
+    location ^~ /.well-known/acme-challenge/ {
+        root /www/wwwroot/jizhang-acme;
+        default_type text/plain;
     }
 
     location / {
-        proxy_pass http://127.0.0.1:8090;
+        return 301 https://jizhang.example.com$request_uri;
+    }
+}
+
+# ------------------------------------------------------------
+# 2. www 收敛：Cookie 没有 Domain 属性，www 与裸域是两套独立会话，
+#    必须 301 到裸域，否则用户登录态会“换个子域就丢”。
+# ------------------------------------------------------------
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.jizhang.example.com;
+
+    ssl_certificate     /etc/nginx/certs/jizhang.example.com.pem;
+    ssl_certificate_key /etc/nginx/certs/jizhang.example.com.key;
+
+    return 301 https://jizhang.example.com$request_uri;
+}
+
+# ------------------------------------------------------------
+# 3. 主站
+# ------------------------------------------------------------
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name jizhang.example.com;
+
+    ssl_certificate     /etc/nginx/certs/jizhang.example.com.pem;
+    ssl_certificate_key /etc/nginx/certs/jizhang.example.com.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:jizhang_ssl:10m;
+    ssl_session_timeout 1h;
+
+    client_max_body_size 10m;
+
+    # HSTS 的 max-age 会被浏览器长期记住，且无法通过改服务器配置撤销。
+    # 因此必须按 300 → 86400 → 31536000 三档递进，每档至少观察一次完整的证书续期。
+    # 证书未经验证就下发一年期的后果：证书一旦过期，老用户会被浏览器硬性
+    # 挡在 NET::ERR_CERT_DATE_INVALID，连“继续访问”都没有。
+    #
+    # ⚠️ 绝对不要加 includeSubDomains 与 preload：前者强制所有子域先配好证书，
+    #    后者进入浏览器内置清单后几乎无法摘除。
+    add_header Strict-Transport-Security "max-age=300" always;
+
+    # nginx 的 add_header 继承规则：某个 location 只要出现一条 add_header，
+    # 就不再继承 server 级的 add_header。因此下列安全头在这些 location 中重复声明。
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # 第一步先只观察、不拦截：确认无违规后再把 name 换成
+    # Content-Security-Policy 并移除 Report-Only 后缀。
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'" always;
+
+    # ---------- 后端 API ----------
+    location /api/ {
+        proxy_pass http://127.0.0.1:8091/api/;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
+        proxy_read_timeout 60s;
+    }
+
+    # ---------- Service Worker：必须短缓存，否则新版本永远不生效 ----------
+    # Next 自身会输出 Cache-Control: public, max-age=0，先 hide 掉避免出现两个同名头。
+    location = /sw.js {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # ---------- Next.js 构建产物：文件名带 hash，可永久缓存 ----------
+    location ^~ /_next/static/ {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # ---------- 页面：禁止缓存 HTML，保证发布后立即生效 ----------
+    location / {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        add_header Strict-Transport-Security "max-age=300" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'" always;
     }
 }
