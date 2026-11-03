@@ -11,9 +11,18 @@ on:
         required: false
         type: boolean
         default: false
+      sync_config:
+        description: 只同步生产环境变量并重启服务，不重新构建镜像
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+concurrency:
+  group: xiaobao-jizhang-production
+  cancel-in-progress: false
 
 env:
   BACKEND_IMAGE_NAME: xiaobao-jizhang-backend
@@ -66,6 +75,7 @@ jobs:
         id: scope
         env:
           FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_all || false }}
+          FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.sync_config || false }}
         run: |
           base_sha="${{ github.event.before }}"
           if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
@@ -119,6 +129,7 @@ jobs:
     needs: [detect, build-backend, build-frontend]
     if: always() && needs.detect.outputs.should_deploy == 'true' && (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') && (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,11 +147,58 @@ jobs:
           name: frontend-image
 
       - name: 准备部署文件
+        env:
+          DB_USER: ${{ vars.DB_USER || 'jizhang' }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ vars.DB_NAME || 'jizhang' }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_ADMIN_ACCESS_SECRET: ${{ secrets.JWT_ADMIN_ACCESS_SECRET }}
+          ACCESS_TOKEN_TTL_SECONDS: ${{ vars.ACCESS_TOKEN_TTL_SECONDS || '900' }}
+          REFRESH_SESSION_TTL_SECONDS: ${{ vars.REFRESH_SESSION_TTL_SECONDS || '2592000' }}
+          ADMIN_ACCESS_TOKEN_TTL_SECONDS: ${{ vars.ADMIN_ACCESS_TOKEN_TTL_SECONDS || '900' }}
+          ADMIN_REFRESH_SESSION_TTL_SECONDS: ${{ vars.ADMIN_REFRESH_SESSION_TTL_SECONDS || '2592000' }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+          BACKEND_PORT: ${{ vars.BACKEND_PORT || '8091' }}
+          FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8090' }}
         run: |
+          set -euo pipefail
+          : "${DB_PASSWORD:?GitHub Environment 缺少 DB_PASSWORD}"
+          : "${JWT_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ACCESS_SECRET}"
+          : "${JWT_ADMIN_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ADMIN_ACCESS_SECRET}"
+          : "${CORS_ORIGINS:?GitHub Environment 缺少 CORS_ORIGINS}"
+          umask 077
+          {
+            printf 'DB_USER=%s\n' "$DB_USER"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+            printf 'DB_NAME=%s\n' "$DB_NAME"
+            printf 'JWT_ACCESS_SECRET=%s\n' "$JWT_ACCESS_SECRET"
+            printf 'JWT_ADMIN_ACCESS_SECRET=%s\n' "$JWT_ADMIN_ACCESS_SECRET"
+            printf 'ACCESS_TOKEN_TTL_SECONDS=%s\n' "$ACCESS_TOKEN_TTL_SECONDS"
+            printf 'REFRESH_SESSION_TTL_SECONDS=%s\n' "$REFRESH_SESSION_TTL_SECONDS"
+            printf 'ADMIN_ACCESS_TOKEN_TTL_SECONDS=%s\n' "$ADMIN_ACCESS_TOKEN_TTL_SECONDS"
+            printf 'ADMIN_REFRESH_SESSION_TTL_SECONDS=%s\n' "$ADMIN_REFRESH_SESSION_TTL_SECONDS"
+            printf 'CORS_ORIGINS=%s\n' "$CORS_ORIGINS"
+            printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
+            printf 'FRONTEND_PORT=%s\n' "$FRONTEND_PORT"
+          } > production.env.new
           mkdir -p deployment-bundle
           cp docker-compose.prod.yml scripts/deploy-prod.sh scripts/backup-prod.sh deployment-bundle/
+          cp production.env.new deployment-bundle/
           if [ -f xiaobao-jizhang-backend.tar.gz ]; then cp xiaobao-jizhang-backend.tar.gz deployment-bundle/; fi
           if [ -f xiaobao-jizhang-frontend.tar.gz ]; then cp xiaobao-jizhang-frontend.tar.gz deployment-bundle/; fi
+          rm -f production.env.new
+
+      - name: 自动准备服务器目录
+        env:
+          DEPLOY_PATH: ${{ vars.JIZHANG_DEPLOY_PATH || '/www/wwwroot/xiaobao-jizhang' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: mkdir -p "$DEPLOY_PATH/backups"
+          envs: DEPLOY_PATH
 
       - name: 上传部署文件
         uses: appleboy/scp-action@v0.1.7

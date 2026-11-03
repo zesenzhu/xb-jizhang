@@ -15,11 +15,11 @@ function startsWithAny(path, prefixes) {
   return prefixes.some((prefix) => path === prefix || path.startsWith(prefix));
 }
 
-export function getDeployScope(paths, forceAll = false) {
+export function getDeployScope(paths, forceAll = false, forceDeploy = false) {
   const changedPaths = paths.map((path) => path.trim()).filter(Boolean);
   const backend = forceAll || changedPaths.some((path) => startsWithAny(path, BACKEND_PREFIXES));
   const frontend = forceAll || changedPaths.some((path) => startsWithAny(path, FRONTEND_PREFIXES));
-  const deployment = forceAll || changedPaths.some((path) => startsWithAny(path, DEPLOYMENT_PREFIXES));
+  const deployment = forceAll || forceDeploy || changedPaths.some((path) => startsWithAny(path, DEPLOYMENT_PREFIXES));
 
   return {
     backend,
@@ -31,7 +31,11 @@ export function getDeployScope(paths, forceAll = false) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const input = readFileSync(0, 'utf8').split('\n');
-  const scope = getDeployScope(input, process.env.FORCE_ALL === 'true');
+  const scope = getDeployScope(
+    input,
+    process.env.FORCE_ALL === 'true',
+    process.env.FORCE_DEPLOY === 'true',
+  );
   const output = process.env.GITHUB_OUTPUT;
 
   if (output) {

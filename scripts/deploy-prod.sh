@@ -3,14 +3,38 @@ set -eu
 
 ROOT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PRODUCTION_ENV_FILE=${PRODUCTION_ENV_FILE:-"$ROOT_DIRECTORY/production.env"}
+PRODUCTION_ENV_CANDIDATE_FILE=${PRODUCTION_ENV_CANDIDATE_FILE:-"$ROOT_DIRECTORY/production.env.new"}
 RELEASE_ENV_FILE=${RELEASE_ENV_FILE:-"$ROOT_DIRECTORY/release.env"}
 COMPOSE_FILE=${COMPOSE_FILE:-"$ROOT_DIRECTORY/docker-compose.prod.yml"}
 RELEASE_TAG=${RELEASE_TAG:?RELEASE_TAG is required}
 BACKEND_CHANGED=${BACKEND_CHANGED:-false}
 FRONTEND_CHANGED=${FRONTEND_CHANGED:-false}
 DEPLOYMENT_CHANGED=${DEPLOYMENT_CHANGED:-false}
+CONFIG_CHANGED=false
 
-[ -f "$PRODUCTION_ENV_FILE" ] || { echo "缺少生产环境变量文件：$PRODUCTION_ENV_FILE" >&2; exit 1; }
+if [ -f "$PRODUCTION_ENV_CANDIDATE_FILE" ]; then
+  chmod 600 "$PRODUCTION_ENV_CANDIDATE_FILE"
+  if [ ! -f "$PRODUCTION_ENV_FILE" ] || ! cmp -s "$PRODUCTION_ENV_CANDIDATE_FILE" "$PRODUCTION_ENV_FILE"; then
+    CONFIG_CHANGED=true
+  fi
+  PRODUCTION_ENV_FILE="$PRODUCTION_ENV_CANDIDATE_FILE"
+elif [ ! -f "$PRODUCTION_ENV_FILE" ]; then
+  echo "缺少生产环境变量文件：$PRODUCTION_ENV_FILE" >&2
+  exit 1
+fi
+
+validate_production_env() {
+  env_file=$1
+  for key in DB_USER DB_PASSWORD DB_NAME JWT_ACCESS_SECRET JWT_ADMIN_ACCESS_SECRET CORS_ORIGINS; do
+    value=$(awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+    [ -n "$value" ] || {
+      echo "生产环境变量缺少必填项：$key" >&2
+      exit 1
+    }
+  done
+}
+
+validate_production_env "$PRODUCTION_ENV_FILE"
 
 if [ ! -f "$RELEASE_ENV_FILE" ] && { [ "$BACKEND_CHANGED" != "true" ] || [ "$FRONTEND_CHANGED" != "true" ]; }; then
   echo "首次部署必须同时提供前后端镜像，且不能缺少 release.env" >&2
@@ -77,6 +101,14 @@ if [ "$FRONTEND_CHANGED" = "true" ]; then
   load_image 'xiaobao-jizhang-frontend.tar.gz'
 fi
 
+compose config >/dev/null
+
+if [ "$PRODUCTION_ENV_FILE" = "$PRODUCTION_ENV_CANDIDATE_FILE" ]; then
+  mv -f "$PRODUCTION_ENV_CANDIDATE_FILE" "$ROOT_DIRECTORY/production.env"
+  chmod 600 "$ROOT_DIRECTORY/production.env"
+  PRODUCTION_ENV_FILE="$ROOT_DIRECTORY/production.env"
+fi
+
 compose up -d postgres redis
 
 if [ "$BACKEND_CHANGED" = "true" ]; then
@@ -84,7 +116,7 @@ if [ "$BACKEND_CHANGED" = "true" ]; then
   compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 fi
 
-if [ "$DEPLOYMENT_CHANGED" = "true" ]; then
+if [ "$DEPLOYMENT_CHANGED" = "true" ] || [ "$CONFIG_CHANGED" = "true" ]; then
   compose up -d --no-build backend frontend
 else
   if [ "$BACKEND_CHANGED" = "true" ]; then

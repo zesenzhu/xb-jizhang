@@ -46,3 +46,12 @@ test('给定强制发布，当计算发布范围，则前后端都构建', () =>
     shouldDeploy: true,
   });
 });
+
+test('给定只同步生产配置，当计算发布范围，则触发部署但不构建镜像', () => {
+  assert.deepEqual(getDeployScope(['docs/技术方向.md'], false, true), {
+    backend: false,
+    frontend: false,
+    deployment: true,
+    shouldDeploy: true,
+  });
+});

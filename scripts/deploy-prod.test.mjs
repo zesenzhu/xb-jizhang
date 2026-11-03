@@ -9,7 +9,7 @@ import test from 'node:test';
 const repositoryDirectory = fileURLToPath(new URL('..', import.meta.url));
 const scriptPath = join(repositoryDirectory, 'scripts/deploy-prod.sh');
 
-async function createFakeDeployment({ releaseEnv, changed }) {
+async function createFakeDeployment({ productionEnv, productionEnvCandidate, releaseEnv, changed }) {
   const directory = await mkdtemp(join(tmpdir(), 'xiaobao-jizhang-deploy-'));
   const scriptsDirectory = join(directory, 'scripts');
   const binDirectory = join(directory, 'bin');
@@ -22,7 +22,21 @@ async function createFakeDeployment({ releaseEnv, changed }) {
   await mkdir(binDirectory);
   await cp(scriptPath, deploymentScript);
   await chmod(deploymentScript, 0o755);
-  await writeFile(join(directory, 'production.env'), 'DB_USER=test\n');
+  await writeFile(
+    join(directory, 'production.env'),
+    productionEnv ?? [
+      'DB_USER=test',
+      'DB_PASSWORD=password',
+      'DB_NAME=jizhang',
+      'JWT_ACCESS_SECRET=access',
+      'JWT_ADMIN_ACCESS_SECRET=admin-access',
+      'CORS_ORIGINS=https://example.com',
+      '',
+    ].join('\n'),
+  );
+  if (productionEnvCandidate !== undefined) {
+    await writeFile(join(directory, 'production.env.new'), productionEnvCandidate);
+  }
   await writeFile(join(directory, 'docker-compose.prod.yml'), 'services: {}\n');
   if (releaseEnv !== undefined) {
     await writeFile(join(directory, 'release.env'), releaseEnv);
@@ -70,9 +84,11 @@ async function createFakeDeployment({ releaseEnv, changed }) {
   });
 
   const updatedReleaseEnv = await readFile(join(directory, 'release.env'), 'utf8').catch(() => null);
+  const updatedProductionEnv = await readFile(join(directory, 'production.env'), 'utf8').catch(() => null);
+  const remainingProductionEnvCandidate = await readFile(join(directory, 'production.env.new'), 'utf8').catch(() => null);
   const dockerLog = await readFile(fakeDockerLog, 'utf8').catch(() => '');
   await rm(directory, { recursive: true, force: true });
-  return { ...result, updatedReleaseEnv, dockerLog };
+  return { ...result, updatedReleaseEnv, updatedProductionEnv, remainingProductionEnvCandidate, dockerLog };
 }
 
 test('给定只发布前端，当更新版本文件，则保留未变更的后端镜像版本', async () => {
@@ -98,4 +114,54 @@ test('给定首次只提供一个镜像，当开始部署，则在加载镜像�
   assert.notEqual(result.code, 0);
   assert.match(result.stderr, /首次部署必须同时提供前后端镜像/);
   assert.doesNotMatch(result.dockerLog, /load/);
+});
+
+test('给定新的生产配置，当部署配置时，则校验后自动替换服务器配置', async () => {
+  const result = await createFakeDeployment({
+    productionEnvCandidate: [
+      'DB_USER=test',
+      'DB_PASSWORD=new-password',
+      'DB_NAME=jizhang',
+      'JWT_ACCESS_SECRET=new-access',
+      'JWT_ADMIN_ACCESS_SECRET=new-admin-access',
+      'CORS_ORIGINS=https://new.example.com',
+      '',
+    ].join('\n'),
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: false, frontend: true },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.updatedProductionEnv, /DB_PASSWORD=new-password/);
+  assert.match(result.updatedProductionEnv, /CORS_ORIGINS=https:\/\/new\.example\.com/);
+  assert.equal(result.remainingProductionEnvCandidate, null);
+  assert.match(result.dockerLog, /up -d --no-build backend frontend/);
+});
+
+test('给定新的生产配置缺少管理员密钥，当部署时，则拒绝替换旧配置', async () => {
+  const result = await createFakeDeployment({
+    productionEnvCandidate: [
+      'DB_USER=test',
+      'DB_PASSWORD=new-password',
+      'DB_NAME=jizhang',
+      'JWT_ACCESS_SECRET=new-access',
+      'CORS_ORIGINS=https://new.example.com',
+      '',
+    ].join('\n'),
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: false, frontend: false },
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /生产环境变量缺少必填项：JWT_ADMIN_ACCESS_SECRET/);
+  assert.match(result.updatedProductionEnv, /DB_PASSWORD=password/);
+  assert.match(result.remainingProductionEnvCandidate, /DB_PASSWORD=new-password/);
 });
