@@ -116,14 +116,21 @@ fi
 
 compose up -d --wait --wait-timeout 120 postgres redis
 
+# 备份必须先于迁移：先改表结构再备份，备份就失去了回滚价值。
+# BACKEND_CHANGED 只在后端镜像变化时为真，此时才存在 schema 变更的可能。
 if [ "$BACKEND_CHANGED" = "true" ]; then
   BACKUP_SCRIPT="$ROOT_DIRECTORY/backup-prod.sh"
   if [ ! -f "$BACKUP_SCRIPT" ]; then
     BACKUP_SCRIPT="$ROOT_DIRECTORY/scripts/backup-prod.sh"
   fi
   sh "$BACKUP_SCRIPT"
-  compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 fi
+
+# 迁移每次部署都执行，不能挂在 BACKEND_CHANGED 下：
+# 变更检测基线是单次提交的 diff，只改 scripts/ 或 .github/ 的发布同样会带上
+# 新的后端镜像与 Prisma schema，被跳过就会让线上数据库停在旧结构。
+# prisma migrate deploy 对已应用的迁移是幂等的，重复执行只做一次查询。
+compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 
 if [ "$DEPLOYMENT_CHANGED" = "true" ] || [ "$CONFIG_CHANGED" = "true" ]; then
   compose up -d --no-build backend frontend

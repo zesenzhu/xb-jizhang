@@ -30,11 +30,12 @@ async function createFakeDeployment({
   await mkdir(binDirectory);
   await cp(scriptPath, deploymentScript);
   await chmod(deploymentScript, 0o755);
+  // 备份脚本把执行记录写进同一个日志文件，才能断言“备份先于迁移”这一顺序约束。
+  const fakeBackupScript = '#!/bin/sh\nprintf \'%s\\n\' "backup" >> "$FAKE_DOCKER_LOG"\n';
+  await writeFile(join(scriptsDirectory, 'backup-prod.sh'), fakeBackupScript);
+  await chmod(join(scriptsDirectory, 'backup-prod.sh'), 0o755);
   if (scriptAtRoot) {
-    await writeFile(
-      join(directory, 'backup-prod.sh'),
-      '#!/bin/sh\nprintf backup >> "$BACKUP_MARKER"\n',
-    );
+    await writeFile(join(directory, 'backup-prod.sh'), fakeBackupScript);
     await chmod(join(directory, 'backup-prod.sh'), 0o755);
   }
   await writeFile(
@@ -201,4 +202,37 @@ test('给定部署脚本直接位于部署目录，当执行发布时，则使�
   assert.match(result.updatedReleaseEnv, /BACKEND_IMAGE=xiaobao-jizhang-backend:new-release/);
   assert.equal(result.remainingProductionEnvCandidate, null);
   assert.match(result.dockerLog, /up -d --wait --wait-timeout 120 postgres redis/);
+});
+
+test('给定后端镜像变化，当执行发布，则先备份数据库再应用迁移', async () => {
+  const result = await createFakeDeployment({
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: true, frontend: false },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  const backupIndex = result.dockerLog.indexOf('backup');
+  const migrateIndex = result.dockerLog.indexOf('prisma migrate deploy');
+  assert.notEqual(backupIndex, -1, '后端发布必须先创建数据库备份');
+  assert.notEqual(migrateIndex, -1, '后端发布必须应用数据库迁移');
+  assert.ok(backupIndex < migrateIndex, '备份必须早于迁移，否则备份无法用于回滚');
+});
+
+test('给定只发布前端，当执行发布，则仍然应用幂等的数据库迁移', async () => {
+  const result = await createFakeDeployment({
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: false, frontend: true },
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.dockerLog, /run --rm --no-deps backend \.\/node_modules\/\.bin\/prisma migrate deploy/);
+  assert.doesNotMatch(result.dockerLog, /backup/, '无后端变更时不应额外创建备份');
 });

@@ -16,6 +16,8 @@ import type {
 export interface HealthResponse {
   name: string;
   status: 'ok';
+  database: 'ok';
+  schema: 'ok';
   timestamp: string;
 }
 
