@@ -1,0 +1,178 @@
+name: 发布小宝记账
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      deploy_all:
+        description: 强制重新构建并发布前后端
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_IMAGE_NAME: xiaobao-jizhang-backend
+  FRONTEND_IMAGE_NAME: xiaobao-jizhang-frontend
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装后端依赖
+        run: pnpm --dir backend install --frozen-lockfile
+
+      - name: 安装前端依赖
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 自动化测试
+        run: pnpm test
+
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      deployment: ${{ steps.scope.outputs.deployment }}
+      should_deploy: ${{ steps.scope.outputs.shouldDeploy }}
+    steps:
+      - name: Checkout完整历史
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 计算变更范围
+        id: scope
+        env:
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_all || false }}
+        run: |
+          base_sha="${{ github.event.before }}"
+          if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
+            base_sha="$(git rev-parse "${GITHUB_SHA}^")"
+          fi
+          git diff --name-only "$base_sha" "$GITHUB_SHA" | node scripts/detect-deploy-scope.mjs
+
+  build-backend:
+    needs: [verify, detect]
+    if: needs.detect.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 构建后端镜像
+        run: docker build -t "${BACKEND_IMAGE_NAME}:${GITHUB_SHA}" -f backend/Dockerfile backend
+
+      - name: 导出后端镜像
+        run: docker save "${BACKEND_IMAGE_NAME}:${GITHUB_SHA}" | gzip > xiaobao-jizhang-backend.tar.gz
+
+      - name: 上传后端镜像制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: xiaobao-jizhang-backend.tar.gz
+          retention-days: 1
+
+  build-frontend:
+    needs: [verify, detect]
+    if: needs.detect.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 构建前端镜像
+        run: docker build --build-arg NEXT_PUBLIC_API_URL=/api -t "${FRONTEND_IMAGE_NAME}:${GITHUB_SHA}" -f frontend/Dockerfile frontend
+
+      - name: 导出前端镜像
+        run: docker save "${FRONTEND_IMAGE_NAME}:${GITHUB_SHA}" | gzip > xiaobao-jizhang-frontend.tar.gz
+
+      - name: 上传前端镜像制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image
+          path: xiaobao-jizhang-frontend.tar.gz
+          retention-days: 1
+
+  deploy:
+    needs: [detect, build-backend, build-frontend]
+    if: always() && needs.detect.outputs.should_deploy == 'true' && (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') && (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 下载后端镜像
+        if: needs.detect.outputs.backend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-image
+
+      - name: 下载前端镜像
+        if: needs.detect.outputs.frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-image
+
+      - name: 准备部署文件
+        run: |
+          mkdir -p deployment-bundle
+          cp docker-compose.prod.yml scripts/deploy-prod.sh scripts/backup-prod.sh deployment-bundle/
+          if [ -f xiaobao-jizhang-backend.tar.gz ]; then cp xiaobao-jizhang-backend.tar.gz deployment-bundle/; fi
+          if [ -f xiaobao-jizhang-frontend.tar.gz ]; then cp xiaobao-jizhang-frontend.tar.gz deployment-bundle/; fi
+
+      - name: 上传部署文件
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: deployment-bundle/*
+          target: ${{ vars.JIZHANG_DEPLOY_PATH || '/www/wwwroot/xiaobao-jizhang' }}
+          strip_components: 1
+
+      - name: 远程部署
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKEND_CHANGED: ${{ needs.detect.outputs.backend }}
+          FRONTEND_CHANGED: ${{ needs.detect.outputs.frontend }}
+          DEPLOYMENT_CHANGED: ${{ needs.detect.outputs.deployment }}
+          RELEASE_TAG: ${{ github.sha }}
+          DEPLOY_PATH: ${{ vars.JIZHANG_DEPLOY_PATH || '/www/wwwroot/xiaobao-jizhang' }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          command_timeout: 30m
+          envs: BACKEND_CHANGED,FRONTEND_CHANGED,DEPLOYMENT_CHANGED,RELEASE_TAG,DEPLOY_PATH
+          script: |
+            set -eu
+            cd "$DEPLOY_PATH"
+            BACKEND_CHANGED="$BACKEND_CHANGED" \
+            FRONTEND_CHANGED="$FRONTEND_CHANGED" \
+            DEPLOYMENT_CHANGED="$DEPLOYMENT_CHANGED" \
+            RELEASE_TAG="$RELEASE_TAG" \
+              sh ./deploy-prod.sh

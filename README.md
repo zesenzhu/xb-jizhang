@@ -110,4 +110,5 @@ pnpm dev
 - [账单需求](docs/requirements/账单需求.md)
 - [账户与分类接口](docs/api/账户与分类接口.md)
 - [账单接口](docs/api/账单接口.md)
+- [生产部署说明](docs/部署/生产部署说明.md)
 - [基础框架搭建计划](docs/superpowers/plans/2026-10-30-基础框架搭建计划.md)
