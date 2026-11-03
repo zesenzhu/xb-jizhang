@@ -53,4 +53,31 @@ describe('TransactionController', () => {
 
     expect(service.list).toHaveBeenCalledWith('user-1', 'ledger-1', query);
   });
+
+  it('给定编辑账单请求，当 Controller 接收参数，则传递认证用户、账本和账单标识', async () => {
+    const service = { update: jest.fn().mockResolvedValue({ id: 'transaction-1' }) };
+    const controller = new TransactionController(service as unknown as TransactionService);
+
+    await controller.update(
+      { id: 'user-1' },
+      'ledger-1',
+      'transaction-1',
+      { version: 1, amountCents: 4000, title: '早餐和咖啡' },
+    );
+
+    expect(service.update).toHaveBeenCalledWith('user-1', 'ledger-1', 'transaction-1', {
+      version: 1,
+      amountCents: 4000,
+      title: '早餐和咖啡',
+    });
+  });
+
+  it('给定删除账单请求，当 Controller 接收路径和版本，则传递认证用户、账本、账单标识和版本', async () => {
+    const service = { remove: jest.fn().mockResolvedValue({ id: 'transaction-1' }) };
+    const controller = new TransactionController(service as unknown as TransactionService);
+
+    await controller.remove({ id: 'user-1' }, 'ledger-1', 'transaction-1', { version: 1 });
+
+    expect(service.remove).toHaveBeenCalledWith('user-1', 'ledger-1', 'transaction-1', 1);
+  });
 });

@@ -63,6 +63,7 @@ describe('TransactionService', () => {
       transaction: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        updateMany: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
@@ -143,6 +144,31 @@ describe('TransactionService', () => {
       }),
     );
     expect(result).toEqual(expect.objectContaining({ id: transactionId, amountCents: 3500 }));
+  });
+
+  it('给定收入或支出未选择账户，当其他字段有效，则创建账单且不更新账户余额', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(null);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.transaction.create.mockResolvedValue({
+      ...transaction,
+      accountId: null,
+      account: null,
+    });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+
+    const result = await dependencies.service.create(userId, ledgerId, {
+      ...validInput,
+      accountId: undefined,
+    });
+
+    expect(dependencies.prisma.account.findFirst).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ accountId: null }) }),
+    );
+    expect(dependencies.transactionClient.account.updateMany).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ id: transactionId, accountId: null }));
   });
 
   it('给定 Viewer 提交账单，当执行创建，则拒绝写入且不启动事务', async () => {
@@ -296,10 +322,15 @@ describe('TransactionService', () => {
             gte: new Date('2026-10-01T00:00:00.000Z'),
             lt: new Date('2026-11-01T00:00:00.000Z'),
           },
-          account: {
-            OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }],
-          },
-          OR: [{ title: { contains: '早餐', mode: 'insensitive' } }, { note: { contains: '早餐', mode: 'insensitive' } }],
+          AND: [
+            {
+              OR: [
+                { accountId: null },
+                { account: { OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }] } },
+              ],
+            },
+            { OR: [{ title: { contains: '早餐', mode: 'insensitive' } }, { note: { contains: '早餐', mode: 'insensitive' } }] },
+          ],
         },
         orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
         skip: 10,
@@ -330,6 +361,32 @@ describe('TransactionService', () => {
     expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 20, hasNextPage: false });
   });
 
+  it('给定账单未选择账户，当成员查询列表，则仍返回该账单', async () => {
+    const dependencies = createService();
+    const unaccountedTransaction = { ...transaction, accountId: null, account: null };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([unaccountedTransaction]);
+    dependencies.prisma.transaction.count.mockResolvedValue(1);
+
+    const result = await dependencies.service.list(userId, ledgerId, { page: 1, pageSize: 20 });
+
+    expect(dependencies.prisma.transaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [
+            {
+              OR: [
+                { accountId: null },
+                { account: { OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }] } },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(result.items).toEqual([unaccountedTransaction]);
+  });
+
   it('给定时间范围无效，当查询账单列表，则返回参数错误且不查询数据库', async () => {
     const dependencies = createService();
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
@@ -357,5 +414,190 @@ describe('TransactionService', () => {
     await expect(dependencies.service.create(userId, ledgerId, validInput)).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it('给定 Editor 编辑未删除账单，当版本和关联资源有效，则撤销旧余额并应用新余额后递增版本', async () => {
+    const dependencies = createService();
+    const updatedTransaction = {
+      ...transaction,
+      amountCents: 4000,
+      title: '早餐和咖啡',
+      version: 2,
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.prisma.account.findFirst.mockResolvedValue(account);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-2' });
+    dependencies.transactionClient.transaction.findUnique.mockResolvedValue(updatedTransaction);
+
+    const result = await dependencies.service.update(userId, ledgerId, transactionId, {
+      version: 1,
+      amountCents: 4000,
+      title: '早餐和咖啡',
+    });
+
+    expect(dependencies.transactionClient.account.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: accountId, ledgerId },
+      data: { currentBalanceCents: { increment: 3500 } },
+    });
+    expect(dependencies.transactionClient.account.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: accountId, ledgerId },
+      data: { currentBalanceCents: { decrement: 4000 } },
+    });
+    expect(dependencies.transactionClient.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: transactionId, ledgerId, version: 1, deletedAt: null },
+        data: expect.objectContaining({ amountCents: 4000, title: '早餐和咖啡', version: { increment: 1 } }),
+      }),
+    );
+    expect(dependencies.transactionClient.transactionAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'UPDATE' }) }),
+    );
+    expect(result).toEqual(expect.objectContaining({ amountCents: 4000, version: 2 }));
+  });
+
+  it('给定账单版本已过期，当成员编辑账单，则返回冲突且不更新余额', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+
+    await expect(
+      dependencies.service.update(userId, ledgerId, transactionId, { version: 2, amountCents: 4000 }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+    expect(dependencies.prisma.account.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('给定数据库遗留转账账单，当成员尝试编辑或删除，则拒绝一期不支持的类型且不启动事务', async () => {
+    const dependencies = createService();
+    const legacyTransfer = {
+      ...transaction,
+      type: 'TRANSFER' as const,
+      category: null,
+      account: null,
+      fromAccountId: accountId,
+      toAccountId: 'account-2',
+      transferGroupId: 'transfer-group-1',
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(legacyTransfer);
+
+    await expect(
+      dependencies.service.update(userId, ledgerId, transactionId, { version: 1, amountCents: 4000 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(dependencies.service.remove(userId, ledgerId, transactionId, 1)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定账单切换为收入且取消账户，当成员编辑账单，则恢复旧支出余额且不应用新账户影响', async () => {
+    const dependencies = createService();
+    const incomeCategory = { ...category, type: 'INCOME' as const, name: '工资' };
+    const updatedTransaction = {
+      ...transaction,
+      type: 'INCOME' as const,
+      amountCents: 5000,
+      categoryId: incomeCategory.id,
+      accountId: null,
+      account: null,
+      version: 2,
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.prisma.category.findFirst.mockResolvedValue(incomeCategory);
+    dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-3' });
+    dependencies.transactionClient.transaction.findUnique.mockResolvedValue(updatedTransaction);
+
+    const result = await dependencies.service.update(userId, ledgerId, transactionId, {
+      version: 1,
+      type: 'INCOME',
+      amountCents: 5000,
+      categoryId: incomeCategory.id,
+      accountId: null,
+    });
+
+    expect(dependencies.prisma.account.findFirst).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.account.updateMany).toHaveBeenCalledWith({
+      where: { id: accountId, ledgerId },
+      data: { currentBalanceCents: { increment: 3500 } },
+    });
+    expect(dependencies.transactionClient.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'INCOME', accountId: null }) }),
+    );
+    expect(result).toEqual(expect.objectContaining({ type: 'INCOME', accountId: null, version: 2 }));
+  });
+
+  it('给定 Owner 删除未删除账单，当版本正确，则软删除并恢复账户余额写入审计', async () => {
+    const dependencies = createService();
+    const deletedTransaction = { ...transaction, deletedAt: new Date('2026-11-01T08:00:00.000Z'), version: 2 };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-4' });
+    dependencies.transactionClient.transaction.findUnique.mockResolvedValue(deletedTransaction);
+
+    const result = await dependencies.service.remove(userId, ledgerId, transactionId, 1);
+
+    expect(dependencies.transactionClient.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: transactionId, ledgerId, version: 1, deletedAt: null },
+        data: expect.objectContaining({ deletedAt: expect.any(Date), version: { increment: 1 } }),
+      }),
+    );
+    expect(dependencies.transactionClient.account.updateMany).toHaveBeenCalledWith({
+      where: { id: accountId, ledgerId },
+      data: { currentBalanceCents: { increment: 3500 } },
+    });
+    expect(dependencies.transactionClient.transactionAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'DELETE' }) }),
+    );
+    expect(result).toEqual(expect.objectContaining({ deletedAt: deletedTransaction.deletedAt, version: 2 }));
+  });
+
+  it('给定 Editor 删除他人创建的账单，当执行删除，则拒绝且不启动事务', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue({ ...transaction, createdById: 'other-user' });
+
+    await expect(dependencies.service.remove(userId, ledgerId, transactionId, 1)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定账单已软删除且操作者有权限，当重复删除，则返回原结果且不重复恢复余额', async () => {
+    const dependencies = createService();
+    const deletedTransaction = { ...transaction, deletedAt: new Date('2026-11-01T08:00:00.000Z'), version: 2 };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(deletedTransaction);
+
+    const result = await dependencies.service.remove(userId, ledgerId, transactionId, 2);
+
+    expect(result).toEqual(deletedTransaction);
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定账单已软删除但 Editor 不是创建人，当重复删除，则仍拒绝越权访问', async () => {
+    const dependencies = createService();
+    const deletedTransaction = {
+      ...transaction,
+      createdById: 'other-user',
+      deletedAt: new Date('2026-11-01T08:00:00.000Z'),
+      version: 2,
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(deletedTransaction);
+
+    await expect(dependencies.service.remove(userId, ledgerId, transactionId, 2)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
 });

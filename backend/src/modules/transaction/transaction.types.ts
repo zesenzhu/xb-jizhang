@@ -6,7 +6,19 @@ export interface CreateTransactionInput {
   amountCents: number;
   occurredAt: string;
   categoryId: string;
-  accountId: string;
+  accountId?: string | null;
+  payerId?: string | null;
+  title?: string | null;
+  note?: string | null;
+}
+
+export interface UpdateTransactionInput {
+  version: number;
+  type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
+  amountCents?: number;
+  occurredAt?: string;
+  categoryId?: string;
+  accountId?: string | null;
   payerId?: string | null;
   title?: string | null;
   note?: string | null;

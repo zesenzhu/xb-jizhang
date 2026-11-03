@@ -17,8 +17,9 @@ export class CreateTransactionDto {
   @IsUUID()
   categoryId!: string;
 
+  @IsOptional()
   @IsUUID()
-  accountId!: string;
+  accountId?: string | null;
 
   @IsOptional()
   @IsUUID()
