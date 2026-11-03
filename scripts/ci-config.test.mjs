@@ -25,3 +25,9 @@ test('给定生产环境未配置 CORS_ORIGINS，当生成生产配置时，则�
   );
   assert.doesNotMatch(workflow, /GitHub Environment 缺少 CORS_ORIGINS/);
 });
+
+test('给定部署包已准备，当执行 SCP 上传时，则上传部署目录而不是不稳定的通配符路径', () => {
+  assert.match(workflow, /test -n "\$\(find deployment-bundle -type f -print -quit\)"/);
+  assert.match(workflow, /source: deployment-bundle\n/);
+  assert.doesNotMatch(workflow, /source: deployment-bundle\/\*/);
+});

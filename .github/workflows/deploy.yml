@@ -194,6 +194,7 @@ jobs:
           if [ -f xiaobao-jizhang-backend.tar.gz ]; then cp xiaobao-jizhang-backend.tar.gz deployment-bundle/; fi
           if [ -f xiaobao-jizhang-frontend.tar.gz ]; then cp xiaobao-jizhang-frontend.tar.gz deployment-bundle/; fi
           rm -f production.env.new
+          test -n "$(find deployment-bundle -type f -print -quit)"
 
       - name: 自动准备服务器目录
         env:
@@ -214,7 +215,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          source: deployment-bundle/*
+          source: deployment-bundle
           target: ${{ vars.JIZHANG_DEPLOY_PATH || '/www/wwwroot/xiaobao-jizhang' }}
           strip_components: 1
 
