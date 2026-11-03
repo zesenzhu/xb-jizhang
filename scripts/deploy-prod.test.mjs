@@ -9,19 +9,34 @@ import test from 'node:test';
 const repositoryDirectory = fileURLToPath(new URL('..', import.meta.url));
 const scriptPath = join(repositoryDirectory, 'scripts/deploy-prod.sh');
 
-async function createFakeDeployment({ productionEnv, productionEnvCandidate, releaseEnv, changed }) {
+async function createFakeDeployment({
+  productionEnv,
+  productionEnvCandidate,
+  releaseEnv,
+  changed,
+  scriptAtRoot = false,
+}) {
   const directory = await mkdtemp(join(tmpdir(), 'xiaobao-jizhang-deploy-'));
   const scriptsDirectory = join(directory, 'scripts');
   const binDirectory = join(directory, 'bin');
   const fakeDockerLog = join(directory, 'docker.log');
   const fakeDocker = join(binDirectory, 'docker');
   const fakeCurl = join(binDirectory, 'curl');
-  const deploymentScript = join(scriptsDirectory, 'deploy-prod.sh');
+  const deploymentScript = scriptAtRoot
+    ? join(directory, 'deploy-prod.sh')
+    : join(scriptsDirectory, 'deploy-prod.sh');
 
   await mkdir(scriptsDirectory);
   await mkdir(binDirectory);
   await cp(scriptPath, deploymentScript);
   await chmod(deploymentScript, 0o755);
+  if (scriptAtRoot) {
+    await writeFile(
+      join(directory, 'backup-prod.sh'),
+      '#!/bin/sh\nprintf backup >> "$BACKUP_MARKER"\n',
+    );
+    await chmod(join(directory, 'backup-prod.sh'), 0o755);
+  }
   await writeFile(
     join(directory, 'production.env'),
     productionEnv ?? [
@@ -56,20 +71,25 @@ async function createFakeDeployment({ productionEnv, productionEnvCandidate, rel
   await chmod(fakeDocker, 0o755);
   await chmod(fakeCurl, 0o755);
 
+  const environment = {
+    ...process.env,
+    PATH: `${binDirectory}:${process.env.PATH}`,
+    FAKE_DOCKER_LOG: fakeDockerLog,
+    BACKUP_MARKER: join(directory, 'backup.marker'),
+    RELEASE_TAG: 'new-release',
+    BACKEND_CHANGED: String(changed.backend),
+    FRONTEND_CHANGED: String(changed.frontend),
+    DEPLOYMENT_CHANGED: 'false',
+  };
+  if (!scriptAtRoot) {
+    environment.PRODUCTION_ENV_FILE = join(directory, 'production.env');
+    environment.RELEASE_ENV_FILE = join(directory, 'release.env');
+    environment.COMPOSE_FILE = join(directory, 'docker-compose.prod.yml');
+  }
+
   const result = await new Promise((resolve) => {
     const child = spawn('sh', [deploymentScript], {
-      env: {
-        ...process.env,
-        PATH: `${binDirectory}:${process.env.PATH}`,
-        FAKE_DOCKER_LOG: fakeDockerLog,
-        PRODUCTION_ENV_FILE: join(directory, 'production.env'),
-        RELEASE_ENV_FILE: join(directory, 'release.env'),
-        COMPOSE_FILE: join(directory, 'docker-compose.prod.yml'),
-        RELEASE_TAG: 'new-release',
-        BACKEND_CHANGED: String(changed.backend),
-        FRONTEND_CHANGED: String(changed.frontend),
-        DEPLOYMENT_CHANGED: 'false',
-      },
+      env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -164,4 +184,20 @@ test('给定新的生产配置缺少管理员密钥，当部署时，则拒绝�
   assert.match(result.stderr, /生产环境变量缺少必填项：JWT_ADMIN_ACCESS_SECRET/);
   assert.match(result.updatedProductionEnv, /DB_PASSWORD=password/);
   assert.match(result.remainingProductionEnvCandidate, /DB_PASSWORD=new-password/);
+});
+
+test('给定部署脚本直接位于部署目录，当执行发布时，则使用部署目录作为根路径', async () => {
+  const result = await createFakeDeployment({
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: true, frontend: false },
+    scriptAtRoot: true,
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.updatedReleaseEnv, /BACKEND_IMAGE=xiaobao-jizhang-backend:new-release/);
+  assert.equal(result.remainingProductionEnvCandidate, null);
 });

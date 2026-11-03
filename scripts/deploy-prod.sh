@@ -1,7 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-ROOT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -f "$SCRIPT_DIRECTORY/docker-compose.prod.yml" ]; then
+  ROOT_DIRECTORY=$SCRIPT_DIRECTORY
+else
+  ROOT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
+fi
 PRODUCTION_ENV_FILE=${PRODUCTION_ENV_FILE:-"$ROOT_DIRECTORY/production.env"}
 PRODUCTION_ENV_CANDIDATE_FILE=${PRODUCTION_ENV_CANDIDATE_FILE:-"$ROOT_DIRECTORY/production.env.new"}
 RELEASE_ENV_FILE=${RELEASE_ENV_FILE:-"$ROOT_DIRECTORY/release.env"}
@@ -112,7 +117,11 @@ fi
 compose up -d postgres redis
 
 if [ "$BACKEND_CHANGED" = "true" ]; then
-  sh "$ROOT_DIRECTORY/scripts/backup-prod.sh"
+  BACKUP_SCRIPT="$ROOT_DIRECTORY/backup-prod.sh"
+  if [ ! -f "$BACKUP_SCRIPT" ]; then
+    BACKUP_SCRIPT="$ROOT_DIRECTORY/scripts/backup-prod.sh"
+  fi
+  sh "$BACKUP_SCRIPT"
   compose run --rm --no-deps backend ./node_modules/.bin/prisma migrate deploy
 fi
 

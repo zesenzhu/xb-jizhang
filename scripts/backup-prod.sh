@@ -1,7 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-ROOT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -f "$SCRIPT_DIRECTORY/docker-compose.prod.yml" ]; then
+  ROOT_DIRECTORY=$SCRIPT_DIRECTORY
+else
+  ROOT_DIRECTORY=$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd)
+fi
 BACKUP_DIRECTORY=${BACKUP_DIRECTORY:-"$ROOT_DIRECTORY/backups"}
 PRODUCTION_ENV_FILE=${PRODUCTION_ENV_FILE:-"$ROOT_DIRECTORY/production.env"}
 RELEASE_ENV_FILE=${RELEASE_ENV_FILE:-"$ROOT_DIRECTORY/release.env"}
