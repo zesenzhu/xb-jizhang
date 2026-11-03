@@ -194,6 +194,8 @@ jobs:
           if [ -f xiaobao-jizhang-backend.tar.gz ]; then cp xiaobao-jizhang-backend.tar.gz deployment-bundle/; fi
           if [ -f xiaobao-jizhang-frontend.tar.gz ]; then cp xiaobao-jizhang-frontend.tar.gz deployment-bundle/; fi
           rm -f production.env.new
+          chmod 755 deployment-bundle
+          find deployment-bundle -type f -exec chmod 644 {} +
           test -n "$(find deployment-bundle -type f -print -quit)"
 
       - name: 自动准备服务器目录

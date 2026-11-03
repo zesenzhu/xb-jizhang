@@ -31,3 +31,8 @@ test('给定部署包已准备，当执行 SCP 上传时，则上传部署目录
   assert.match(workflow, /source: deployment-bundle\n/);
   assert.doesNotMatch(workflow, /source: deployment-bundle\/\*/);
 });
+
+test('给定部署包由 umask 077 创建，当执行 Docker SCP 上传时，则为临时包开放读取权限', () => {
+  assert.match(workflow, /chmod 755 deployment-bundle/);
+  assert.match(workflow, /find deployment-bundle -type f -exec chmod 644/);
+});
