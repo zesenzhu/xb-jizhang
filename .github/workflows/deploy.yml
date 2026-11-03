@@ -45,6 +45,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: |
+            backend/pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
 
       - name: 安装后端依赖
         run: pnpm --dir backend install --frozen-lockfile
