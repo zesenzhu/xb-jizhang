@@ -200,4 +200,5 @@ test('给定部署脚本直接位于部署目录，当执行发布时，则使�
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.updatedReleaseEnv, /BACKEND_IMAGE=xiaobao-jizhang-backend:new-release/);
   assert.equal(result.remainingProductionEnvCandidate, null);
+  assert.match(result.dockerLog, /up -d --wait --wait-timeout 120 postgres redis/);
 });

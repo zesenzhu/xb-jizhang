@@ -114,7 +114,7 @@ if [ "$PRODUCTION_ENV_FILE" = "$PRODUCTION_ENV_CANDIDATE_FILE" ]; then
   PRODUCTION_ENV_FILE="$ROOT_DIRECTORY/production.env"
 fi
 
-compose up -d postgres redis
+compose up -d --wait --wait-timeout 120 postgres redis
 
 if [ "$BACKEND_CHANGED" = "true" ]; then
   BACKUP_SCRIPT="$ROOT_DIRECTORY/backup-prod.sh"
