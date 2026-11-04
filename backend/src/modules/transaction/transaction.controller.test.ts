@@ -1,7 +1,21 @@
+import 'reflect-metadata';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
+import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
 
 describe('TransactionController', () => {
+  it('给定 categoryRootId 不是 UUID，当校验账单列表参数，则返回字段校验错误', () => {
+    const dto = plainToInstance(QueryTransactionsDto, {
+      page: 1,
+      pageSize: 20,
+      categoryRootId: 'not-a-uuid',
+    });
+
+    expect(validateSync(dto).some(({ property }) => property === 'categoryRootId')).toBe(true);
+  });
+
   it('给定创建账单请求，当 Controller 接收参数，则只传递认证用户和允许字段', async () => {
     const service = { create: jest.fn().mockResolvedValue({ id: 'transaction-1' }) };
     const controller = new TransactionController(service as unknown as TransactionService);
@@ -47,7 +61,13 @@ describe('TransactionController', () => {
   it('给定账单列表请求，当 Controller 接收筛选参数，则把用户、账本和查询条件传入 Service', async () => {
     const service = { list: jest.fn().mockResolvedValue({ items: [], total: 0 }) };
     const controller = new TransactionController(service as unknown as TransactionService);
-    const query = { page: 2, pageSize: 10, type: 'INCOME' as const, keyword: '工资' };
+    const query = {
+      page: 2,
+      pageSize: 10,
+      type: 'INCOME' as const,
+      keyword: '工资',
+      categoryRootId: '11111111-1111-4111-8111-111111111111',
+    };
 
     await controller.list({ id: 'user-1' }, 'ledger-1', query);
 

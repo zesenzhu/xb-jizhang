@@ -301,6 +301,18 @@ export class TransactionService {
   async list(userId: string, ledgerId: string, query: TransactionQuery) {
     const member = await this.getMembership(userId, ledgerId);
     if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
+    if (query.categoryId !== undefined && query.categoryRootId !== undefined) {
+      throw this.invalidCategoryFilterException();
+    }
+
+    if (query.categoryRootId !== undefined) {
+      const categoryRoot = await this.prisma.category.findFirst({
+        where: { id: query.categoryRootId, ledgerId },
+        select: { id: true, parentId: true },
+      });
+      if (!categoryRoot) throw this.notFoundException();
+      if (categoryRoot.parentId !== null) throw this.invalidCategoryFilterException();
+    }
 
     const page = Math.max(1, query.page);
     const pageSize = Math.min(100, Math.max(1, query.pageSize));
@@ -319,6 +331,12 @@ export class TransactionService {
       deletedAt: null,
       ...(query.type === undefined ? {} : { type: query.type }),
       ...(query.categoryId === undefined ? {} : { categoryId: query.categoryId }),
+      ...(query.categoryRootId === undefined ? {} : {
+        OR: [
+          { categoryId: query.categoryRootId },
+          { category: { parentId: query.categoryRootId } },
+        ],
+      }),
       ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
       ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
       ...(occurredAt === undefined ? {} : { occurredAt }),
@@ -460,6 +478,10 @@ export class TransactionService {
 
   private invalidInputException(): BadRequestException {
     return new BadRequestException({ code: 40021, message: '账单参数不合法', data: null });
+  }
+
+  private invalidCategoryFilterException(): BadRequestException {
+    return new BadRequestException({ code: 40023, message: '分类筛选参数不合法', data: null });
   }
 
   private forbiddenException(): ForbiddenException {

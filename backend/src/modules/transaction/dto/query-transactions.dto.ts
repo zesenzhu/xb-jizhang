@@ -25,6 +25,10 @@ export class QueryTransactionsDto {
 
   @IsOptional()
   @IsUUID()
+  categoryRootId?: string;
+
+  @IsOptional()
+  @IsUUID()
   accountId?: string;
 
   @IsOptional()

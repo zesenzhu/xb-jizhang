@@ -291,6 +291,105 @@ describe('TransactionService', () => {
     expect(dependencies.transactionClient.account.updateMany).not.toHaveBeenCalled();
   });
 
+  it('给定有效一级分类，当按分类根节点查询账单，则匹配根分类直记和二级分类账单', async () => {
+    const dependencies = createService();
+    const categoryRootId = '11111111-1111-4111-8111-111111111111';
+    const childCategoryId = '22222222-2222-4222-8222-222222222222';
+    const directTransaction = {
+      ...transaction,
+      id: 'transaction-root',
+      category: { ...category, id: categoryRootId, parentId: null },
+    };
+    const childTransaction = {
+      ...transaction,
+      id: 'transaction-child',
+      category: { ...category, id: childCategoryId, parentId: categoryRootId },
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.category.findFirst.mockResolvedValue({ id: categoryRootId, parentId: null });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([directTransaction, childTransaction]);
+    dependencies.prisma.transaction.count.mockResolvedValue(2);
+
+    const query: Parameters<TransactionService['list']>[2] & { categoryRootId: string } = {
+      page: 1,
+      pageSize: 20,
+      categoryRootId,
+    };
+    const result = await dependencies.service.list(userId, ledgerId, query);
+
+    expect(dependencies.prisma.category.findFirst).toHaveBeenCalledWith({
+      where: { id: categoryRootId, ledgerId },
+      select: { id: true, parentId: true },
+    });
+    expect(dependencies.prisma.transaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        ledgerId,
+        deletedAt: null,
+        OR: [
+          { categoryId: categoryRootId },
+          { category: { parentId: categoryRootId } },
+        ],
+      }),
+    }));
+    expect(result.items.map(({ id }) => id)).toEqual(['transaction-root', 'transaction-child']);
+  });
+
+  it('给定分类根节点属于其他账本，当查询分类下钻，则返回资源不存在且不查询账单', async () => {
+    const dependencies = createService();
+    const categoryRootId = '11111111-1111-4111-8111-111111111111';
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.category.findFirst.mockResolvedValue(null);
+    dependencies.prisma.transaction.findMany.mockResolvedValue([]);
+    dependencies.prisma.transaction.count.mockResolvedValue(0);
+
+    await expect(dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+      categoryRootId,
+    } as Parameters<TransactionService['list']>[2] & { categoryRootId: string })).rejects.toMatchObject({
+      response: { code: 40421 },
+    });
+    expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
+    expect(dependencies.prisma.transaction.count).not.toHaveBeenCalled();
+  });
+
+  it('给定分类下钻 ID 指向二级分类，当查询账单列表，则返回根分类层级参数错误', async () => {
+    const dependencies = createService();
+    const categoryRootId = '22222222-2222-4222-8222-222222222222';
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.category.findFirst.mockResolvedValue({ id: categoryRootId, parentId: 'root-category' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([]);
+    dependencies.prisma.transaction.count.mockResolvedValue(0);
+
+    await expect(dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+      categoryRootId,
+    } as Parameters<TransactionService['list']>[2] & { categoryRootId: string })).rejects.toMatchObject({
+      response: { code: 40023 },
+    });
+    expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('给定精确分类和分类根节点同时传入，当查询账单列表，则返回筛选参数冲突', async () => {
+    const dependencies = createService();
+    const categoryRootId = '11111111-1111-4111-8111-111111111111';
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([]);
+    dependencies.prisma.transaction.count.mockResolvedValue(0);
+
+    await expect(dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+      categoryId,
+      categoryRootId,
+    } as Parameters<TransactionService['list']>[2] & { categoryRootId: string })).rejects.toMatchObject({
+      response: { code: 40023 },
+    });
+    expect(dependencies.prisma.category.findFirst).not.toHaveBeenCalled();
+    expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
   it('给定活跃成员查询账单，当包含筛选条件，则按账本、可见账户和时间倒序分页返回', async () => {
     const dependencies = createService();
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
