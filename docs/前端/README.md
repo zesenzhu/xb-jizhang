@@ -57,7 +57,7 @@ updatedAt: 2026-11-04
 | --- | --- | --- | --- |
 | B1 | 分类无层级字段 | 已修复：`Category.parentId` 支持最多两级 | 已解除 |
 | B2 | 默认分类目录不足 | 已修复：新建账本初始化 16 个一级 + 49 个二级 | 已解除 |
-| B3 | 账本无时区 | Ledger 模型无 `timezone`；`账本与成员接口.md` 摘要字段无该字段 | 账单页（日期分组） |
+| B3 | 账本时区尚未落库 | 二期接口设计已要求 `Ledger.timezone`；当前 Prisma `Ledger` 模型及运行中的账本接口尚未实现 | 账单页（日期分组）、统计页 |
 | B4 | 无撤销删除接口 | 有 `DELETE`，controller 无 `restore` 路由 | 降级：删除后不提供撤销 |
 | B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById` | 账单页（筛选） |
 | B6 | 关键词不匹配分类名 | `keywordCondition` 只覆盖 `title` / `note` | 账单页（搜索） |
