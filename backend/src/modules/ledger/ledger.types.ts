@@ -24,6 +24,10 @@ export interface UpdateLedgerInput {
   updatedAt: Date;
 }
 
+export interface CopyLedgerInput extends CreateLedgerInput {
+  clientRequestId: string;
+}
+
 export interface LedgerSummary {
   id: string;
   name: string;

@@ -30,9 +30,13 @@ describe('LedgerService', () => {
   const createService = () => {
     const transactionClient = {
       ledger: { create: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
-      ledgerMember: { create: jest.fn() },
-      category: { createMany: jest.fn() },
-      transaction: { count: jest.fn() },
+      ledgerMember: { create: jest.fn(), findUnique: jest.fn() },
+      category: { createMany: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+      ledgerCopyRequest: { create: jest.fn(), update: jest.fn() },
+      transaction: { count: jest.fn(), create: jest.fn() },
+      account: { create: jest.fn() },
+      ledgerInvitation: { create: jest.fn() },
+      transactionAuditLog: { create: jest.fn() },
       userLedgerPreference: { findUnique: jest.fn() },
       $queryRaw: jest.fn(),
     };
@@ -40,6 +44,7 @@ describe('LedgerService', () => {
       ledger: { findMany: jest.fn(), count: jest.fn(), findUnique: jest.fn() },
       ledgerMember: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
       userLedgerPreference: { findUnique: jest.fn() },
+      ledgerCopyRequest: { findUnique: jest.fn() },
       $transaction: jest.fn(
         async (callback: (client: typeof transactionClient) => Promise<unknown>) =>
           callback(transactionClient),
@@ -439,6 +444,104 @@ describe('LedgerService', () => {
     await expect(
       dependencies.service.update(userId, 'ledger-1', { name: '新名称', updatedAt }),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  const copyInput = {
+    name: ' 模板账本 ', type: 'PERSONAL' as const,
+    clientRequestId: '9d0e8400-e29b-41d4-a716-446655440000',
+  };
+  const sourceCategories = [
+    { id: 'grandchild-1', ledgerId: 'ledger-1', type: 'EXPENSE', name: '粥', parentId: 'child-1',
+      icon: null, color: null, sortOrder: 1, isSystem: false, isActive: true },
+    { id: 'child-1', ledgerId: 'ledger-1', type: 'EXPENSE', name: '早餐', parentId: 'root-1',
+      icon: null, color: null, sortOrder: 2, isSystem: false, isActive: false },
+    { id: 'root-1', ledgerId: 'ledger-1', type: 'EXPENSE', name: '餐饮', parentId: null,
+      icon: 'food', color: '#ffffff', sortOrder: 3, isSystem: true, isActive: true },
+  ];
+
+  it('给定非 Owner，当复制账本，则拒绝且不写入幂等记录', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE', ledger });
+    const copy = dependencies.service as LedgerService & { copy: (userId: string, ledgerId: string, input: typeof copyInput) => Promise<unknown> };
+
+    await expect(copy.copy(userId, ledger.id, copyInput)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定分类树，当 Owner 复制账本，则同事务复制设置及完整分类关系且只创建一个 Owner', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerCopyRequest.findUnique.mockResolvedValue(null);
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE', ledger });
+    dependencies.transactionClient.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE', ledger });
+    dependencies.transactionClient.ledger.create.mockResolvedValue({ ...ledger, id: 'ledger-2', name: '模板账本', type: 'PERSONAL', _count: { members: 0 } });
+    dependencies.transactionClient.ledgerMember.create.mockResolvedValue({ role: 'OWNER', joinedAt: updatedAt });
+    dependencies.transactionClient.category.findMany.mockResolvedValue(sourceCategories);
+    dependencies.transactionClient.category.create
+      .mockResolvedValueOnce({ id: 'new-root' })
+      .mockResolvedValueOnce({ id: 'new-child' })
+      .mockResolvedValueOnce({ id: 'new-grandchild' });
+    const copy = dependencies.service as LedgerService & { copy: (userId: string, ledgerId: string, input: typeof copyInput) => Promise<unknown> };
+
+    const result = await copy.copy(userId, ledger.id, copyInput);
+
+    expect(dependencies.transactionClient.ledgerCopyRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ userId, clientRequestId: copyInput.clientRequestId, sourceLedgerId: ledger.id }),
+    }));
+    expect(dependencies.transactionClient.ledger.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: { name: '模板账本', type: 'PERSONAL', defaultCurrency: 'CNY', timezone: 'Asia/Shanghai',
+        icon: null, color: null, creatorId: userId },
+    }));
+    expect(dependencies.transactionClient.ledgerMember.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: { ledgerId: 'ledger-2', userId, role: 'OWNER', status: 'ACTIVE' },
+    }));
+    expect(dependencies.transactionClient.category.create.mock.calls.map(([call]) => call.data)).toEqual([
+      expect.objectContaining({ ledgerId: 'ledger-2', type: 'EXPENSE', name: '餐饮', parentId: null,
+        icon: 'food', color: '#ffffff', sortOrder: 3, isSystem: true, isActive: true }),
+      expect.objectContaining({ ledgerId: 'ledger-2', name: '早餐', parentId: 'new-root', isActive: false }),
+      expect.objectContaining({ ledgerId: 'ledger-2', name: '粥', parentId: 'new-child' }),
+    ]);
+    expect(dependencies.transactionClient.ledgerCopyRequest.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { targetLedgerId: 'ledger-2' },
+    }));
+    expect(dependencies.transactionClient.account.create).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.transaction.create).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.transaction.count).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.ledgerInvitation.create).not.toHaveBeenCalled();
+    expect(dependencies.transactionClient.transactionAuditLog.create).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ id: 'ledger-2', memberCount: 1, isCurrent: false, isDefault: false }));
+  });
+
+  it('给定已有幂等记录，当重试复制，则回读原目标而不创建新账本', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerCopyRequest.findUnique.mockResolvedValue({ sourceLedgerId: ledger.id, targetLedgerId: 'ledger-2' });
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE', joinedAt: updatedAt,
+      ledger: { ...ledger, id: 'ledger-2' } });
+    const copy = dependencies.service as LedgerService & { copy: (userId: string, ledgerId: string, input: typeof copyInput) => Promise<unknown> };
+
+    expect(await copy.copy(userId, ledger.id, copyInput)).toEqual(expect.objectContaining({ id: 'ledger-2' }));
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定并发唯一键冲突，当另一个请求已完成，则回读其目标', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerCopyRequest.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ sourceLedgerId: ledger.id, targetLedgerId: 'ledger-2' });
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE', joinedAt: updatedAt,
+      ledger: { ...ledger, id: 'ledger-2' } });
+    dependencies.prisma.$transaction.mockRejectedValue({ code: 'P2002' });
+    const copy = dependencies.service as LedgerService & { copy: (userId: string, ledgerId: string, input: typeof copyInput) => Promise<unknown> };
+
+    expect(await copy.copy(userId, ledger.id, copyInput)).toEqual(expect.objectContaining({ id: 'ledger-2' }));
+  });
+
+  it('给定已删目标的幂等记录，当重试复制，则冲突且不创建第二个账本', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerCopyRequest.findUnique.mockResolvedValue({ sourceLedgerId: ledger.id, targetLedgerId: null });
+    const copy = dependencies.service as LedgerService & { copy: (userId: string, ledgerId: string, input: typeof copyInput) => Promise<unknown> };
+
+    await expect(copy.copy(userId, ledger.id, copyInput)).rejects.toBeInstanceOf(ConflictException);
     expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
 });

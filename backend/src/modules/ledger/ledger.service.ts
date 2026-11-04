@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getDefaultCategoryData } from '../category/category.constants';
 import { isLedgerTimezone } from './ledger-timezone.validator';
 import type {
+  CopyLedgerInput,
   CreateLedgerInput,
   LedgerQuery,
   LedgerSummary,
@@ -61,6 +62,10 @@ function validateCurrency(currency: string | undefined): void {
   if (currency !== undefined && !Intl.supportedValuesOf('currency').includes(currency)) {
     throw new BadRequestException({ code: 40001, message: '账本币种无效', data: null });
   }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
 @Injectable()
@@ -126,6 +131,111 @@ export class LedgerService {
       await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
       return { ...toLedgerSummary(ledger, membership.role, membership.joinedAt), memberCount: 1 };
     });
+  }
+
+  async copy(userId: string, sourceLedgerId: string, input: CopyLedgerInput): Promise<LedgerSummary> {
+    const name = input.name.trim();
+    if (!name) throw this.invalidNameException();
+    validateTimezone(input.timezone);
+    validateCurrency(input.defaultCurrency);
+
+    const requestWhere = { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } };
+    const readExisting = async (): Promise<LedgerSummary | null> => {
+      const request = await this.prisma.ledgerCopyRequest.findUnique({
+        where: requestWhere,
+        select: { sourceLedgerId: true, targetLedgerId: true },
+      });
+      if (!request) return null;
+      if ((request.sourceLedgerId && request.sourceLedgerId !== sourceLedgerId) || !request.targetLedgerId) {
+        throw this.copyConflictException();
+      }
+      try {
+        return await this.getDetail(userId, request.targetLedgerId);
+      } catch (error) {
+        if (error instanceof NotFoundException) throw this.copyConflictException();
+        throw error;
+      }
+    };
+
+    const existing = await readExisting();
+    if (existing) return existing;
+    const sourceMembership = await this.getMembership(userId, sourceLedgerId);
+    if (!sourceMembership || sourceMembership.status !== 'ACTIVE') throw this.notFoundException();
+    if (sourceMembership.role !== 'OWNER') throw this.forbiddenException();
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const membership = await this.getMembership(userId, sourceLedgerId, transaction);
+        if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+        if (membership.role !== 'OWNER') throw this.forbiddenException();
+
+        await transaction.ledgerCopyRequest.create({
+          data: { userId, clientRequestId: input.clientRequestId, sourceLedgerId },
+        });
+        const source = membership.ledger;
+        const ledger = await transaction.ledger.create({
+          data: {
+            name,
+            type: input.type,
+            defaultCurrency: input.defaultCurrency ?? source.defaultCurrency,
+            timezone: input.timezone ?? source.timezone,
+            icon: input.icon === undefined ? source.icon : input.icon,
+            color: input.color === undefined ? source.color : input.color,
+            creatorId: userId,
+          },
+          select: ledgerSelect,
+        });
+        const owner = await transaction.ledgerMember.create({
+          data: { ledgerId: ledger.id, userId, role: 'OWNER', status: 'ACTIVE' },
+          select: { role: true, joinedAt: true },
+        });
+
+        const categories = await transaction.category.findMany({
+          where: { ledgerId: sourceLedgerId },
+          select: { id: true, type: true, name: true, parentId: true, icon: true, color: true,
+            sortOrder: true, isSystem: true, isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        });
+        const ids = new Map<string, string>();
+        let pending = categories;
+        while (pending.length > 0) {
+          const next = pending.filter((category) => !category.parentId || ids.has(category.parentId));
+          if (next.length === 0) throw this.copyConflictException();
+          for (const category of next) {
+            const created = await transaction.category.create({
+              data: {
+                ledgerId: ledger.id,
+                type: category.type,
+                name: category.name,
+                parentId: category.parentId ? ids.get(category.parentId)! : null,
+                icon: category.icon,
+                color: category.color,
+                sortOrder: category.sortOrder,
+                isSystem: category.isSystem,
+                isActive: category.isActive,
+              },
+              select: { id: true },
+            });
+            ids.set(category.id, created.id);
+          }
+          const copied = new Set(next.map((category) => category.id));
+          pending = pending.filter((category) => !copied.has(category.id));
+        }
+
+        await transaction.ledgerCopyRequest.update({
+          where: requestWhere,
+          data: { targetLedgerId: ledger.id },
+        });
+        return { ...toLedgerSummary(ledger, owner.role, owner.joinedAt), memberCount: 1 };
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const concurrent = await readExisting();
+        if (concurrent) return concurrent;
+        throw this.copyConflictException();
+      }
+      throw error;
+    }
   }
 
   async getDetail(userId: string, ledgerId: string): Promise<LedgerSummary> {
@@ -217,6 +327,10 @@ export class LedgerService {
 
   private currencyConflictException(): ConflictException {
     return new ConflictException({ code: 40902, message: '账本已有账单，不能修改默认币种', data: null });
+  }
+
+  private copyConflictException(): ConflictException {
+    return new ConflictException({ code: 40902, message: '复制请求已失效或发生冲突', data: null });
   }
 
   private invalidNameException(): BadRequestException {

@@ -99,6 +99,24 @@ describe('LedgerController', () => {
     }));
     expect(service.update.mock.calls[0][2]).not.toHaveProperty('isArchived');
   });
+
+  it('给定复制请求，当 Controller 接收参数，则只传递允许字段和认证用户', async () => {
+    const service = { copy: jest.fn().mockResolvedValue({ id: 'ledger-2' }) };
+    const controller = new LedgerController(service as unknown as LedgerService);
+    const copy = controller as LedgerController & { copy: (user: { id: string }, ledgerId: string, dto: Record<string, unknown>) => Promise<unknown> };
+
+    const result = await copy.copy({ id: 'user-1' }, 'ledger-1', {
+      name: '模板账本', type: 'PERSONAL', clientRequestId: '9d0e8400-e29b-41d4-a716-446655440000',
+      defaultCurrency: 'USD', timezone: 'America/New_York', icon: 'home', color: '#ffffff',
+      isArchived: true, creatorId: 'other-user',
+    });
+
+    expect(service.copy).toHaveBeenCalledWith('user-1', 'ledger-1', {
+      name: '模板账本', type: 'PERSONAL', clientRequestId: '9d0e8400-e29b-41d4-a716-446655440000',
+      defaultCurrency: 'USD', timezone: 'America/New_York', icon: 'home', color: '#ffffff',
+    });
+    expect(result).toEqual({ id: 'ledger-2' });
+  });
 });
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
