@@ -73,3 +73,35 @@ assert.equal(categoryPathText(withParent, null), null);
 assert.equal(categoryPathText(withParent, 'missing'), null);
 
 console.log('category tree contract passed');
+
+// 九宫格显示：一级与二级都是「分类项」，选中二级时该格显示二级本身
+import { resolveGridTile } from '../src/lib/bill/category-tree';
+
+const foodNode = buildCategoryTree([
+  category({ id: 'food', name: '餐饮', sortOrder: 10 }),
+  category({ id: 'breakfast', name: '早餐', parentId: 'food', sortOrder: 10 }),
+  category({ id: 'lunch', name: '午餐', parentId: 'food', sortOrder: 20 }),
+])[0];
+
+// 未选中：显示一级自身，且保留子级标记
+const idle = resolveGridTile(foodNode, null);
+assert.equal(idle.node.id, 'food');
+assert.equal(idle.isRoot, true);
+assert.equal(idle.selected, false);
+
+// 选中一级：显示一级，标记已选
+const rootPicked = resolveGridTile(foodNode, 'food');
+assert.equal(rootPicked.node.id, 'food');
+assert.equal(rootPicked.selected, true);
+
+// 选中二级：该格显示二级本身，不再显示一级
+const childPicked = resolveGridTile(foodNode, 'lunch');
+assert.equal(childPicked.node.id, 'lunch');
+assert.equal(childPicked.node.name, '午餐');
+assert.equal(childPicked.selected, true);
+assert.equal(childPicked.isRoot, false);
+
+// 选中别的分类：本格不受影响
+const otherPicked = resolveGridTile(foodNode, 'transport');
+assert.equal(otherPicked.node.id, 'food');
+assert.equal(otherPicked.selected, false);

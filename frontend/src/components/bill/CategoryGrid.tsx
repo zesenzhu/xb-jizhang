@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CategoryNode } from '@/lib/bill/category-tree';
+import { resolveGridTile, type CategoryNode } from '@/lib/bill/category-tree';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 
 export interface CategoryGridProps {
@@ -94,8 +94,12 @@ export function CategoryGrid({
     <>
       <div className="grid grid-cols-5 gap-y-3.5 px-4 pb-3 pt-1">
         {nodes.map((node) => {
-          const selected = node.id === selectedId;
+          // 选中二级时，这一格显示二级本身（一级与二级都是「分类项」），
+          // 否则选完子分类后九宫格毫无变化，用户不知道有没有选中。
+          const tile = resolveGridTile(node, selectedId);
           const hasChildren = node.children.length > 0;
+          const isGroupPick = tile.isRoot && !tile.selected && hasChildren;
+
           return (
             <button
               key={node.id}
@@ -107,22 +111,22 @@ export function CategoryGrid({
                 }
                 onSelect(node.id);
               }}
-              aria-pressed={selected}
+              aria-pressed={tile.selected}
               className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
             >
               <CategoryBubble
-                name={node.name}
-                color={node.color}
-                selected={selected}
-                hasChildren={hasChildren}
+                name={tile.node.name}
+                color={tile.node.color}
+                selected={tile.selected}
+                hasChildren={isGroupPick}
               />
               <span
                 className={cn(
                   'max-w-full truncate text-[11px] leading-none',
-                  selected ? 'font-semibold text-primary' : 'text-text-muted',
+                  tile.selected ? 'font-semibold text-primary' : 'text-text-muted',
                 )}
               >
-                {node.name}
+                {tile.node.name}
               </span>
             </button>
           );
@@ -149,7 +153,7 @@ export function CategoryGrid({
           if (!next) setExpandedId(null);
         }}
         layer="nested"
-        title={expanded?.name ?? ''}
+        title={expanded ? sheetTitle(expanded, selectedId) : ''}
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
           {expanded && (
@@ -166,6 +170,12 @@ export function CategoryGrid({
       </BottomSheet>
     </>
   );
+}
+
+/** 二级抽屉标题：已选子分类时显示「一级 › 二级」，让用户确认当前选中的是哪一层。 */
+function sheetTitle(node: CategoryNode, selectedId: string | null): string {
+  const selectedChild = node.children.find((child) => child.id === selectedId);
+  return selectedChild ? `${node.name} · ${selectedChild.name}` : node.name;
 }
 
 /**

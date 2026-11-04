@@ -42,6 +42,34 @@ function compareOrder(left: CategoryNode, right: CategoryNode): number {
   return left.name.localeCompare(right.name, 'zh-CN');
 }
 
+/**
+ * 九宫格里某一格实际要显示的分类。
+ *
+ * 一格代表一个「分类项」，一级和二级都是分类项：选中二级时，该格显示二级本身，
+ * 而不是继续显示它的一级父类。否则用户选完「其他学习」后，九宫格里看不到任何变化，
+ * 只有一行小字写着已选路径。
+ */
+export interface GridTile {
+  /** 该格要显示的分类：选中二级时为二级，否则为一级 */
+  node: CategoryNode;
+  /** 是否是一级分类自身（决定是否显示子级角标） */
+  isRoot: boolean;
+  selected: boolean;
+}
+
+export function resolveGridTile(node: CategoryNode, selectedId: string | null): GridTile {
+  if (node.id === selectedId) {
+    return { node, isRoot: true, selected: true };
+  }
+
+  const selectedChild = node.children.find((child) => child.id === selectedId);
+  if (selectedChild) {
+    return { node: selectedChild, isRoot: false, selected: true };
+  }
+
+  return { node, isRoot: true, selected: false };
+}
+
 /** 按类型筛选，供支出/收入切换使用。 */
 export function filterByType(
   categories: readonly CategorySummary[],
