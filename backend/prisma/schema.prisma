@@ -79,6 +79,8 @@ model User {
   isActive            Boolean               @default(true) @map("is_active")
   ledgersCreated      Ledger[]              @relation("LedgerCreator")
   ledgerMemberships   LedgerMember[]
+  ledgerPreference    UserLedgerPreference?
+  ledgerCopyRequests  LedgerCopyRequest[]
   sentInvitations     LedgerInvitation[]    @relation("InvitationSender")
   refreshSessions     RefreshSession[]
   createdTransactions Transaction[]         @relation("TransactionCreator")
@@ -93,27 +95,64 @@ model User {
 }
 
 model Ledger {
-  id              String                @id @default(uuid())
-  name            String
-  type            LedgerType            @default(PERSONAL)
-  creatorId       String                @map("creator_id")
-  defaultCurrency String                @default("CNY") @map("default_currency")
-  icon            String?
-  color           String?
-  isArchived      Boolean               @default(false) @map("is_archived")
-  creator         User                  @relation("LedgerCreator", fields: [creatorId], references: [id])
-  members         LedgerMember[]
-  invitations     LedgerInvitation[]
-  accounts        Account[]
-  categories      Category[]
-  transactions    Transaction[]
-  budgets         Budget[]
-  auditLogs       TransactionAuditLog[]
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  id                 String                 @id @default(uuid())
+  name               String
+  type               LedgerType             @default(PERSONAL)
+  creatorId          String                 @map("creator_id")
+  defaultCurrency    String                 @default("CNY") @map("default_currency")
+  timezone           String                 @default("Asia/Shanghai")
+  icon               String?
+  color              String?
+  isArchived         Boolean                @default(false) @map("is_archived")
+  creator            User                   @relation("LedgerCreator", fields: [creatorId], references: [id])
+  members            LedgerMember[]
+  currentPreferences UserLedgerPreference[] @relation("CurrentPreferenceLedger")
+  defaultPreferences UserLedgerPreference[] @relation("DefaultPreferenceLedger")
+  sourceCopyRequests LedgerCopyRequest[]    @relation("CopySourceLedger")
+  targetCopyRequest  LedgerCopyRequest?     @relation("CopyTargetLedger")
+  invitations        LedgerInvitation[]
+  accounts           Account[]
+  categories         Category[]
+  transactions       Transaction[]
+  budgets            Budget[]
+  auditLogs          TransactionAuditLog[]
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
 
   @@index([creatorId])
   @@map("ledger")
+}
+
+model UserLedgerPreference {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  currentLedgerId String?  @map("current_ledger_id")
+  defaultLedgerId String?  @map("default_ledger_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentLedger   Ledger?  @relation("CurrentPreferenceLedger", fields: [currentLedgerId], references: [id], onDelete: SetNull)
+  defaultLedger   Ledger?  @relation("DefaultPreferenceLedger", fields: [defaultLedgerId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([currentLedgerId])
+  @@index([defaultLedgerId])
+  @@map("user_ledger_preference")
+}
+
+model LedgerCopyRequest {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  clientRequestId String   @map("client_request_id")
+  sourceLedgerId  String?  @map("source_ledger_id")
+  targetLedgerId  String?  @unique @map("target_ledger_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceLedger    Ledger?  @relation("CopySourceLedger", fields: [sourceLedgerId], references: [id], onDelete: SetNull)
+  targetLedger    Ledger?  @relation("CopyTargetLedger", fields: [targetLedgerId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, clientRequestId])
+  @@index([sourceLedgerId])
+  @@map("ledger_copy_request")
 }
 
 model LedgerMember {
