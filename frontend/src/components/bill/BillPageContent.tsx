@@ -27,6 +27,10 @@ import { BillSearchBar } from '@/components/bill/BillSearchBar';
 import { BillListSkeleton } from '@/components/skeleton/BillListSkeleton';
 import { LedgerTopBar } from '@/components/bill/LedgerTopBar';
 import { MonthSummaryCard } from '@/components/bill/MonthSummaryCard';
+import { BillCreateSheet } from '@/components/bill/BillCreateSheet';
+import { CreateBillFab } from '@/components/bill/CreateBillFab';
+import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
+import { useOfflineStore } from '@/store/offlineStore';
 
 const PAGE_SIZE = 30;
 
@@ -49,6 +53,8 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
   const [selected, setSelected] = React.useState(now);
   const [filter, setFilter] = React.useState<BillFilter>(createInitialBillFilter);
   const [keywordInput, setKeywordInput] = React.useState('');
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const isOnline = useOfflineStore((store) => store.isOnline);
 
   const range = React.useMemo(
     () => ({
@@ -167,6 +173,8 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
           onNextMonth={goNext}
         />
 
+        <SyncStatusBar isOnline={isOnline} />
+
         <BillSearchBar
           keyword={keywordInput}
           payerId={filter.payerId}
@@ -253,6 +261,23 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
           </>
         )}
       </main>
+
+      <CreateBillFab
+        memberRole={ledgerQuery.data?.memberRole}
+        onClick={() => setCreateOpen(true)}
+      />
+
+      {currentLedgerId && (
+        <BillCreateSheet
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          ledgerId={currentLedgerId}
+          ledgerName={ledgerQuery.data?.name ?? null}
+          onCreated={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
     </div>
   );
 }
