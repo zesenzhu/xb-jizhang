@@ -23,6 +23,7 @@ describe('AuthService', () => {
       user: { create: jest.fn(), update: jest.fn() },
       ledger: { create: jest.fn() },
       ledgerMember: { create: jest.fn() },
+      userLedgerPreference: { create: jest.fn() },
       category: { createMany: jest.fn() },
       refreshSession: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     };
@@ -117,6 +118,13 @@ describe('AuthService', () => {
         }),
       }),
     );
+    expect(dependencies.transactionClient.userLedgerPreference.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user-1',
+        currentLedgerId: 'ledger-1',
+        defaultLedgerId: 'ledger-1',
+      },
+    });
     expect(dependencies.transactionClient.category.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([

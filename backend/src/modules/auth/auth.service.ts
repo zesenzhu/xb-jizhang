@@ -94,6 +94,13 @@ export class AuthService {
             status: 'ACTIVE',
           },
         });
+        await transaction.userLedgerPreference.create({
+          data: {
+            userId: user.id,
+            currentLedgerId: ledger.id,
+            defaultLedgerId: ledger.id,
+          },
+        });
         await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
         await this.createRefreshSession(transaction, user.id, refreshToken, metadata);
 
