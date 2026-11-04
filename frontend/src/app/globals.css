@@ -98,12 +98,22 @@
   --text-main: #ffffff;
   --text-muted: #8e8e93;
   --text-tertiary: #636366;
+
+  /* 主色与财务语义色必须同时覆盖，否则启用暗色后会出现深底浅色断层 */
+  --theme-primary: #0a84ff;
+  --theme-primary-hover: #409cff;
+  --theme-primary-active: #0062c4;
+  --theme-primary-subtle: rgba(10, 132, 255, 0.18);
+  --color-income: #32d74b;
+  --color-expense: #ff453a;
+  --color-fab: #ffd60a;
 }
 
 /* 预留扩展示例：薄荷绿主题 */
 [data-theme='mint'] {
   --theme-primary: #10b981;
   --theme-primary-hover: #059669;
+  --theme-primary-active: #047857;
   --theme-primary-subtle: rgba(16, 185, 129, 0.12);
 }
 
@@ -111,6 +121,7 @@
 [data-theme='amber'] {
   --theme-primary: #f59e0b;
   --theme-primary-hover: #d97706;
+  --theme-primary-active: #b45309;
   --theme-primary-subtle: rgba(245, 158, 11, 0.12);
 }
 

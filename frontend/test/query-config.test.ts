@@ -17,4 +17,31 @@ assert.equal(queryStaleTime.accounts, 5 * 60 * 1000);
 assert.equal(queryStaleTime.categories, 5 * 60 * 1000);
 assert.equal(queryStaleTime.transactions, 30 * 1000);
 
+// 账单与统计的缓存键：首段必须是 'ledger'，否则退出登录时清不掉上个用户的缓存。
+assert.deepEqual(
+  queryKeys.transactions.list('ledger-1', { page: 1, type: 'EXPENSE' }),
+  ['ledger', 'ledger-1', 'transactions', 'list', { page: 1, type: 'EXPENSE' }],
+);
+assert.equal(queryKeys.transactions.list('ledger-1', {})[0], 'ledger');
+assert.deepEqual(queryKeys.transactions.all('ledger-1'), ['ledger', 'ledger-1', 'transactions']);
+
+// 归一化：键序与空值都不影响最终缓存键，否则同一组筛选会命中不同缓存。
+assert.deepEqual(
+  queryKeys.transactions.list('ledger-1', { type: 'EXPENSE', page: 1 }),
+  queryKeys.transactions.list('ledger-1', { page: 1, type: 'EXPENSE' }),
+);
+assert.deepEqual(
+  queryKeys.transactions.list('ledger-1', { page: 1, keyword: undefined }),
+  queryKeys.transactions.list('ledger-1', { page: 1 }),
+);
+
+assert.deepEqual(
+  queryKeys.statistics.overview('ledger-1', { from: 'a', to: 'b' }),
+  ['ledger', 'ledger-1', 'statistics', 'overview', { from: 'a', to: 'b' }],
+);
+assert.deepEqual(
+  queryKeys.statistics.overview('ledger-1', { to: 'b', from: 'a', type: undefined }),
+  queryKeys.statistics.overview('ledger-1', { from: 'a', to: 'b' }),
+);
+
 console.log('query config contract passed');

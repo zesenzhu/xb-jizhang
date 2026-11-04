@@ -41,9 +41,9 @@ export function AmountDisplay({
   let colorStyle = '';
   if (colorSemantic === 'colored') {
     if (type === 'INCOME' || (type === 'NEUTRAL' && amount > 0)) {
-      colorStyle = 'text-emerald-400';
+      colorStyle = 'text-financial-income';
     } else if (type === 'EXPENSE' || (type === 'NEUTRAL' && amount < 0)) {
-      colorStyle = 'text-rose-400';
+      colorStyle = 'text-financial-expense';
     } else {
       colorStyle = 'text-text-muted';
     }

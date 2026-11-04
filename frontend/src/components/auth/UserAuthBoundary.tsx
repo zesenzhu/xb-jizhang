@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/api/user-auth-api';
 import { initializeAuthSession } from '@/lib/auth/initialize-auth';
 import { getLoginRedirectUrl } from '@/lib/routing/routes';
 import { useUserAuthStore } from '@/store/userAuthStore';
-import { UserHomeSkeleton } from '@/components/auth/UserHomeSkeleton';
+import { BillListSkeleton } from '@/components/skeleton/BillListSkeleton';
 import { LedgerListSkeleton } from '@/components/skeleton/LedgerListSkeleton';
 import { UserProfileSkeleton } from '@/components/skeleton/UserProfileSkeleton';
 import { SecondaryPageSkeleton } from '@/components/skeleton/SecondaryPageSkeleton';
@@ -42,8 +42,8 @@ function resolveRouteSkeleton(pathname: string | null): React.ReactNode {
     );
   }
 
-  // 默认使用首页明细（当前活跃账本 + 触控记账键盘）专属骨架
-  return <UserHomeSkeleton />;
+  // 一级 Tab 与未知路径统一使用账单页骨架，与 /user 的真实结构对齐
+  return <BillListSkeleton />;
 }
 
 export function UserAuthBoundary({
