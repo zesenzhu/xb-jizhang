@@ -1,143 +1,144 @@
 ---
-title: 小宝记账一期前端设计总纲
-type: architecture
+title: 一期前端设计索引
+type: index
 status: draft
-version: 0.1
+version: 0.2
 owner: 小宝
-updatedAt: 2026-11-03
-related:
-  - ../需求/一期账本与记账需求.md
-  - ../api/账单接口.md
-  - ../api/账户与分类接口.md
-  - ../api/账本与成员接口.md
-  - ../architecture/前端应用架构.md
-  - ../ui/页面与布局规范.md
-  - ./页面与交互设计.md
-  - ./数据层与状态设计.md
-  - ./组件与样式规范.md
-  - ./迭代计划.md
+updatedAt: 2026-11-04
 ---
 
-# 一期前端设计总纲
+# 一期前端设计索引
 
-## 1. 文档定位
+## 组织原则
 
-`docs/前端/` 是一期用户端开发的唯一设计入口，回答三个问题：
+**一个页面一个文件，文件自包含。** 改一个页面只改它自己那份文件，不跨文件联动。
 
-- 页面长什么样、怎么交互（`页面与交互设计.md`）
-- 数据怎么取、状态怎么管（`数据层与状态设计.md`）
-- 组件怎么拆、样式怎么写（`组件与样式规范.md`）
-- 按什么顺序做、每步怎么验收（`迭代计划.md`）
+每个页面文档固定包含六节，不增不减：
 
-后端契约以 `docs/api/` 与 DTO 为准，本文不重复字段定义；产品规则以 `docs/需求/一期账本与记账需求.md` 为准，本文不重新定义业务语义。
+1. 页面结构与布局
+2. 数据来源（接口、类型、缓存键）
+3. 交互规则
+4. 状态矩阵
+5. 组件清单（复用 / 扩展 / 新建）
+6. 验收清单
 
-## 2. 与现有代码的关系
+跨页面共用的内容（后端缺口、全局样式约束、通用组件契约）统一放在本文件，页面文档只引用不重复。
 
-一期不是重写，是在现有骨架上补齐业务页。现状边界：
+## 页面文档
 
-| 层 | 现状 | 本期动作 |
-| --- | --- | --- |
-| 路由与守卫 | `/user/**` 与 `/admin/**` 双域已隔离；`UserAuthBoundary` 按路径匹配骨架 | 复用，新增一条骨架映射 |
-| 认证 | HttpOnly Cookie + 401 单飞刷新队列 | 不动 |
-| 账本 | 列表 / 新建 / 详情已接真实接口 | 复用 `getLedger`、`getLedgers` |
-| 账单 | **零对接**，首页「记一笔」只 `alert` | 本期主要工作量 |
-| 账户 / 分类 / 成员 | **零对接** | 本期补只读消费 |
-| UI 基座 | `Button`/`Input`/`Badge`/`Skeleton`/`AmountDisplay`/`AmountKeypad` 可用 | 复用 + 少量扩展 |
-| 主题 | `globals.css` 语义 token 已建立，暗色仅有变量无开关 | 只消费 token，不新增硬编码色 |
-
-结论：**底座够用，缺的全是业务层。** 不引入新依赖，不重构认证与账本模块。
-
-## 3. 页面归属决策
-
-需求 5.1 规定「账单页是普通用户进入应用后的主要页面」。据此：
-
-- `/user` 由当前的「概览 + 快捷键盘演示页」改造为**账单页**（账本栏 + 月度概览 + 搜索 + 日期分组流水 + 右下角 FAB）。
-- 现有 `AmountKeypad` 从首页卡片移入**记账抽屉**，成为唯一记账入口。
-- `/user/ledger`、`/user/ledger/new`、`/user/profile` 保持不变。
-- 不新建 `/user/ledger/[ledgerId]/transactions`：账本通过顶部账本栏切换，避免同一份账单出现两个 URL 入口。
-
-理由：移动端多一层路径会让「打开即记账」变慢；需求的页面模型是单页账本视图（见参考截图的账本名 + 月份 + 分组列表），不是「先选账本再进流水」。
-
-## 4. 后端能力缺口
-
-以下结论来自对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对。**必须在对应迭代开始前解决，否则该迭代无法验收。**
-
-### 4.1 阻断项
-
-| # | 缺口 | 证据 | 影响的需求条款 | 处理建议 |
-| --- | --- | --- | --- | --- |
-| B1 | 分类无层级字段 | `schema.prisma` Category 无 `parentId`/`children`；`category.service.ts` 的 `categorySelect` 无父级 | 7.5、9.1、AC6 两级分类 | 加 `parentId` 自关联 + 迁移；`GET /categories` 返回 `parentId` |
-| B2 | 默认分类仅 4 条 | `category.constants.ts` 只有餐饮/交通/工资/其他收入；需求 9.2 给出 16 个一级 + 二级目录 | 7.5、9.2 | 重写 `DEFAULT_CATEGORIES`，含 `parentId` 与 `icon`；对已存在账本提供补种脚本 |
-| B3 | 账本无时区 | `schema.prisma` Ledger 无 `timezone`；`ledger.types.ts`、`create-ledger.dto.ts` 均无 | 5.2、11.3、AC17 | 加 `timezone String @default("Asia/Shanghai")` 并在 `LedgerSummary` 返回 |
-| B4 | 无撤销删除接口 | 有 `DELETE`，无 `RESTORE` 路由 | 8.3、AC15 五秒撤销 | 新增 `POST /transactions/:id/restore`，或在产品侧改为「不做撤销」 |
-| B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById`；`list` 的 `where` 未使用 | 6.2、10 | 加 `createdById?` 查询参数 |
-| B6 | 关键词不匹配分类名 | `transaction.service.ts` 的 `keywordCondition` 只覆盖 `title`/`note` | 6.2 | 补 `category: { name: { contains } }` |
-
-### 4.2 可变通项（前端先行，记录降级口径）
-
-| 缺口 | 降级方案 | 风险 |
-| --- | --- | --- |
-| 无统计聚合接口 | 前端按当前筛选条件拉分页并累加 | `pageSize` 上限 100，单月超 100 笔时概览失真。需在迭代二补后端 `summary` 接口 |
-| 无分类 `icon`/`color` 透出 | 前端按分类名映射图标与色板 | 新增分类时映射缺失，需兜底图标 |
-| 账单详情只返回 `createdById`/`updatedById` | 用 `GET /members` 结果映射昵称 | 成员被移除后昵称丢失 |
-| 无商家历史建议接口 | 从前端已加载的分页中提取最近使用的 `title`，去重取 5 条 | 首次记账无建议 |
-| `note` 上限 2000（需求 200） | 前端按 200 校验 | 后端仍接受更长的直接请求 |
-| 无服务端未来时间校验 | 前端拦截 | 绕过前端可写入未来账单 |
-
-### 4.3 需产品确认
-
-1. 删除撤销是否保留（决定 B4 是否需要）。
-2. 概览是否随搜索缩小（需求标注为建议值）。
-3. 一期是否上线暗色模式；若不上线，`profile` 页的「跟随系统」文案需删除。
-4. 默认分类目录是否按需求 9.2 全量补种到既有账本。
-
-## 5. 迭代总览
-
-四个迭代，每迭代独立可验收，后端前置依赖单独列出。
-
-| 迭代 | 主题 | 交付物 | 后端前置 |
+| 页面 | 路由 | 文档 | 状态 |
 | --- | --- | --- | --- |
-| 一 | 账单页只读 | 账单页骨架、月度概览、日期分组流水、分页加载、空/错误态 | 无（缺口用前端聚合兜底） |
-| 二 | 记账抽屉 | 底部抽屉、类型分段、金额键盘、分类选择、日期时间、创建与幂等 | B1、B2（分类层级与目录） |
-| 三 | 明细管理 | 账单详情、编辑（版本冲突）、删除（角色规则）、筛选面板与搜索 | B5、B6；B4 视产品结论 |
-| 四 | 收尾 | 时区口径统一、概览接口接入、PWA 离线提示、无障碍与回归 | B3、统计接口 |
+| 账单页 | `/user` | [账单页.md](./账单页.md) | draft |
+| 记账抽屉 | `/user` 浮层 | [记账抽屉.md](./记账抽屉.md) | draft |
+| 分类选择 | 记账抽屉二级浮层 | [分类选择.md](./分类选择.md) | draft |
+| 账单详情 | `/user` 浮层 | [账单详情.md](./账单详情.md) | draft |
 
-详细任务拆分与验收标准见 `迭代计划.md`。
+尚未设计（后续迭代按需新增文件）：账本切换面板、筛选面板、个人中心改版。
 
-## 6. 关键技术决策
+## 后端能力缺口
 
-| 决策 | 结论 | 理由 |
+对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对结论。**缺口在对应页面文档里会被引用，修复后需同步删除引用。**
+
+### 阻断项
+
+| # | 缺口 | 证据 | 阻塞页面 |
+| --- | --- | --- | --- |
+| B1 | 分类无层级字段 | `schema.prisma` Category 无 `parentId` | 分类选择 |
+| B2 | 默认分类仅 4 条 | `category.constants.ts` 实测 4 条，需求 9.2 要 16 个一级 | 分类选择 |
+| B3 | 账本无时区 | Ledger 模型无 `timezone` | 账单页（日期分组） |
+| B4 | 无撤销删除接口 | 有 `DELETE`，无 `RESTORE` 路由 | 账单详情 |
+| B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById` | 账单页（筛选） |
+| B6 | 关键词不匹配分类名 | `keywordCondition` 只覆盖 `title`/`note` | 账单页（搜索） |
+
+### 已核实的实现缺陷
+
+| # | 问题 | 证据 | 影响 |
+| --- | --- | --- | --- |
+| D1 | 列表过滤掉无账户账单 | `transaction.service.ts` 的 `where` 用 `account: { OR: [...] }`，Prisma 对可选关系过滤等价 `is`，排除 `accountId=null` | 需求 AC7：不填账户的账单在列表不可见 |
+| D2 | `note` 上限 2000 | `create-transaction.dto.ts` / `update-transaction.dto.ts` 均为 `@Length(1,2000)` | 需求要求 200，前端自行限制 |
+| D3 | 详情无分类图标、无成员昵称 | `transactionSelect` 只取 `category{id,type,name}`，`createdById` 是裸 ID | 前端用首字 + 成员表映射降级 |
+
+## 全局样式约束
+
+### 颜色
+
+只允许三类来源：
+
+1. `globals.css` `@theme` 定义语义类名（`bg-app-card`、`text-primary`、`text-financial-expense` 等）；
+2. Tailwind 内置中性色（`slate` / `zinc`），仅用于骨架与遮罩；
+3. 深色概览卡的少量硬编码需先抽成 token。
+
+**禁止**：新增未定义的 `*-ios-*` 类名；业务组件写 `bg-[#xxxxxx]`；同一语义在不同页面用不同色值。
+
+### 既有失效项（改样式时容易误判）
+
+| 项 | 位置 | 状态 |
 | --- | --- | --- |
-| 记账入口 | 只保留账单页右下角 FAB，移除底部导航中央的记账球 | 需求 5.4 明确唯一入口；中央球与 FAB 并存会造成两个入口语义冲突 |
-| 抽屉实现 | 新建 `BottomSheet`，不复用 `ui/dialog.tsx` | 现有 Dialog 居中定位、无 portal、无焦点陷阱，改造成本高于新建 |
-| 日期分组 | 前端按账本时区计算 `billDate`（`YYYY-MM-DD`），不依赖设备时区 | 需求 11.3；后端无聚合 |
-| 金额输入 | 复用 `AmountKeypad`，扩展「保存并继续」槽位 | 现有实现已满足两位小数、退格、清空、长度限制 |
-| 表单状态 | 组件内 `useReducer`，不入 Zustand | 抽屉生命周期短，写入全局 store 会在关闭后残留 |
-| 查询缓存 | 沿用 TanStack Query，新增 `queryKeys.transactions(ledgerId, filters)` | 与现有 `ledgers` 约定一致 |
-| 样式来源 | 只消费 `globals.css` 的语义 token | 现有代码已有 `text-ios-blue` 等无效类名，禁止再引入 |
+| `text-ios-blue` / `from-ios-blue` / `shadow-ios-blue/*` | `AuthCard`、`UserAuthEntry`、`SyncStatusBar` 共 10+ 处 | `--color-ios-blue` 未定义，**静默无效** |
+| `animate-in` / `fade-in` / `zoom-in-95` | `dialog.tsx`、`SyncStatusBar`、`AuthCard` | 未安装 `tailwindcss-animate`，**静默无效** |
+| `AmountDisplay` 颜色 | `common/AmountDisplay.tsx` | 硬编码 `text-emerald-400`/`text-rose-400`，未用 token |
+| `.pb-safe` fallback | `globals.css` | 固定 20px，桌面端凭空多间距；改用显式 `env()` |
+| `AmountKeypad` 内嵌 `pb-safe` | `mobile/AmountKeypad.tsx` | 放进抽屉会与抽屉 safe-area 叠加 |
 
-## 7. 参考设计稿的取舍
+### 层级
 
-用户提供的四张截图（记账抽屉、账单页、分类选择、账单页另一月份）作为视觉与信息层级参考，不逐像素还原：
+| 层 | z-index |
+| --- | --- |
+| 页面内容 | 0 |
+| FAB | 30 |
+| 底栏 `MobileBottomNav` | 40 |
+| 抽屉 / 详情面板 | 50 |
+| 分类选择（二级浮层） | 60 |
+| Toast | 70 |
 
-**采纳**
+### 安全区
 
-- 顶部账本名 + 月份切换 + 收支日历入口的信息层级
-- 深色概览卡：大号总支出、次级总收入与结余
-- 日期分组卡片：左侧日期与星期、右侧当日合计折叠
-- 账单行结构：圆形分类图标 + 分类名 + 时间·备注 + 右对齐金额
-- 记账抽屉：类型分段器在顶部、分类九宫格、金额区、底部键盘、键盘右侧双提交键
-- 分类选择：底部面板、按一级分组展开二级
+页面容器 `pb-[calc(4rem+env(safe-area-inset-bottom))]`；FAB `bottom-[calc(5rem+env(safe-area-inset-bottom))]`；抽屉底部 `pb-[env(safe-area-inset-bottom)]`，键盘不重复加。
 
-**不采纳**
+## 通用组件约定
 
-- 三 Tab 底栏（账本/资产/统计）：本期只交付账本与我的；资产与统计无对应后端能力
-- 纯黑深色主题作为默认：现有体系是浅色基线 + 可选暗色，直接切黑会破坏 `globals.css` 与既有页面对比度
-- 抽屉内的「报销/优惠/图片/标签」按钮：需求 4.2 明确一期不做标签与附件
+### `BottomSheet`
 
-## 8. 文档导航
+```text
+BottomSheetProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title?: string
+  layer?: 'base' | 'nested'   // nested 用于二级浮层
+  onBeforeClose?: () => boolean  // 返回 false 阻止关闭（未保存确认）
+  children: React.ReactNode
+}
+```
 
-1. [页面与交互设计](./页面与交互设计.md)：页面结构、组件层级、状态矩阵、交互细节
-2. [数据层与状态设计](./数据层与状态设计.md)：API 模块、类型、缓存键、时区与分组算法、表单状态机
-3. [组件与样式规范](./组件与样式规范.md)：复用/扩展/新建清单、token 用法、样式实现约束
-4. [迭代计划](./迭代计划.md)：任务拆分、依赖顺序、验收标准
+实现要求：`createPortal` 挂到 `body`；打开时保存并设置 `body.overflow`，关闭时恢复原值；焦点进入面板，关闭后归还触发元素；`Esc` 与遮罩点击都经过 `onBeforeClose`；不实现下滑手势（与列表滚动冲突）。
+
+### `Toast`
+
+```text
+toast.success('已保存')
+toast.error('保存失败，请重试')
+toast.action('已删除', { label: '撤销', onClick })
+```
+
+单例容器挂载在 `UserNavShell` 内，`z-70`。同时最多 1 条，后入覆盖先入。
+
+### 金额转换
+
+`lib/bill/amount.ts` 纯函数：`amountText ↔ amountCents`，用字符串处理，禁止浮点乘法参与业务判断。
+
+## 页面归属决策
+
+`/user` 由当前演示页改造为**账单页**，不新建 `/user/ledger/[id]/transactions`。理由：需求 5.1 规定账单页是进入应用后的主页面；单页账本视图（账本名 + 月份 + 分组）符合参考设计；多一层路径会让「打开即记账」变慢，且同一份账单会有两个 URL 入口。
+
+现有 `AmountKeypad` 从首页卡片移入记账抽屉，成为唯一记账入口。`/user/ledger`、`/user/ledger/new`、`/user/profile` 保持不变。
+
+## 迭代顺序
+
+| 迭代 | 页面 | 后端前置 |
+| --- | --- | --- |
+| 一 | 账单页（只读） | 无；概览用前端聚合兜底 |
+| 二 | 记账抽屉 + 分类选择 | B1、B2 |
+| 三 | 账单详情 | B5、B6；B4 视产品结论 |
+| 四 | 时区统一、概览接口、暗色补齐、死代码清理 | B3、统计接口 |
+
+每迭代结束执行 `pnpm typecheck`、`pnpm test`、`pnpm lint`，并在浏览器验收该页面文档的「验收清单」。
