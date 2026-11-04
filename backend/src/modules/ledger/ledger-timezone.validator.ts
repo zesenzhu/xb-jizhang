@@ -1,8 +1,12 @@
+import { getTimeZones } from '@vvo/tzdb';
 import { ValidateBy } from 'class-validator';
 
+const ianaTimezoneNames = new Set(
+  getTimeZones({ includeUtc: true, includeGmtOffsets: true }).flatMap((zone) => zone.group),
+);
+
 export function isLedgerTimezone(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  if (value !== 'UTC' && !/^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/.test(value)) return false;
+  if (typeof value !== 'string' || !ianaTimezoneNames.has(value)) return false;
 
   try {
     new Intl.DateTimeFormat('en', { timeZone: value });

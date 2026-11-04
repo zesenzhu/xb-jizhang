@@ -38,6 +38,17 @@ describe('LedgerController', () => {
 
     expect(validateSync(update)).toHaveLength(0);
   });
+  it.each(['GMT', 'CET', 'EST5EDT', 'Etc/GMT+8'])(
+    '给定合法 IANA 标识 %s，当校验创建与更新 DTO，则均允许', (timezone) => {
+      const create = plainToInstance(CreateLedgerDto, { name: '时区账本', type: 'PERSONAL', timezone });
+      const update = plainToInstance(UpdateLedgerDto, {
+        timezone, updatedAt: '2026-10-30T08:00:00.000Z',
+      });
+
+      expect(validateSync(create)).toHaveLength(0);
+      expect(validateSync(update)).toHaveLength(0);
+    },
+  );
   it('给定带归档参数的账本列表请求，当用户查询账本，则把查询参数和认证用户传入 Service', async () => {
     const service = {
       list: jest.fn().mockResolvedValue({ items: [], total: 0 }),

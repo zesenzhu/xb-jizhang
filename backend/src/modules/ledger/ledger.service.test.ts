@@ -206,12 +206,39 @@ describe('LedgerService', () => {
 
   it('给定 ICU 短名 CST，当用户创建账本，则在写入前拒绝', async () => {
     const dependencies = createService();
+    dependencies.transactionClient.ledger.create.mockResolvedValue({ ...ledger, timezone: 'CST' });
+    dependencies.transactionClient.ledgerMember.create.mockResolvedValue({ role: 'OWNER', joinedAt: updatedAt });
+    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 65 });
 
-    await expect(dependencies.service.create(userId, {
-      name: '歧义时区账本', type: 'PERSONAL', timezone: 'CST',
-    })).rejects.toBeInstanceOf(BadRequestException);
+    try {
+      const result = await dependencies.service.create(userId, {
+        name: '歧义时区账本', type: 'PERSONAL', timezone: 'CST',
+      });
+      expect(dependencies.transactionClient.ledger.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ timezone: 'CST' }),
+      }));
+      throw new Error(`CST 创建被错误写入，返回时区 ${result.timezone}`);
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) throw error;
+    }
     expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it.each(['GMT', 'CET', 'EST5EDT', 'Etc/GMT+8'])(
+    '给定合法 IANA 标识 %s，当创建账本，则写入原标识', async (timezone) => {
+      const dependencies = createService();
+      dependencies.transactionClient.ledger.create.mockResolvedValue({ ...ledger, timezone });
+      dependencies.transactionClient.ledgerMember.create.mockResolvedValue({ role: 'OWNER', joinedAt: updatedAt });
+      dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 65 });
+
+      const result = await dependencies.service.create(userId, { name: '时区账本', type: 'PERSONAL', timezone });
+
+      expect(dependencies.transactionClient.ledger.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ timezone }),
+      }));
+      expect(result.timezone).toBe(timezone);
+    },
+  );
 
   it('给定不存在的 IANA 时区，当用户创建账本，则拒绝创建', async () => {
     const dependencies = createService();
@@ -294,12 +321,41 @@ describe('LedgerService', () => {
 
   it('给定 ICU 短名 CST，当 Owner 更新账本，则在读取成员前拒绝', async () => {
     const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+    dependencies.prisma.ledger.findUnique.mockResolvedValue(ledger);
+    dependencies.transactionClient.ledger.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.ledger.findUnique.mockResolvedValue({ ...ledger, timezone: 'CST' });
 
-    await expect(dependencies.service.update(userId, 'ledger-1', {
-      timezone: 'CST', updatedAt,
-    })).rejects.toBeInstanceOf(BadRequestException);
+    try {
+      const result = await dependencies.service.update(userId, 'ledger-1', {
+        timezone: 'CST', updatedAt,
+      });
+      expect(dependencies.transactionClient.ledger.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ timezone: 'CST' }),
+      }));
+      throw new Error(`CST 更新被错误写入，返回时区 ${result.timezone}`);
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) throw error;
+    }
     expect(dependencies.prisma.ledgerMember.findUnique).not.toHaveBeenCalled();
   });
+
+  it.each(['GMT', 'CET', 'EST5EDT', 'Etc/GMT+8'])(
+    '给定合法 IANA 标识 %s，当 Owner 更新账本，则写入原标识', async (timezone) => {
+      const dependencies = createService();
+      dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+      dependencies.prisma.ledger.findUnique.mockResolvedValue(ledger);
+      dependencies.transactionClient.ledger.updateMany.mockResolvedValue({ count: 1 });
+      dependencies.transactionClient.ledger.findUnique.mockResolvedValue({ ...ledger, timezone });
+
+      const result = await dependencies.service.update(userId, 'ledger-1', { timezone, updatedAt });
+
+      expect(dependencies.transactionClient.ledger.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ timezone }),
+      }));
+      expect(result.timezone).toBe(timezone);
+    },
+  );
 
   it('给定合法 Etc 时区，当 Owner 更新账本，则保存该时区', async () => {
     const dependencies = createService();
