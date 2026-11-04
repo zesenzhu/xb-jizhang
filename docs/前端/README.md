@@ -47,7 +47,7 @@ updatedAt: 2026-11-04
 | 账单编辑 + 版本冲突 | `PATCH /ledgers/:id/transactions/:tid` | `transaction.service.ts` 的 `update`，`40922` |
 | 账单软删除 + 角色边界 | `DELETE /ledgers/:id/transactions/:tid` | `OWNER` 全部、`EDITOR` 仅自己创建 |
 | 无账户账单参与列表与统计 | 列表 `where` 与统计 `where` 均含 `accountId: null` | `transaction.service.ts`、`statistics.service.ts` |
-| **收支概览聚合** | `GET /ledgers/:id/statistics/overview` | 已实现，返回 `totalIncomeCents` / `totalExpenseCents` / `netCents` / `transactionCount` |
+| **收支概览聚合** | `GET /ledgers/:id/statistics/overview` | 已实现，返回 `totalIncomeCents` / `totalExpenseCents` / `netCents` / `transactionCount`，支持 `keyword` / `payerId` |
 
 概览接口改变了前端的统计实现：不再需要前端累加分页，直接按同一组筛选条件请求聚合结果即可。`docs/api/统计接口.md` 明确「服务端聚合结果为唯一口径，前端不重复计算」。
 
@@ -68,20 +68,20 @@ updatedAt: 2026-11-04
 | --- | --- | --- | --- |
 | D2 | `note` 上限 2000 | `create` / `update` DTO 均为 `@Length(1,2000)` | 需求要求 200，前端自行限制 |
 | D3 | 详情无分类图标、无成员昵称 | `transactionSelect` 只取 `category{id,type,name}`，`createdById` 为裸 ID | 名称首字 + 成员表映射 |
-| D4 | 统计筛选少于列表筛选 | 统计支持 `from/to/type/categoryId/accountId`；列表另有 `keyword`、`payerId` | 见下方「概览与列表筛选不一致」 |
+| D4 | 统计筛选少于列表筛选 | 已修复：统计与列表均支持 `keyword`、`payerId` | 已解除 |
 
-### 概览与列表筛选不一致（需后端补齐）
+### 概览与列表筛选一致性
 
-需求 6.1 要求「概览金额、每日合计和账单列表必须使用同一组已生效筛选条件」，但两个接口的参数集不同：
+需求 6.1 要求「概览金额、每日合计和账单列表必须使用同一组已生效筛选条件」。后端统计接口已补齐关键词和实际付款人筛选，前端账单页将同一组查询参数传给两个接口：
 
 | 参数 | 列表 | 统计 |
 | --- | --- | --- |
 | `from` / `to` / `type` / `categoryId` / `accountId` | ✅ | ✅ |
-| `keyword` | ✅ | ❌ |
-| `payerId` | ✅ | ❌ |
+| `keyword` | ✅ | ✅ |
+| `payerId` | ✅ | ✅ |
 | `createdById` | ❌ | ❌ |
 
-后果：用户输入关键词后，列表缩小但概览不变，违反需求 6.1。一期前端处理：**有关键词或付款人筛选时，概览区显示「概览未跟随该条件」提示**，不静默展示不一致的数字。后端补齐参数后移除该提示。
+账单页的 `BillSearchBar` 已交付：关键词需提交后生效，付款人选择立即生效，条件胶囊支持单独移除和清除全部；统计卡使用同一组已生效筛选条件，并在筛选状态显示「筛选结果」。
 
 ## 全局样式约束
 

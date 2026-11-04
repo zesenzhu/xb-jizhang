@@ -6,6 +6,7 @@ export const queryStaleTime = {
   ledgers: 60 * 1000,
   accounts: 5 * 60 * 1000,
   categories: 5 * 60 * 1000,
+  members: 5 * 60 * 1000,
   transactions: 30 * 1000,
 } as const;
 
@@ -33,6 +34,7 @@ export const queryKeys = {
   },
   accounts: (ledgerId: string) => ['ledger', ledgerId, 'accounts'] as const,
   categories: (ledgerId: string) => ['ledger', ledgerId, 'categories'] as const,
+  members: (ledgerId: string) => ['ledger', ledgerId, 'members'] as const,
   transactions: {
     all: (ledgerId: string) => ['ledger', ledgerId, 'transactions'] as const,
     list: (ledgerId: string, filter: TransactionListQuery = {}) =>

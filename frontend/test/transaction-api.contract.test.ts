@@ -69,11 +69,15 @@ void (async () => {
     await getStatisticsOverview('ledger-1', {
       from: '2026-10-31T16:00:00.000Z',
       to: '2026-11-30T16:00:00.000Z',
+      keyword: ' 早餐 ',
+      payerId: 'user-2',
     });
     assert.equal(captured.at(-1)?.url, '/ledgers/ledger-1/statistics/overview');
     assert.deepEqual(captured.at(-1)?.params, {
       from: '2026-10-31T16:00:00.000Z',
       to: '2026-11-30T16:00:00.000Z',
+      keyword: ' 早餐 ',
+      payerId: 'user-2',
     });
 
     console.log('transaction api contract passed');

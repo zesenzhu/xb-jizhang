@@ -15,7 +15,9 @@ assert.equal(queryStaleTime.currentUser, 5 * 60 * 1000);
 assert.equal(queryStaleTime.ledgers, 60 * 1000);
 assert.equal(queryStaleTime.accounts, 5 * 60 * 1000);
 assert.equal(queryStaleTime.categories, 5 * 60 * 1000);
+assert.equal(queryStaleTime.members, 5 * 60 * 1000);
 assert.equal(queryStaleTime.transactions, 30 * 1000);
+assert.deepEqual(queryKeys.members('ledger-1'), ['ledger', 'ledger-1', 'members']);
 
 // 账单与统计的缓存键：首段必须是 'ledger'，否则退出登录时清不掉上个用户的缓存。
 assert.deepEqual(
@@ -36,8 +38,8 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  queryKeys.statistics.overview('ledger-1', { from: 'a', to: 'b' }),
-  ['ledger', 'ledger-1', 'statistics', 'overview', { from: 'a', to: 'b' }],
+  queryKeys.statistics.overview('ledger-1', { from: 'a', to: 'b', keyword: '早餐', payerId: 'user-2' }),
+  ['ledger', 'ledger-1', 'statistics', 'overview', { from: 'a', to: 'b', keyword: '早餐', payerId: 'user-2' }],
 );
 assert.deepEqual(
   queryKeys.statistics.overview('ledger-1', { to: 'b', from: 'a', type: undefined }),

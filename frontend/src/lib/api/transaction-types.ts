@@ -87,4 +87,6 @@ export interface StatisticsOverviewQuery {
   type?: TransactionType;
   categoryId?: string;
   accountId?: string;
+  payerId?: string;
+  keyword?: string;
 }
