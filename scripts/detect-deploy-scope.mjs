@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const BACKEND_PREFIXES = ['backend/'];
 const FRONTEND_PREFIXES = ['frontend/'];
@@ -29,7 +31,7 @@ export function getDeployScope(paths, forceAll = false, forceDeploy = false) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const input = readFileSync(0, 'utf8').split('\n');
   const scope = getDeployScope(
     input,

@@ -85,9 +85,18 @@ jobs:
           FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_all || false }}
           FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.sync_config || false }}
         run: |
-          base_sha="${{ github.event.before }}"
-          if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
-            base_sha="$(git rev-parse "${GITHUB_SHA}^")"
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
+            if [ -n "$previous_tag" ]; then
+              base_sha="$(git rev-list -n 1 "$previous_tag")"
+            else
+              base_sha="$(git hash-object -t tree /dev/null)"
+            fi
+          else
+            base_sha="${{ github.event.before }}"
+            if [ -z "$base_sha" ] || [ "$base_sha" = "0000000000000000000000000000000000000000" ]; then
+              base_sha="$(git rev-parse "${GITHUB_SHA}^")"
+            fi
           fi
           git diff --name-only "$base_sha" "$GITHUB_SHA" | node scripts/detect-deploy-scope.mjs
 

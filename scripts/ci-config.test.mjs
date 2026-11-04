@@ -36,3 +36,13 @@ test('给定部署包由 umask 077 创建，当执行 Docker SCP 上传时，则
   assert.match(workflow, /chmod 755 deployment-bundle/);
   assert.match(workflow, /find deployment-bundle -type f -exec chmod 644/);
 });
+
+test('给定推送发布 Tag，当计算变更范围，则比较当前 Tag 与上一个 Tag 之间的差异', () => {
+  assert.match(workflow, /if \[ "\$\{GITHUB_REF_TYPE:-\}" = "tag" \]; then/);
+  assert.match(workflow, /git describe --tags --abbrev=0 "\$\{GITHUB_SHA\}\^"/);
+  assert.match(workflow, /git rev-list -n 1 "\$previous_tag"/);
+});
+
+test('给定首次发布 Tag 没有上一个 Tag，当计算变更范围，则以空树作为比较基准', () => {
+  assert.match(workflow, /git hash-object -t tree \/dev\/null/);
+});
