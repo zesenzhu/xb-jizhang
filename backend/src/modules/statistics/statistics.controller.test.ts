@@ -1,10 +1,80 @@
+import 'reflect-metadata';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
+import { QueryStatisticsDto } from './dto/query-statistics.dto';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './statistics.service';
 
 describe('StatisticsController', () => {
+  it('给定非法 period、granularity 和自然日期格式，当校验统计参数，则返回对应字段错误', () => {
+    const dto = plainToInstance(QueryStatisticsDto, {
+      period: 'DAY',
+      anchorDate: '2026-2-31',
+      granularity: 'HOUR',
+    });
+
+    expect(validateSync(dto).map(({ property }) => property)).toEqual(
+      expect.arrayContaining(['period', 'anchorDate', 'granularity']),
+    );
+  });
+
+  it.each([
+    { period: 'WEEK', fromDate: '2026-10-01', toDate: '2026-10-07' },
+    {
+      period: 'RANGE',
+      anchorDate: '2026-10-01',
+      fromDate: '2026-10-01',
+      toDate: '2026-10-07',
+    },
+    { period: 'ALL', fromDate: '2026-10-01', toDate: '2026-10-07' },
+    { period: 'MONTH' },
+    { anchorDate: '2026-10-01' },
+    { period: 'WEEK', anchorDate: '2026-10-01', granularity: 'MONTH' },
+  ])(
+    '给定互相冲突或缺失的统计周期参数 $period，当校验 DTO，则返回参数错误',
+    (query) => {
+      const dto = plainToInstance(QueryStatisticsDto, query);
+
+      expect(validateSync(dto).map(({ property }) => property)).toContain(
+        'period',
+      );
+    },
+  );
+
+  it('给定完整 RANGE 或旧 ISO from/to 参数，当校验 DTO，则允许兼容请求', () => {
+    const range = plainToInstance(QueryStatisticsDto, {
+      period: 'RANGE',
+      fromDate: '2026-10-01',
+      toDate: '2026-10-31',
+    });
+    const legacy = plainToInstance(QueryStatisticsDto, {
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-11-01T00:00:00.000Z',
+    });
+
+    expect(validateSync(range)).toHaveLength(0);
+    expect(validateSync(legacy)).toHaveLength(0);
+  });
+
+  it('给定带时间部分的自定义范围日期，当校验 DTO，则拒绝非自然日期格式', () => {
+    const dto = plainToInstance(QueryStatisticsDto, {
+      period: 'RANGE',
+      fromDate: '2026-10-01T00:00:00.000Z',
+      toDate: '2026-10-31',
+    });
+
+    expect(validateSync(dto).map(({ property }) => property)).toContain(
+      'fromDate',
+    );
+  });
+
   it('给定统计概览请求，当 Controller 接收筛选条件，则传递认证用户、账本和查询参数', async () => {
-    const service = { overview: jest.fn().mockResolvedValue({ totalIncomeCents: 10000 }) };
-    const controller = new StatisticsController(service as unknown as StatisticsService);
+    const service = {
+      overview: jest.fn().mockResolvedValue({ totalIncomeCents: 10000 }),
+    };
+    const controller = new StatisticsController(
+      service as unknown as StatisticsService,
+    );
     const query = {
       from: '2026-10-01T00:00:00.000Z',
       to: '2026-11-01T00:00:00.000Z',
