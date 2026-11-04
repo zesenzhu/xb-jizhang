@@ -17,6 +17,36 @@ export class StatisticsController {
     @Param('ledgerId') ledgerId: string,
     @Query() query: QueryStatisticsDto,
   ) {
-    return this.statisticsService.overview(user.id, ledgerId, query as StatisticsQuery);
+    return this.statisticsService.overview(
+      user.id,
+      ledgerId,
+      query as StatisticsQuery,
+    );
+  }
+
+  @Get('trend')
+  trend(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+    @Query() query: QueryStatisticsDto,
+  ) {
+    return this.statisticsService.trend(
+      user.id,
+      ledgerId,
+      query as StatisticsQuery,
+    );
+  }
+
+  @Get('periods')
+  periods(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+    @Query() query: QueryStatisticsDto,
+  ) {
+    return this.statisticsService.periods(
+      user.id,
+      ledgerId,
+      query as StatisticsQuery,
+    );
   }
 }

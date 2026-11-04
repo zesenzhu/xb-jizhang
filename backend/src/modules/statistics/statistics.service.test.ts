@@ -330,4 +330,279 @@ describe('StatisticsService', () => {
       select: { occurredAt: true },
     });
   });
+
+  it('给定趋势中间周期没有账单，当查询净额趋势，则返回连续周期和零值项', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      ledger: { timezone: 'Asia/Shanghai' },
+    });
+    dependencies.prisma.$queryRaw.mockResolvedValue([
+      {
+        periodStart: '2026-10-01',
+        expenseCents: 1000,
+        incomeCents: 500,
+        transactionCount: 2,
+      },
+      {
+        periodStart: '2026-10-03',
+        expenseCents: 100,
+        incomeCents: 800,
+        transactionCount: 2,
+      },
+    ]);
+
+    const trend = (dependencies.service as unknown as Record<string, unknown>)
+      .trend;
+    expect(trend).toEqual(expect.any(Function));
+    if (typeof trend !== 'function') return;
+    const result = await trend.call(dependencies.service, userId, ledgerId, {
+      period: 'RANGE',
+      fromDate: '2026-10-01',
+      toDate: '2026-10-03',
+      granularity: 'DAY',
+      metric: 'NET',
+    });
+
+    expect(result).toEqual({
+      ledgerId,
+      range: {
+        period: 'RANGE',
+        timezone: 'Asia/Shanghai',
+        fromDate: '2026-10-01',
+        toDate: '2026-10-03',
+        startAt: '2026-09-30T16:00:00.000Z',
+        endAt: '2026-10-03T16:00:00.000Z',
+        granularity: 'DAY',
+      },
+      hasData: true,
+      items: [
+        {
+          fromDate: '2026-10-01',
+          toDate: '2026-10-01',
+          valueCents: -500,
+          expenseCents: 1000,
+          incomeCents: 500,
+          netCents: -500,
+          transactionCount: 2,
+          drilldown: {
+            from: '2026-09-30T16:00:00.000Z',
+            to: '2026-10-01T16:00:00.000Z',
+          },
+        },
+        {
+          fromDate: '2026-10-02',
+          toDate: '2026-10-02',
+          valueCents: 0,
+          expenseCents: 0,
+          incomeCents: 0,
+          netCents: 0,
+          transactionCount: 0,
+          drilldown: {
+            from: '2026-10-01T16:00:00.000Z',
+            to: '2026-10-02T16:00:00.000Z',
+          },
+        },
+        {
+          fromDate: '2026-10-03',
+          toDate: '2026-10-03',
+          valueCents: 700,
+          expenseCents: 100,
+          incomeCents: 800,
+          netCents: 700,
+          transactionCount: 2,
+          drilldown: {
+            from: '2026-10-02T16:00:00.000Z',
+            to: '2026-10-03T16:00:00.000Z',
+          },
+        },
+      ],
+    });
+    expect(dependencies.prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('给定趋势范围没有可见账单，当查询趋势，则返回 hasData=false 和空数组', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      ledger: { timezone: 'Asia/Shanghai' },
+    });
+    dependencies.prisma.$queryRaw.mockResolvedValue([]);
+
+    const trend = (dependencies.service as unknown as Record<string, unknown>)
+      .trend;
+    expect(trend).toEqual(expect.any(Function));
+    if (typeof trend !== 'function') return;
+    const result = await trend.call(dependencies.service, userId, ledgerId, {
+      period: 'RANGE',
+      fromDate: '2026-10-01',
+      toDate: '2026-10-02',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({ hasData: false, items: [] }),
+    );
+  });
+
+  it('给定部分月份含账单且中间月无账单，当查询周期汇总，则裁剪首尾并补零周期', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      ledger: { timezone: 'Asia/Shanghai' },
+    });
+    dependencies.prisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          periodStart: '2025-10-01',
+          expenseCents: 1200,
+          incomeCents: 0,
+          transactionCount: 2,
+        },
+        {
+          periodStart: '2025-12-01',
+          expenseCents: 0,
+          incomeCents: 3000,
+          transactionCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([{ count: 2 }]);
+
+    const periods = (dependencies.service as unknown as Record<string, unknown>)
+      .periods;
+    expect(periods).toEqual(expect.any(Function));
+    if (typeof periods !== 'function') return;
+    const result = await periods.call(dependencies.service, userId, ledgerId, {
+      period: 'RANGE',
+      fromDate: '2025-10-30',
+      toDate: '2025-12-02',
+      granularity: 'MONTH',
+    });
+
+    expect(result).toEqual({
+      ledgerId,
+      range: {
+        period: 'RANGE',
+        timezone: 'Asia/Shanghai',
+        fromDate: '2025-10-30',
+        toDate: '2025-12-02',
+        startAt: '2025-10-29T16:00:00.000Z',
+        endAt: '2025-12-02T16:00:00.000Z',
+        granularity: 'MONTH',
+      },
+      summary: {
+        totalIncomeCents: 3000,
+        totalExpenseCents: 1200,
+        netCents: 1800,
+        averageDailyExpenseCents: 600,
+        effectiveDayCount: 2,
+        transactionCount: 3,
+      },
+      items: [
+        {
+          fromDate: '2025-10-30',
+          toDate: '2025-10-31',
+          expenseCents: 1200,
+          incomeCents: 0,
+          netCents: -1200,
+          transactionCount: 2,
+          drilldown: {
+            from: '2025-10-29T16:00:00.000Z',
+            to: '2025-10-31T16:00:00.000Z',
+          },
+        },
+        {
+          fromDate: '2025-11-01',
+          toDate: '2025-11-30',
+          expenseCents: 0,
+          incomeCents: 0,
+          netCents: 0,
+          transactionCount: 0,
+          drilldown: {
+            from: '2025-10-31T16:00:00.000Z',
+            to: '2025-11-30T16:00:00.000Z',
+          },
+        },
+        {
+          fromDate: '2025-12-01',
+          toDate: '2025-12-02',
+          expenseCents: 0,
+          incomeCents: 3000,
+          netCents: 3000,
+          transactionCount: 1,
+          drilldown: {
+            from: '2025-11-30T16:00:00.000Z',
+            to: '2025-12-02T16:00:00.000Z',
+          },
+        },
+      ],
+    });
+    expect(dependencies.prisma.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('给定无数据的周范围，当查询周期汇总，则仍返回完整零值行', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      ledger: { timezone: 'Asia/Shanghai' },
+    });
+    dependencies.prisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ count: 0 }]);
+
+    const periods = (dependencies.service as unknown as Record<string, unknown>)
+      .periods;
+    expect(periods).toEqual(expect.any(Function));
+    if (typeof periods !== 'function') return;
+    const result = await periods.call(dependencies.service, userId, ledgerId, {
+      period: 'WEEK',
+      anchorDate: '2026-10-14',
+    });
+
+    expect(result.summary).toEqual({
+      totalIncomeCents: 0,
+      totalExpenseCents: 0,
+      netCents: 0,
+      averageDailyExpenseCents: 0,
+      effectiveDayCount: 0,
+      transactionCount: 0,
+    });
+    expect(result.items).toHaveLength(7);
+    expect(
+      result.items.every(
+        (item: { transactionCount: number }) => item.transactionCount === 0,
+      ),
+    ).toBe(true);
+  });
+
+  it('给定 ALL 趋势带有关键词筛选，当解析起点，则仍使用首笔可见账单日期', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      ledger: { timezone: 'Asia/Shanghai' },
+    });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue({
+      occurredAt: new Date('2026-10-01T17:00:00.000Z'),
+    });
+    dependencies.prisma.$queryRaw.mockResolvedValue([]);
+
+    const trend = (dependencies.service as unknown as Record<string, unknown>)
+      .trend;
+    expect(trend).toEqual(expect.any(Function));
+    if (typeof trend !== 'function') return;
+    const result = await trend.call(dependencies.service, userId, ledgerId, {
+      period: 'ALL',
+      keyword: '不影响范围起点',
+      granularity: 'YEAR',
+    });
+
+    expect(result.range).toEqual(
+      expect.objectContaining({
+        fromDate: '2026-10-02',
+        startAt: '2026-10-01T16:00:00.000Z',
+      }),
+    );
+    expect(dependencies.prisma.transaction.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ ledgerId }) }),
+    );
+  });
 });

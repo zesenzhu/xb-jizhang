@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { StatisticsQuery } from './statistics.types';
+import type {
+  ResolvedStatisticsGranularity,
+  StatisticsQuery,
+} from './statistics.types';
 
 export interface StatisticsOccurredAtFilter {
   gte?: Date;
@@ -116,13 +119,12 @@ export function buildStatisticsWhere(
   };
 }
 
-export function buildStatisticsDayCountQuery(
+function buildStatisticsSqlConditions(
   userId: string,
   ledgerId: string,
   query: StatisticsQuery,
   occurredAt: StatisticsOccurredAtFilter | undefined,
-  timezone: string,
-): Prisma.Sql {
+): Prisma.Sql[] {
   const filters = normalizeFilters(query);
   const conditions: Prisma.Sql[] = [
     Prisma.sql`t."ledger_id" = ${ledgerId}`,
@@ -176,12 +178,66 @@ export function buildStatisticsDayCountQuery(
     conditions.push(Prisma.sql`t."occurred_at" < ${occurredAt.lt}`);
   }
 
+  return conditions;
+}
+
+function statisticsFromJoins(): Prisma.Sql {
   return Prisma.sql`
-    SELECT COUNT(DISTINCT (t."occurred_at" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date)::int AS "count"
     FROM "transaction" AS t
     LEFT JOIN "account" AS a ON a."id" = t."account_id"
     LEFT JOIN "category" AS c ON c."id" = t."category_id"
     LEFT JOIN "category" AS p ON p."id" = c."parent_id"
+  `;
+}
+
+export function buildStatisticsDayCountQuery(
+  userId: string,
+  ledgerId: string,
+  query: StatisticsQuery,
+  occurredAt: StatisticsOccurredAtFilter | undefined,
+  timezone: string,
+): Prisma.Sql {
+  const conditions = buildStatisticsSqlConditions(
+    userId,
+    ledgerId,
+    query,
+    occurredAt,
+  );
+  return Prisma.sql`
+    SELECT COUNT(DISTINCT (t."occurred_at" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date)::int AS "count"
+    ${statisticsFromJoins()}
     WHERE ${Prisma.join(conditions, ' AND ')}
+  `;
+}
+
+export function buildStatisticsPeriodAggregateQuery(
+  userId: string,
+  ledgerId: string,
+  query: StatisticsQuery,
+  occurredAt: StatisticsOccurredAtFilter,
+  timezone: string,
+  granularity: ResolvedStatisticsGranularity,
+): Prisma.Sql {
+  const conditions = buildStatisticsSqlConditions(
+    userId,
+    ledgerId,
+    query,
+    occurredAt,
+  );
+  const localOccurredAt = Prisma.sql`(
+    t."occurred_at" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone}
+  )`;
+  const bucket = Prisma.sql`DATE_TRUNC(${granularity.toLowerCase()}, ${localOccurredAt})`;
+
+  return Prisma.sql`
+    SELECT
+      TO_CHAR(${bucket}, 'YYYY-MM-DD') AS "periodStart",
+      COALESCE(SUM(t."amount_cents") FILTER (WHERE t."type" = 'EXPENSE'), 0)::text AS "expenseCents",
+      COALESCE(SUM(t."amount_cents") FILTER (WHERE t."type" = 'INCOME'), 0)::text AS "incomeCents",
+      COUNT(t."id")::int AS "transactionCount"
+    ${statisticsFromJoins()}
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    GROUP BY ${bucket}
+    ORDER BY ${bucket}
   `;
 }

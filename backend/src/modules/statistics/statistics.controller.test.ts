@@ -18,6 +18,18 @@ describe('StatisticsController', () => {
     );
   });
 
+  it('给定趋势 metric 不在允许值内，当校验统计参数，则返回 metric 字段错误', () => {
+    const dto = plainToInstance(QueryStatisticsDto, {
+      period: 'MONTH',
+      anchorDate: '2026-10-15',
+      metric: 'BALANCE',
+    });
+
+    expect(validateSync(dto).map(({ property }) => property)).toContain(
+      'metric',
+    );
+  });
+
   it.each([
     { period: 'WEEK', fromDate: '2026-10-01', toDate: '2026-10-07' },
     {
@@ -77,6 +89,36 @@ describe('StatisticsController', () => {
     expect(validateSync(dto).map(({ property }) => property)).toContain(
       'categoryRootId',
     );
+  });
+
+  it('给定趋势与周期汇总请求，当 Controller 接收筛选条件，则传递认证用户、账本和完整查询参数', async () => {
+    const service = {
+      trend: jest.fn().mockResolvedValue({ hasData: false, items: [] }),
+      periods: jest.fn().mockResolvedValue({ items: [] }),
+    };
+    const controller = new StatisticsController(
+      service as unknown as StatisticsService,
+    );
+    const query = {
+      period: 'MONTH' as const,
+      anchorDate: '2026-10-15',
+      granularity: 'DAY' as const,
+      metric: 'NET' as const,
+      payerId: 'user-2',
+    };
+
+    const actions = controller as unknown as Record<string, unknown>;
+    const trend = actions.trend;
+    const periods = actions.periods;
+    expect(trend).toEqual(expect.any(Function));
+    expect(periods).toEqual(expect.any(Function));
+    if (typeof trend !== 'function' || typeof periods !== 'function') return;
+
+    await trend.call(controller, { id: 'user-1' }, 'ledger-1', query);
+    await periods.call(controller, { id: 'user-1' }, 'ledger-1', query);
+
+    expect(service.trend).toHaveBeenCalledWith('user-1', 'ledger-1', query);
+    expect(service.periods).toHaveBeenCalledWith('user-1', 'ledger-1', query);
   });
 
   it('给定统计概览请求，当 Controller 接收筛选条件，则传递认证用户、账本和查询参数', async () => {

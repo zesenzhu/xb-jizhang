@@ -115,6 +115,10 @@ export class QueryStatisticsDto {
   type?: 'EXPENSE' | 'INCOME';
 
   @IsOptional()
+  @IsIn(['EXPENSE', 'INCOME', 'NET'])
+  metric?: 'EXPENSE' | 'INCOME' | 'NET';
+
+  @IsOptional()
   @IsUUID()
   categoryId?: string;
 

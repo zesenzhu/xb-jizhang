@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   buildStatisticsDayCountQuery,
+  buildStatisticsPeriodAggregateQuery,
   buildStatisticsWhere,
 } from './statistics-query';
 
@@ -157,6 +158,47 @@ describe('statistics query builder', () => {
         'account-1',
         'user-2',
         'category-1',
+        '100% 早餐',
+        new Date('2026-10-31T16:00:00.000Z'),
+        new Date('2026-11-30T16:00:00.000Z'),
+      ]),
+    );
+  });
+
+  it('给定月粒度与完整过滤条件，当构建周期聚合 SQL，则按本地日期分组并安全绑定筛选值', () => {
+    const query = buildStatisticsPeriodAggregateQuery(
+      userId,
+      ledgerId,
+      {
+        categoryRootId: 'category-root',
+        accountId: 'account-1',
+        payerId: 'user-2',
+        keyword: '100% 早餐',
+      },
+      {
+        gte: new Date('2026-10-31T16:00:00.000Z'),
+        lt: new Date('2026-11-30T16:00:00.000Z'),
+      },
+      'America/New_York',
+      'MONTH',
+    );
+
+    expect(query.sql).toContain('DATE_TRUNC(?,');
+    expect(query.sql).toContain("AT TIME ZONE 'UTC' AT TIME ZONE ?");
+    expect(query.sql).toContain('GROUP BY DATE_TRUNC(?,');
+    expect(query.sql).toContain('t."deleted_at" IS NULL');
+    expect(query.sql).toContain('a."visibility" = \'PRIVATE\'');
+    expect(query.sql).toContain('l."status" = \'ACTIVE\'');
+    expect(query.sql).toContain('POSITION(LOWER(?)');
+    expect(query.values).toEqual(
+      expect.arrayContaining([
+        'month',
+        'America/New_York',
+        ledgerId,
+        userId,
+        'category-root',
+        'account-1',
+        'user-2',
         '100% 早餐',
         new Date('2026-10-31T16:00:00.000Z'),
         new Date('2026-11-30T16:00:00.000Z'),
