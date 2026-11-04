@@ -24,6 +24,7 @@ export class LedgerController {
       name: dto.name,
       type: dto.type,
       defaultCurrency: dto.defaultCurrency,
+      timezone: dto.timezone,
       icon: dto.icon,
       color: dto.color,
     };
@@ -43,9 +44,10 @@ export class LedgerController {
   ) {
     const input: UpdateLedgerInput = {
       name: dto.name,
+      defaultCurrency: dto.defaultCurrency,
+      timezone: dto.timezone,
       icon: dto.icon,
       color: dto.color,
-      isArchived: dto.isArchived,
       updatedAt: new Date(dto.updatedAt),
     };
     return this.ledgerService.update(user.id, ledgerId, input);

@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsTimeZone, Length } from 'class-validator';
 
 export class CreateLedgerDto {
   @IsString()
@@ -10,8 +10,12 @@ export class CreateLedgerDto {
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Z]{3}$/)
+  @IsIn(Intl.supportedValuesOf('currency'))
   defaultCurrency?: string;
+
+  @IsOptional()
+  @IsTimeZone()
+  timezone?: string;
 
   @IsOptional()
   @IsString()

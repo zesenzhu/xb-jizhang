@@ -1,10 +1,18 @@
-import { IsBoolean, IsDateString, IsOptional, IsString, Length } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString, IsTimeZone, Length } from 'class-validator';
 
 export class UpdateLedgerDto {
   @IsOptional()
   @IsString()
   @Length(1, 100)
   name?: string;
+
+  @IsOptional()
+  @IsIn(Intl.supportedValuesOf('currency'))
+  defaultCurrency?: string;
+
+  @IsOptional()
+  @IsTimeZone()
+  timezone?: string;
 
   @IsOptional()
   @IsString()
@@ -15,10 +23,6 @@ export class UpdateLedgerDto {
   @IsString()
   @Length(1, 20)
   color?: string | null;
-
-  @IsOptional()
-  @IsBoolean()
-  isArchived?: boolean;
 
   @IsDateString()
   updatedAt!: string;

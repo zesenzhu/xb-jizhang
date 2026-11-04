@@ -20,11 +20,13 @@ const ledgerSelect = {
   name: true,
   type: true,
   defaultCurrency: true,
+  timezone: true,
   icon: true,
   color: true,
   isArchived: true,
   createdAt: true,
   updatedAt: true,
+  _count: { select: { members: { where: { status: 'ACTIVE' as const } } } },
 } as const;
 
 type LedgerRecord = Prisma.LedgerGetPayload<{ select: typeof ledgerSelect }>;
@@ -34,8 +36,33 @@ function toLedgerSummary(
   ledger: LedgerRecord,
   memberRole: LedgerSummary['memberRole'],
   joinedAt: Date,
+  preference?: { currentLedgerId: string | null; defaultLedgerId: string | null } | null,
 ): LedgerSummary {
-  return { ...ledger, memberRole, joinedAt };
+  const { _count, ...fields } = ledger;
+  return {
+    ...fields,
+    memberRole,
+    joinedAt,
+    memberCount: _count.members,
+    isCurrent: preference?.currentLedgerId === ledger.id,
+    isDefault: preference?.defaultLedgerId === ledger.id,
+  };
+}
+
+function validateTimezone(timezone: string | undefined): void {
+  if (timezone === undefined) return;
+  try {
+    if (!/^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*$/.test(timezone)) throw new RangeError();
+    new Intl.DateTimeFormat('en', { timeZone: timezone });
+  } catch {
+    throw new BadRequestException({ code: 40001, message: '账本时区无效', data: null });
+  }
+}
+
+function validateCurrency(currency: string | undefined): void {
+  if (currency !== undefined && !Intl.supportedValuesOf('currency').includes(currency)) {
+    throw new BadRequestException({ code: 40001, message: '账本币种无效', data: null });
+  }
 }
 
 @Injectable()
@@ -48,9 +75,8 @@ export class LedgerService {
     const where: Prisma.LedgerMemberWhereInput = {
       userId,
       status: 'ACTIVE',
-      ...(query.includeArchived ? {} : { ledger: { isArchived: false } }),
     };
-    const [memberships, total] = await Promise.all([
+    const [memberships, total, preference] = await Promise.all([
       this.prisma.ledgerMember.findMany({
         where,
         orderBy: { joinedAt: 'asc' },
@@ -59,11 +85,15 @@ export class LedgerService {
         select: { role: true, joinedAt: true, ledger: { select: ledgerSelect } },
       }),
       this.prisma.ledgerMember.count({ where }),
+      this.prisma.userLedgerPreference.findUnique({
+        where: { userId },
+        select: { currentLedgerId: true, defaultLedgerId: true },
+      }),
     ]);
 
     return {
       items: memberships.map(({ ledger, role, joinedAt }) =>
-        toLedgerSummary(ledger, role, joinedAt),
+        toLedgerSummary(ledger, role, joinedAt, preference),
       ),
       total,
       page,
@@ -75,6 +105,8 @@ export class LedgerService {
   async create(userId: string, input: CreateLedgerInput): Promise<LedgerSummary> {
     const name = input.name.trim();
     if (!name) throw this.invalidNameException();
+    validateTimezone(input.timezone);
+    validateCurrency(input.defaultCurrency);
 
     return this.prisma.$transaction(async (transaction) => {
       const ledger = await transaction.ledger.create({
@@ -82,6 +114,7 @@ export class LedgerService {
           name,
           type: input.type,
           defaultCurrency: input.defaultCurrency ?? 'CNY',
+          timezone: input.timezone ?? 'Asia/Shanghai',
           ...(input.icon === undefined ? {} : { icon: input.icon }),
           ...(input.color === undefined ? {} : { color: input.color }),
           creatorId: userId,
@@ -93,14 +126,17 @@ export class LedgerService {
         select: { role: true, joinedAt: true },
       });
       await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
-      return toLedgerSummary(ledger, membership.role, membership.joinedAt);
+      return { ...toLedgerSummary(ledger, membership.role, membership.joinedAt), memberCount: 1 };
     });
   }
 
   async getDetail(userId: string, ledgerId: string): Promise<LedgerSummary> {
     const membership = await this.getMembership(userId, ledgerId);
     if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
-    return toLedgerSummary(membership.ledger, membership.role, membership.joinedAt);
+    const preference = await this.prisma.userLedgerPreference.findUnique({
+      where: { userId }, select: { currentLedgerId: true, defaultLedgerId: true },
+    });
+    return toLedgerSummary(membership.ledger, membership.role, membership.joinedAt, preference);
   }
 
   async update(
@@ -108,6 +144,8 @@ export class LedgerService {
     ledgerId: string,
     input: UpdateLedgerInput,
   ): Promise<LedgerSummary> {
+    validateTimezone(input.timezone);
+    validateCurrency(input.defaultCurrency);
     const membership = await this.getMembership(userId, ledgerId);
     if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
     if (membership.role !== 'OWNER') throw this.forbiddenException();
@@ -123,13 +161,19 @@ export class LedgerService {
 
     const data: Prisma.LedgerUpdateManyMutationInput = {
       ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      ...(input.defaultCurrency === undefined ? {} : { defaultCurrency: input.defaultCurrency }),
+      ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
       ...(input.icon === undefined ? {} : { icon: input.icon }),
       ...(input.color === undefined ? {} : { color: input.color }),
-      ...(input.isArchived === undefined ? {} : { isArchived: input.isArchived }),
     };
     if (input.name !== undefined && !input.name.trim()) throw this.invalidNameException();
 
     return this.prisma.$transaction(async (transaction) => {
+      if (input.defaultCurrency !== undefined && input.defaultCurrency !== ledger.defaultCurrency) {
+        await transaction.$queryRaw(Prisma.sql`SELECT id FROM "ledger" WHERE id = ${ledgerId} FOR UPDATE`);
+        const count = await transaction.transaction.count({ where: { ledgerId } });
+        if (count > 0) throw this.currencyConflictException();
+      }
       const updated = await transaction.ledger.updateMany({
         where: { id: ledgerId, updatedAt: input.updatedAt },
         data,
@@ -141,7 +185,10 @@ export class LedgerService {
         select: ledgerSelect,
       });
       if (!latest) throw this.notFoundException();
-      return toLedgerSummary(latest, membership.role, membership.joinedAt);
+      const preference = await transaction.userLedgerPreference.findUnique({
+        where: { userId }, select: { currentLedgerId: true, defaultLedgerId: true },
+      });
+      return toLedgerSummary(latest, membership.role, membership.joinedAt, preference);
     });
   }
 
@@ -168,6 +215,10 @@ export class LedgerService {
 
   private conflictException(): ConflictException {
     return new ConflictException({ code: 40902, message: '账本版本已变化，请刷新后重试', data: null });
+  }
+
+  private currencyConflictException(): ConflictException {
+    return new ConflictException({ code: 40902, message: '账本已有账单，不能修改默认币种', data: null });
   }
 
   private invalidNameException(): BadRequestException {
