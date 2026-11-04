@@ -29,18 +29,20 @@ describe('LedgerService', () => {
 
   const createService = () => {
     const transactionClient = {
-      ledger: { create: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
-      ledgerMember: { create: jest.fn(), findUnique: jest.fn() },
+      ledger: { create: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn() },
+      ledgerMember: { create: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
       category: { createMany: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       ledgerCopyRequest: { create: jest.fn(), update: jest.fn() },
       transaction: { count: jest.fn(), create: jest.fn() },
       account: { create: jest.fn() },
-      ledgerInvitation: { create: jest.fn() },
+      ledgerInvitation: { create: jest.fn(), count: jest.fn() },
       transactionAuditLog: { create: jest.fn() },
       userLedgerPreference: { findUnique: jest.fn() },
       $queryRaw: jest.fn(),
     };
     const prisma = {
+      transaction: { count: jest.fn() },
+      ledgerInvitation: { count: jest.fn() },
       ledger: { findMany: jest.fn(), count: jest.fn(), findUnique: jest.fn() },
       ledgerMember: { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() },
       userLedgerPreference: { findUnique: jest.fn() },
@@ -56,6 +58,131 @@ describe('LedgerService', () => {
       service: new LedgerService(prisma as unknown as PrismaService),
     };
   };
+
+  describe('安全删除', () => {
+    const setup = () => {
+      const d = createService();
+      const owner = { role: 'OWNER', status: 'ACTIVE', joinedAt: updatedAt, ledger };
+      d.prisma.ledgerMember.findUnique.mockResolvedValue(owner);
+      d.transactionClient.ledgerMember.findUnique.mockResolvedValue(owner);
+      for (const client of [d.prisma, d.transactionClient]) {
+        client.transaction.count.mockResolvedValue(0);
+        client.ledgerInvitation.count.mockResolvedValue(0);
+        client.ledgerMember.count.mockImplementation(async ({ where }) => where.userId === userId ? 1 : 0);
+      }
+      d.transactionClient.$queryRaw.mockResolvedValue([{ id: ledger.id }]);
+      d.transactionClient.ledger.deleteMany.mockResolvedValue({ count: 1 });
+      return d;
+    };
+
+    it.each([null, { role: 'OWNER', status: 'LEFT' }, { role: 'OWNER', status: 'REMOVED' }])(
+      '给定无活跃访问资格 %j，当删除，则返回不可见且不检查数据', async (member) => {
+        const d = setup();
+        d.prisma.ledgerMember.findUnique.mockResolvedValue(member);
+        await expect(d.service.remove(userId, ledger.id)).rejects.toBeInstanceOf(NotFoundException);
+        expect(d.prisma.transaction.count).not.toHaveBeenCalled();
+        expect(d.prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['EDITOR', 'VIEWER'])('给定非 Owner %s，当删除，则拒绝越权', async (role) => {
+      const d = setup();
+      d.prisma.ledgerMember.findUnique.mockResolvedValue({ role, status: 'ACTIVE' });
+      await expect(d.service.remove(userId, ledger.id)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(d.prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['软删除交易', 40911, 1, 0, 0, 1],
+      ['其他活跃成员', 40912, 0, 1, 0, 1],
+      ['有效待处理邀请', 40913, 0, 0, 1, 1],
+      ['最后一本账本', 40914, 0, 0, 0, 0],
+    ] as const)('给定%s，当删除，则返回业务错误 %s', async (_name, code, transactions, members, invitations, others) => {
+      const d = setup();
+      d.prisma.transaction.count.mockResolvedValue(transactions);
+      d.prisma.ledgerInvitation.count.mockResolvedValue(invitations);
+      d.prisma.ledgerMember.count.mockImplementation(async ({ where }) => where.userId === userId ? others : members);
+      await expect(d.service.remove(userId, ledger.id)).rejects.toMatchObject({ response: { code } });
+      expect(d.transactionClient.ledger.deleteMany).not.toHaveBeenCalled();
+      if (transactions) expect(d.prisma.transaction.count).toHaveBeenCalledWith({ where: { ledgerId: ledger.id } });
+    });
+
+    it('给定符合条件的空账本，当删除，则在账本和用户锁内复核并执行物理删除', async () => {
+      const d = setup();
+      const before = new Date();
+      await expect(d.service.remove(userId, ledger.id)).resolves.toBeNull();
+      const tx = d.transactionClient;
+      expect(tx.$queryRaw.mock.calls[0][0]).toEqual(expect.objectContaining({
+        text: 'SELECT id FROM "ledger" WHERE id = $1 FOR UPDATE', values: [ledger.id],
+      }));
+      expect(tx.$queryRaw.mock.calls[1][0]).toEqual(expect.objectContaining({
+        text: 'SELECT id FROM "user" WHERE id = $1 FOR UPDATE', values: [userId],
+      }));
+      expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.ledgerMember.findUnique.mock.invocationCallOrder[0]);
+      expect(tx.ledgerMember.findUnique.mock.invocationCallOrder[0]).toBeLessThan(tx.$queryRaw.mock.invocationCallOrder[1]);
+      expect(tx.$queryRaw.mock.invocationCallOrder[1]).toBeLessThan(tx.transaction.count.mock.invocationCallOrder[0]);
+      expect(tx.transaction.count).toHaveBeenCalledWith({ where: { ledgerId: ledger.id } });
+      expect(tx.ledgerMember.count).toHaveBeenCalledWith({ where: { ledgerId: ledger.id, status: 'ACTIVE', userId: { not: userId } } });
+      expect(tx.ledgerMember.count).toHaveBeenCalledWith({ where: { userId, status: 'ACTIVE', ledgerId: { not: ledger.id } } });
+      expect(tx.ledgerInvitation.count).toHaveBeenCalledWith({ where: {
+        ledgerId: ledger.id, status: 'PENDING', expiresAt: { gt: expect.any(Date) },
+      } });
+      expect(tx.ledgerInvitation.count.mock.calls[0][0].where.expiresAt.gt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(tx.ledger.deleteMany).toHaveBeenCalledWith({ where: { id: ledger.id } });
+      expect(d.prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['交易', '成员', '邀请', '其他账本'])('给定预检后%s资格变化，当锁后复核，则返回 40902', async (kind) => {
+      const d = setup();
+      if (kind === '交易') d.transactionClient.transaction.count.mockResolvedValue(1);
+      if (kind === '邀请') d.transactionClient.ledgerInvitation.count.mockResolvedValue(1);
+      if (kind === '成员') d.transactionClient.ledgerMember.count.mockResolvedValue(1);
+      if (kind === '其他账本') d.transactionClient.ledgerMember.count.mockResolvedValue(0);
+      await expect(d.service.remove(userId, ledger.id)).rejects.toMatchObject({ response: { code: 40902 } });
+      expect(d.transactionClient.ledger.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it.each([null, { role: 'OWNER', status: 'REMOVED' }, { role: 'EDITOR', status: 'ACTIVE' }])(
+      '给定预检后 Owner 资格变化 %j，当锁后复核，则拒绝删除', async (member) => {
+        const d = setup();
+        d.transactionClient.ledgerMember.findUnique.mockResolvedValue(member);
+        await expect(d.service.remove(userId, ledger.id)).rejects.toMatchObject({ response: { code: member?.status === 'ACTIVE' ? 40902 : 40401 } });
+        expect(d.transactionClient.ledger.deleteMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      [null, 40401],
+      [{ role: 'OWNER', status: 'LEFT' }, 40401],
+      [{ role: 'EDITOR', status: 'ACTIVE' }, 40902],
+    ] as const)('给定等待用户锁期间 Owner 变为 %j，当锁后复核，则返回 %s', async (latest, code) => {
+      const d = setup();
+      d.transactionClient.ledgerMember.findUnique
+        .mockResolvedValueOnce({ role: 'OWNER', status: 'ACTIVE', joinedAt: updatedAt, ledger })
+        .mockResolvedValueOnce(latest);
+      await expect(d.service.remove(userId, ledger.id)).rejects.toMatchObject({ response: { code } });
+      const memberLock = d.transactionClient.$queryRaw.mock.calls[2][0];
+      expect(memberLock.text.trim()).toBe('SELECT id FROM "ledger_member" WHERE ledger_id = $1 AND user_id = $2 FOR UPDATE');
+      expect(memberLock.values).toEqual([ledger.id, userId]);
+      expect(d.transactionClient.$queryRaw.mock.invocationCallOrder[2]).toBeLessThan(
+        d.transactionClient.ledgerMember.findUnique.mock.invocationCallOrder[1],
+      );
+      expect(d.transactionClient.ledger.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('给定等待锁时账本已删除，当获得锁，则返回不存在', async () => {
+      const d = setup();
+      d.transactionClient.$queryRaw.mockResolvedValueOnce([]);
+      await expect(d.service.remove(userId, ledger.id)).rejects.toBeInstanceOf(NotFoundException);
+      expect(d.transactionClient.ledger.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('给定最终删除未命中，当删除，则返回资格冲突', async () => {
+      const d = setup();
+      d.transactionClient.ledger.deleteMany.mockResolvedValue({ count: 0 });
+      await expect(d.service.remove(userId, ledger.id)).rejects.toMatchObject({ response: { code: 40902 } });
+    });
+  });
 
   it('给定用户拥有多个活跃账本，当查询账本列表，则只按成员关系返回账本角色', async () => {
     const dependencies = createService();

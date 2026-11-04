@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AuthUser } from '../../common/auth/authenticated-request';
 import { AuthGuard } from '../auth/auth.guard';
@@ -49,6 +49,11 @@ export class LedgerController {
       color: dto.color,
     };
     return this.ledgerService.copy(user.id, ledgerId, input);
+  }
+
+  @Delete(':ledgerId')
+  remove(@CurrentUser() user: AuthUser, @Param('ledgerId') ledgerId: string) {
+    return this.ledgerService.remove(user.id, ledgerId);
   }
 
   @Patch(':ledgerId')

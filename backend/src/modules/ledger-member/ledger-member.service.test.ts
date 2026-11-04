@@ -11,6 +11,7 @@ describe('LedgerMemberService', () => {
 
   const createService = () => {
     const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-editor' }]),
       ledgerMember: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -39,6 +40,36 @@ describe('LedgerMemberService', () => {
 
   const activeOwner = { id: ownerMemberId, ledgerId, userId: ownerUserId, role: 'OWNER', status: 'ACTIVE' };
   const activeEditor = { id: editorMemberId, ledgerId, userId: editorUserId, role: 'EDITOR', status: 'ACTIVE' };
+
+  describe('与空账本删除协调', () => {
+    it.each([
+      ['leave', 'EDITOR', 'LEFT'],
+      ['leave', 'VIEWER', 'LEFT'],
+      ['remove', 'EDITOR', 'REMOVED'],
+      ['remove', 'VIEWER', 'REMOVED'],
+    ] as const)('给定 %s 的 %s 仅剩一本账本，当变更，则先锁受影响用户并允许状态变为 %s', async (action, role, status) => {
+      const d = createService();
+      const target = { ...activeEditor, role };
+      d.prisma.ledgerMember.findUnique.mockImplementation(async ({ where }) =>
+        where.id === editorMemberId || where.ledgerId_userId?.userId === editorUserId ? target : activeOwner);
+      d.transactionClient.ledgerMember.count.mockResolvedValue(0);
+      d.transactionClient.ledgerMember.updateMany.mockResolvedValue({ count: 1 });
+      const result = action === 'leave'
+        ? d.service.leave(editorUserId, ledgerId)
+        : d.service.remove(ownerUserId, ledgerId, editorMemberId);
+      await expect(result).resolves.toBeNull();
+      const tx = d.transactionClient;
+      expect(tx.$queryRaw).toHaveBeenCalledWith(expect.objectContaining({
+        text: 'SELECT id FROM "user" WHERE id = $1 FOR UPDATE', values: [editorUserId],
+      }));
+      expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.ledgerMember.updateMany.mock.invocationCallOrder[0]);
+      expect(tx.ledgerMember.updateMany).toHaveBeenCalledWith({
+        where: { id: editorMemberId, ledgerId, status: 'ACTIVE', ...(action === 'leave' ? { userId: editorUserId } : {}) },
+        data: { status },
+      });
+      expect(tx.ledgerMember.count).not.toHaveBeenCalled();
+    });
+  });
 
   it('给定 Viewer 是活跃成员，当查询成员列表，则只返回同一账本的活跃成员', async () => {
     const dependencies = createService();

@@ -11,6 +11,7 @@ describe('InvitationService', () => {
 
   const createService = () => {
     const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: ledgerId }]),
       ledgerInvitation: { update: jest.fn(), updateMany: jest.fn() },
       ledgerMember: { findUnique: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     };
@@ -97,7 +98,7 @@ describe('InvitationService', () => {
     expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('给定用户曾退出账本且邀请有效，当用户接受邀请，则恢复原成员关系并消费邀请', async () => {
+  it.each(['LEFT', 'REMOVED'])('给定旧成员 %s 且邀请有效，当接受，则先锁账本再恢复成员并消费邀请', async (status) => {
     const dependencies = createService();
     dependencies.prisma.user.findUnique.mockResolvedValue({ email: 'member@example.com' });
     dependencies.prisma.ledgerInvitation.findUnique.mockResolvedValue({
@@ -112,7 +113,7 @@ describe('InvitationService', () => {
     dependencies.transactionClient.ledgerMember.findUnique
       .mockResolvedValueOnce({
         id: 'member-old',
-        status: 'LEFT',
+        status,
         role: 'EDITOR',
       })
       .mockResolvedValueOnce({ role: 'VIEWER', joinedAt: new Date() });
@@ -128,6 +129,30 @@ describe('InvitationService', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'ACCEPTED' }) }),
     );
     expect(result).toEqual(expect.objectContaining({ ledgerId, memberRole: 'VIEWER' }));
+    const tx = dependencies.transactionClient;
+    expect(tx.$queryRaw).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'SELECT id FROM "ledger" WHERE id = $1 FOR KEY SHARE', values: [ledgerId],
+    }));
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.ledgerMember.findUnique.mock.invocationCallOrder[0]);
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.ledgerMember.updateMany.mock.invocationCallOrder[0]);
+  });
+
+  it('给定删除先完成，当接受邀请锁后账本不存在，则返回 404 且不读取或恢复成员、不消费邀请', async () => {
+    const d = createService();
+    d.prisma.user.findUnique.mockResolvedValue({ email: 'member@example.com' });
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue({
+      id: invitationId, ledgerId, targetEmail: 'member@example.com', role: 'VIEWER',
+      status: 'PENDING', expiresAt: new Date(Date.now() + 60_000),
+    });
+    d.transactionClient.$queryRaw.mockResolvedValue([]);
+    d.transactionClient.ledgerMember.findUnique.mockResolvedValue({ id: 'old', status: 'LEFT', role: 'VIEWER', joinedAt: new Date() });
+    d.transactionClient.ledgerMember.updateMany.mockResolvedValue({ count: 1 });
+    d.transactionClient.ledgerInvitation.updateMany.mockResolvedValue({ count: 1 });
+    await expect(d.service.accept(invitedUserId, 'invite-token')).rejects.toBeInstanceOf(NotFoundException);
+    expect(d.transactionClient.ledgerMember.findUnique).not.toHaveBeenCalled();
+    expect(d.transactionClient.ledgerMember.updateMany).not.toHaveBeenCalled();
+    expect(d.transactionClient.ledgerMember.create).not.toHaveBeenCalled();
+    expect(d.transactionClient.ledgerInvitation.updateMany).not.toHaveBeenCalled();
   });
 
   it('给定邀请已过期，当用户接受邀请，则返回冲突并标记邀请已过期', async () => {

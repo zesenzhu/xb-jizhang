@@ -238,6 +238,70 @@ export class LedgerService {
     }
   }
 
+  /** 预检提供具体阻碍原因；锁后复核把并发资格变化统一报告为冲突。 */
+  async remove(userId: string, ledgerId: string): Promise<null> {
+    const membership = await this.getMembership(userId, ledgerId);
+    if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+    if (membership.role !== 'OWNER') throw this.forbiddenException();
+    await this.checkDeletionEligibility(this.prisma, userId, ledgerId, false);
+
+    return this.prisma.$transaction(async (transaction) => {
+      // 必须用 FOR UPDATE：它与新增交易的外键锁、邀请接受的 KEY SHARE 互斥。
+      const ledgers = await transaction.$queryRaw<{ id: string }[]>(
+        Prisma.sql`SELECT id FROM "ledger" WHERE id = ${ledgerId} FOR UPDATE`,
+      );
+      if (ledgers.length === 0) throw this.notFoundException();
+      const owner = await this.getMembership(userId, ledgerId, transaction);
+      if (!owner || owner.status !== 'ACTIVE') throw this.notFoundException();
+      if (owner.role !== 'OWNER') throw this.deletionConflictException();
+
+      // 与其他账本删除、成员退出/移除串行化，保护最后一本可访问账本。
+      await transaction.$queryRaw(Prisma.sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      // 角色更新不触发账本外键锁；在用户锁后固定成员行，避免等待期间 Owner 资格变化。
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT id FROM "ledger_member" WHERE ledger_id = ${ledgerId} AND user_id = ${userId} FOR UPDATE
+      `);
+      const latest = await this.getMembership(userId, ledgerId, transaction);
+      if (!latest || latest.status !== 'ACTIVE') throw this.notFoundException();
+      if (latest.role !== 'OWNER') throw this.deletionConflictException();
+
+      await this.checkDeletionEligibility(transaction, userId, ledgerId, true);
+      // Cascade 清理账本配置；偏好和复制历史的账本引用由 SET NULL 在同一事务清理。
+      const deleted = await transaction.ledger.deleteMany({ where: { id: ledgerId } });
+      if (deleted.count !== 1) throw this.deletionConflictException();
+      return null;
+    });
+  }
+
+  private async checkDeletionEligibility(
+    client: Prisma.TransactionClient,
+    userId: string,
+    ledgerId: string,
+    rechecking: boolean,
+  ): Promise<void> {
+    const reject = (code: number, message: string): never => {
+      if (rechecking) throw this.deletionConflictException();
+      throw new ConflictException({ code, message, data: null });
+    };
+    // 不过滤 deletedAt，软删除交易仍属于必须保留的账本历史。
+    if (await client.transaction.count({ where: { ledgerId } })) {
+      reject(40911, '账本存在账单，不能删除');
+    }
+    if (await client.ledgerMember.count({ where: { ledgerId, status: 'ACTIVE', userId: { not: userId } } })) {
+      reject(40912, '账本仍有其他活跃成员，不能删除');
+    }
+    if (await client.ledgerInvitation.count({ where: { ledgerId, status: 'PENDING', expiresAt: { gt: new Date() } } })) {
+      reject(40913, '账本存在待处理邀请，不能删除');
+    }
+    if (!await client.ledgerMember.count({ where: { userId, status: 'ACTIVE', ledgerId: { not: ledgerId } } })) {
+      reject(40914, '不能删除最后一本可访问账本');
+    }
+  }
+
+  private deletionConflictException(): ConflictException {
+    return new ConflictException({ code: 40902, message: '账本删除条件已变化，请刷新后重试', data: null });
+  }
+
   async getDetail(userId: string, ledgerId: string): Promise<LedgerSummary> {
     const membership = await this.getMembership(userId, ledgerId);
     if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();

@@ -1,8 +1,19 @@
+import { RequestMethod } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { LedgerController } from './ledger.controller';
 import { LedgerService } from './ledger.service';
 import { UpdateLedgerDto } from './dto/update-ledger.dto';
 
 describe('LedgerController', () => {
+  it('给定删除请求，当调用 Controller，则使用 DELETE 路由并返回 null', async () => {
+    const service = { remove: jest.fn().mockResolvedValue(null) };
+    const controller = new LedgerController(service as unknown as LedgerService);
+    expect(Reflect.getMetadata(METHOD_METADATA, controller.remove)).toBe(RequestMethod.DELETE);
+    expect(Reflect.getMetadata(PATH_METADATA, controller.remove)).toBe(':ledgerId');
+    await expect(controller.remove({ id: 'user-1' }, 'ledger-1')).resolves.toBeNull();
+    expect(service.remove).toHaveBeenCalledWith('user-1', 'ledger-1');
+  });
+
   it('给定有效与无效时区和币种，当校验账本 DTO，则只接受服务端支持的值', () => {
     const valid = plainToInstance(CreateLedgerDto, {
       name: '纽约', type: 'PERSONAL', timezone: 'America/New_York', defaultCurrency: 'USD',

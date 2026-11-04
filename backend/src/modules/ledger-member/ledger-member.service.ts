@@ -90,6 +90,7 @@ export class LedgerMemberService {
     if (target.role === 'OWNER') await this.ensureAnotherOwner(ledgerId, target.id);
 
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockUser(transaction, target.userId);
       const updated = await transaction.ledgerMember.updateMany({
         where: { id: memberId, ledgerId, status: 'ACTIVE' },
         data: { status: 'REMOVED' },
@@ -105,6 +106,7 @@ export class LedgerMemberService {
     if (actor.role === 'OWNER') await this.ensureAnotherOwner(ledgerId, actor.id);
 
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockUser(transaction, userId);
       const updated = await transaction.ledgerMember.updateMany({
         where: { id: actor.id, ledgerId, userId, status: 'ACTIVE' },
         data: { status: 'LEFT' },
@@ -150,6 +152,11 @@ export class LedgerMemberService {
       if (!previous || !next) throw this.conflictException();
       return { previousOwner: toMemberSummary(previous), newOwner: toMemberSummary(next) };
     });
+  }
+
+  private async lockUser(transaction: Prisma.TransactionClient, userId: string): Promise<void> {
+    // 与删除按 user -> membership 同序串行化；退出/移除本身允许用户不再拥有账本。
+    await transaction.$queryRaw(Prisma.sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
   }
 
   private async requireOwner(userId: string, ledgerId: string) {

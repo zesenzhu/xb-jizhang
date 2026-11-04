@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { normalizeEmail } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -125,6 +126,11 @@ export class InvitationService {
     }
 
     return this.prisma.$transaction(async (transaction) => {
+      // 恢复旧成员是 UPDATE，不会获取外键锁；先锁账本以与安全删除按相同顺序互斥。
+      const ledgers = await transaction.$queryRaw<{ id: string }[]>(
+        Prisma.sql`SELECT id FROM "ledger" WHERE id = ${invitation.ledgerId} FOR KEY SHARE`,
+      );
+      if (ledgers.length === 0) throw this.notFoundException();
       const existingMember = await transaction.ledgerMember.findUnique({
         where: { ledgerId_userId: { ledgerId: invitation.ledgerId, userId } },
         select: { id: true, status: true },
