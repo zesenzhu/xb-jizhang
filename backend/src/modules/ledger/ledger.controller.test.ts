@@ -20,6 +20,24 @@ describe('LedgerController', () => {
     expect(validateSync(invalidCreate)).toHaveLength(2);
     expect(validateSync(invalidUpdate)).toHaveLength(2);
   });
+
+  it('给定 ICU 短名 CST，当校验创建与更新 DTO，则均拒绝时区字段', () => {
+    const create = plainToInstance(CreateLedgerDto, { name: '歧义', type: 'PERSONAL', timezone: 'CST' });
+    const update = plainToInstance(UpdateLedgerDto, {
+      timezone: 'CST', updatedAt: '2026-10-30T08:00:00.000Z',
+    });
+
+    expect(validateSync(create).map((error) => error.property)).toContain('timezone');
+    expect(validateSync(update).map((error) => error.property)).toContain('timezone');
+  });
+
+  it('给定合法 Etc 时区，当校验更新 DTO，则允许该时区', () => {
+    const update = plainToInstance(UpdateLedgerDto, {
+      timezone: 'Etc/GMT+8', updatedAt: '2026-10-30T08:00:00.000Z',
+    });
+
+    expect(validateSync(update)).toHaveLength(0);
+  });
   it('给定带归档参数的账本列表请求，当用户查询账本，则把查询参数和认证用户传入 Service', async () => {
     const service = {
       list: jest.fn().mockResolvedValue({ items: [], total: 0 }),

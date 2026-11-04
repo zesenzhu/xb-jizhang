@@ -204,6 +204,15 @@ describe('LedgerService', () => {
     }));
   });
 
+  it('给定 ICU 短名 CST，当用户创建账本，则在写入前拒绝', async () => {
+    const dependencies = createService();
+
+    await expect(dependencies.service.create(userId, {
+      name: '歧义时区账本', type: 'PERSONAL', timezone: 'CST',
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('给定不存在的 IANA 时区，当用户创建账本，则拒绝创建', async () => {
     const dependencies = createService();
 
@@ -281,6 +290,29 @@ describe('LedgerService', () => {
       } as UpdateLedgerInput),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(dependencies.prisma.ledgerMember.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('给定 ICU 短名 CST，当 Owner 更新账本，则在读取成员前拒绝', async () => {
+    const dependencies = createService();
+
+    await expect(dependencies.service.update(userId, 'ledger-1', {
+      timezone: 'CST', updatedAt,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.ledgerMember.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('给定合法 Etc 时区，当 Owner 更新账本，则保存该时区', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
+    dependencies.prisma.ledger.findUnique.mockResolvedValue(ledger);
+    dependencies.transactionClient.ledger.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.ledger.findUnique.mockResolvedValue({ ...ledger, timezone: 'Etc/GMT+8' });
+
+    await dependencies.service.update(userId, 'ledger-1', { timezone: 'Etc/GMT+8', updatedAt });
+
+    expect(dependencies.transactionClient.ledger.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ timezone: 'Etc/GMT+8' }),
+    }));
   });
 
   it('给定不受支持的货币代码，当用户创建账本，则拒绝创建', async () => {

@@ -1,4 +1,5 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsTimeZone, Length } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { IsLedgerTimezone } from '../ledger-timezone.validator';
 
 export class UpdateLedgerDto {
   @IsOptional()
@@ -11,7 +12,7 @@ export class UpdateLedgerDto {
   defaultCurrency?: string;
 
   @IsOptional()
-  @IsTimeZone()
+  @IsLedgerTimezone()
   timezone?: string;
 
   @IsOptional()

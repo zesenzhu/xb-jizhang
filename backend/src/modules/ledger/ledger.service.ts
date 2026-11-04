@@ -8,6 +8,7 @@ import {
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getDefaultCategoryData } from '../category/category.constants';
+import { isLedgerTimezone } from './ledger-timezone.validator';
 import type {
   CreateLedgerInput,
   LedgerQuery,
@@ -51,10 +52,7 @@ function toLedgerSummary(
 
 function validateTimezone(timezone: string | undefined): void {
   if (timezone === undefined) return;
-  try {
-    if (!/^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)*$/.test(timezone)) throw new RangeError();
-    new Intl.DateTimeFormat('en', { timeZone: timezone });
-  } catch {
+  if (!isLedgerTimezone(timezone)) {
     throw new BadRequestException({ code: 40001, message: '账本时区无效', data: null });
   }
 }
