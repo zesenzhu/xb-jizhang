@@ -38,6 +38,18 @@ export async function getTransactions(
   );
 }
 
+/** 详情不缓存（staleTime 0）：编辑后必须立刻看到新值，他人也可能随时修改。 */
+export async function getTransaction(
+  ledgerId: string,
+  transactionId: string,
+): Promise<TransactionSummary> {
+  return unwrap(
+    await userClient.get<ApiSuccessResponse<TransactionSummary>>(
+      `/ledgers/${encodeURIComponent(ledgerId)}/transactions/${encodeURIComponent(transactionId)}`,
+    ),
+  );
+}
+
 export async function createTransaction(
   ledgerId: string,
   input: CreateTransactionInput,

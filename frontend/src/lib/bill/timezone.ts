@@ -83,3 +83,33 @@ export function currentZonedMonth(
     Number(parts.find((part) => part.type === type)?.value ?? 0);
   return { year: read('year'), month: read('month') };
 }
+
+/**
+ * 账本时区下的完整日期时间，如 `2026-11-02 22:20`。
+ *
+ * 详情页要区分「发生时间」和「创建时间」，两者都需要日期；
+ * 与 `billDateOf` 不同，这里保留时:分，且用同一时区，
+ * 避免跨时区用户看到发生时间在 11-02、创建时间却在 11-03 的错位。
+ */
+export function formatBillDateTime(
+  iso: string,
+  timeZone: string = LEDGER_TIME_ZONE,
+): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? '';
+
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+}

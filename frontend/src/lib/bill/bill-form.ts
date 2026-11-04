@@ -1,4 +1,5 @@
 import type { CategoryType } from '@/lib/api/category-types';
+import { amountTextFromCents } from './amount';
 
 export interface BillFormState {
   type: CategoryType;
@@ -33,7 +34,9 @@ export type BillFormAction =
   | { kind: 'submitStart' }
   | { kind: 'submitFailure'; error: string }
   | { kind: 'resetForNext'; clientRequestId: string; occurredAt: string }
-  | { kind: 'reset'; now: Date; categoryId?: string | null; accountId?: string | null; payerId?: string | null };
+  | { kind: 'reset'; now: Date; categoryId?: string | null; accountId?: string | null; payerId?: string | null }
+  /** 整体灌入一份状态，用于详情编辑态预填（reset 带不了全部字段） */
+  | { kind: 'hydrate'; state: BillFormState };
 
 export const NOTE_MAX_LENGTH = 200;
 
@@ -61,6 +64,41 @@ export function createInitialBillForm(
     note: '',
     payerId: options.payerId ?? null,
     clientRequestId: options.clientRequestId ?? generateRequestId(),
+    isDirty: false,
+    submitting: false,
+    error: null,
+    timeError: null,
+  };
+}
+
+/**
+ * 用已有账单预填编辑表单。
+ *
+ * 编辑态与新建共用同一份字段与校验，只差初始值和提交方式；
+ * 因此这里返回同一个 `BillFormState`，而不是另立一套编辑 state。
+ */
+export function billFormFromTransaction(bill: {
+  type: CategoryType;
+  amountCents: number;
+  categoryId: string | null;
+  occurredAt: string;
+  accountId: string | null;
+  title: string | null;
+  note: string | null;
+  payerId: string | null;
+  clientRequestId: string;
+}): BillFormState {
+  return {
+    type: bill.type,
+    amountText: amountTextFromCents(bill.amountCents),
+    categoryId: bill.categoryId,
+    occurredAt: bill.occurredAt,
+    accountId: bill.accountId,
+    title: bill.title ?? '',
+    note: (bill.note ?? '').slice(0, NOTE_MAX_LENGTH),
+    payerId: bill.payerId,
+    clientRequestId: bill.clientRequestId,
+    // 预填不算脏：用户没改动时关闭不该弹放弃确认。
     isDirty: false,
     submitting: false,
     error: null,
@@ -114,6 +152,9 @@ export function billFormReducer(state: BillFormState, action: BillFormAction): B
 
     case 'submitFailure':
       return { ...state, submitting: false, error: action.error };
+
+    case 'hydrate':
+      return action.state;
 
     case 'reset':
       // 重新打开抽屉必须是干净状态：上次放弃的草稿不能残留，

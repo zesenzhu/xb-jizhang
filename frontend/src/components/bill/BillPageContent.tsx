@@ -23,6 +23,7 @@ import { queryKeys, queryStaleTime } from '@/lib/query/query-config';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { Button } from '@/components/ui/button';
 import { BillDayCard } from '@/components/bill/BillDayCard';
+import { BillDetailContainer } from '@/components/bill/BillDetailContainer';
 import { BillSearchBar } from '@/components/bill/BillSearchBar';
 import { BillListSkeleton } from '@/components/skeleton/BillListSkeleton';
 import { LedgerTopBar } from '@/components/bill/LedgerTopBar';
@@ -54,6 +55,7 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
   const [filter, setFilter] = React.useState<BillFilter>(createInitialBillFilter);
   const [keywordInput, setKeywordInput] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [detailBillId, setDetailBillId] = React.useState<string | null>(null);
   const isOnline = useOfflineStore((store) => store.isOnline);
 
   const range = React.useMemo(
@@ -249,7 +251,11 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
             )}
 
             {groups.map((group) => (
-              <BillDayCard key={group.billDate} group={group} />
+              <BillDayCard
+                key={group.billDate}
+                group={group}
+                onSelectBill={(bill) => setDetailBillId(bill.id)}
+              />
             ))}
 
             <div ref={sentinelRef} className="flex justify-center py-2">
@@ -266,6 +272,19 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
         memberRole={ledgerQuery.data?.memberRole}
         onClick={() => setCreateOpen(true)}
       />
+
+      {currentLedgerId && (
+        <BillDetailContainer
+          open={detailBillId !== null}
+          onOpenChange={(next) => {
+            if (!next) setDetailBillId(null);
+          }}
+          ledgerId={currentLedgerId}
+          billId={detailBillId}
+          memberRole={ledgerQuery.data?.memberRole}
+          onDeleted={() => setDetailBillId(null)}
+        />
+      )}
 
       {currentLedgerId && (
         <BillCreateSheet
