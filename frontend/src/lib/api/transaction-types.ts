@@ -6,6 +6,7 @@ export interface TransactionCategoryRef {
   id: string;
   type: string;
   name: string;
+  parentId: string | null;
 }
 
 export interface TransactionAccountRef {
@@ -71,6 +72,30 @@ export interface TransactionListResponse {
 }
 
 export type TransactionListApiResponse = ApiSuccessResponse<TransactionListResponse>;
+
+export interface CreateTransactionInput {
+  clientRequestId: string;
+  type: TransactionType;
+  amountCents: number;
+  occurredAt: string;
+  categoryId: string;
+  accountId?: string | null;
+  payerId?: string | null;
+  title?: string | null;
+  note?: string | null;
+}
+
+export interface UpdateTransactionInput {
+  version: number;
+  type?: TransactionType;
+  amountCents?: number;
+  occurredAt?: string;
+  categoryId?: string;
+  accountId?: string | null;
+  payerId?: string | null;
+  title?: string | null;
+  note?: string | null;
+}
 
 export interface StatisticsOverview {
   from: string | null;

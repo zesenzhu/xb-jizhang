@@ -1,11 +1,14 @@
 import { userClient } from './user-client';
 import type { ApiSuccessResponse } from './auth-types';
 import type {
+  CreateTransactionInput,
   StatisticsOverview,
   StatisticsOverviewQuery,
   TransactionListApiResponse,
   TransactionListQuery,
   TransactionListResponse,
+  TransactionSummary,
+  UpdateTransactionInput,
 } from './transaction-types';
 
 function unwrap<T>(response: { data: ApiSuccessResponse<T> }): T {
@@ -31,6 +34,44 @@ export async function getTransactions(
     await userClient.get<TransactionListApiResponse>(
       `/ledgers/${encodeURIComponent(ledgerId)}/transactions`,
       { params: toParams(query) },
+    ),
+  );
+}
+
+export async function createTransaction(
+  ledgerId: string,
+  input: CreateTransactionInput,
+): Promise<TransactionSummary> {
+  return unwrap(
+    await userClient.post<ApiSuccessResponse<TransactionSummary>>(
+      `/ledgers/${encodeURIComponent(ledgerId)}/transactions`,
+      input,
+    ),
+  );
+}
+
+export async function updateTransaction(
+  ledgerId: string,
+  transactionId: string,
+  input: UpdateTransactionInput,
+): Promise<TransactionSummary> {
+  return unwrap(
+    await userClient.patch<ApiSuccessResponse<TransactionSummary>>(
+      `/ledgers/${encodeURIComponent(ledgerId)}/transactions/${encodeURIComponent(transactionId)}`,
+      input,
+    ),
+  );
+}
+
+export async function deleteTransaction(
+  ledgerId: string,
+  transactionId: string,
+  version: number,
+): Promise<TransactionSummary> {
+  return unwrap(
+    await userClient.delete<ApiSuccessResponse<TransactionSummary>>(
+      `/ledgers/${encodeURIComponent(ledgerId)}/transactions/${encodeURIComponent(transactionId)}`,
+      { data: { version } },
     ),
   );
 }
