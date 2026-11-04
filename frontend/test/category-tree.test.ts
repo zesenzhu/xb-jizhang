@@ -105,3 +105,27 @@ assert.equal(childPicked.isRoot, false);
 const otherPicked = resolveGridTile(foodNode, 'transport');
 assert.equal(otherPicked.node.id, 'food');
 assert.equal(otherPicked.selected, false);
+
+// 打开面板时的预选：上次用过的优先，失效则回退第一个
+import { resolveInitialCategoryId } from '../src/lib/bill/category-tree';
+
+const grid = buildCategoryTree([
+  category({ id: 'food', name: '餐饮', sortOrder: 10 }),
+  category({ id: 'breakfast', name: '早餐', parentId: 'food', sortOrder: 10 }),
+  category({ id: 'transport', name: '交通', sortOrder: 20 }),
+]);
+
+// 没有记忆：选第一个一级分类
+assert.equal(resolveInitialCategoryId(grid, null), 'food');
+
+// 记忆是一级分类：沿用它
+assert.equal(resolveInitialCategoryId(grid, 'transport'), 'transport');
+
+// 记忆是二级分类：沿用它（不能回退到一级）
+assert.equal(resolveInitialCategoryId(grid, 'breakfast'), 'breakfast');
+
+// 记忆已失效（被停用/删除）：回退第一个
+assert.equal(resolveInitialCategoryId(grid, 'deleted-category'), 'food');
+
+// 空分类：返回 null，由调用方走空态
+assert.equal(resolveInitialCategoryId([], 'food'), null);

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { billFormReducer, createInitialBillForm, NOTE_MAX_LENGTH } from '../src/lib/bill/bill-form';
 
-const base = createInitialBillForm(new Date('2026-11-04T10:00:00.000Z'), 'req-1');
+const base = createInitialBillForm({
+  now: new Date('2026-11-04T10:00:00.000Z'),
+  clientRequestId: 'req-1',
+});
 
 // 初始状态：支出、金额 0、未选分类、不脏
 assert.equal(base.type, 'EXPENSE');

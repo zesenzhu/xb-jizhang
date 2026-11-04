@@ -91,3 +91,27 @@ export function categoryPathText(
     : undefined;
   return parent ? `${parent.name}-${target.name}` : target.name;
 }
+
+/**
+ * 打开记账面板时应该预选哪个分类。
+ *
+ * 优先级：上次用过的分类（仍启用且类型匹配）→ 该类型的第一个一级分类。
+ * 上次的选择可能已被停用或删除，此时必须回退到第一个，
+ * 否则会出现「分类显示为空但提交时又说分类无效」的矛盾状态。
+ */
+export function resolveInitialCategoryId(
+  nodes: readonly CategoryNode[],
+  rememberedId: string | null,
+): string | null {
+  if (nodes.length === 0) return null;
+
+  if (rememberedId) {
+    for (const node of nodes) {
+      if (node.id === rememberedId) return node.id;
+      if (node.children.some((child) => child.id === rememberedId)) return rememberedId;
+    }
+    // 记住了但已不存在/已停用：继续回退到第一个。
+  }
+
+  return nodes[0]?.id ?? null;
+}

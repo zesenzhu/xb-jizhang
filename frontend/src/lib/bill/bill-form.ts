@@ -33,21 +33,34 @@ export type BillFormAction =
   | { kind: 'submitStart' }
   | { kind: 'submitFailure'; error: string }
   | { kind: 'resetForNext'; clientRequestId: string; occurredAt: string }
-  | { kind: 'reset'; now: Date };
+  | { kind: 'reset'; now: Date; categoryId?: string | null; accountId?: string | null; payerId?: string | null };
 
 export const NOTE_MAX_LENGTH = 200;
 
-export function createInitialBillForm(now: Date = new Date(), clientRequestId?: string): BillFormState {
+export interface InitialBillFormOptions {
+  now?: Date;
+  clientRequestId?: string;
+  /** 预选分类：上次用过的，或该类型第一个一级分类 */
+  categoryId?: string | null;
+  accountId?: string | null;
+  payerId?: string | null;
+}
+
+export function createInitialBillForm(
+  options: InitialBillFormOptions = {},
+): BillFormState {
+  const now = options.now ?? new Date();
   return {
     type: 'EXPENSE',
     amountText: '0',
-    categoryId: null,
+    // 预选不算「填过」：isDirty 仍为 false，关闭时不该弹放弃确认。
+    categoryId: options.categoryId ?? null,
     occurredAt: now.toISOString(),
-    accountId: null,
+    accountId: options.accountId ?? null,
     title: '',
     note: '',
-    payerId: null,
-    clientRequestId: clientRequestId ?? generateRequestId(),
+    payerId: options.payerId ?? null,
+    clientRequestId: options.clientRequestId ?? generateRequestId(),
     isDirty: false,
     submitting: false,
     error: null,
@@ -103,8 +116,14 @@ export function billFormReducer(state: BillFormState, action: BillFormAction): B
       return { ...state, submitting: false, error: action.error };
 
     case 'reset':
-      // 重新打开抽屉必须是干净状态：上次放弃的草稿不能残留。
-      return createInitialBillForm(action.now, generateRequestId());
+      // 重新打开抽屉必须是干净状态：上次放弃的草稿不能残留，
+      // 但分类/账户/付款人沿用调用方给的「上次选择」。
+      return createInitialBillForm({
+        now: action.now,
+        categoryId: action.categoryId,
+        accountId: action.accountId,
+        payerId: action.payerId,
+      });
 
     case 'resetForNext':
       // 保存并继续：清空金额/商家/备注，保留类型/时间/分类/账户/付款人。

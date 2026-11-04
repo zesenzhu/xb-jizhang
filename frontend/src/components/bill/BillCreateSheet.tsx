@@ -10,7 +10,7 @@ import { getAccounts } from '@/lib/api/account-api';
 import { ApiRequestError } from '@/lib/api/errors';
 import { queryKeys, queryStaleTime } from '@/lib/query/query-config';
 import { parseAmountText } from '@/lib/bill/amount';
-import { buildCategoryTree } from '@/lib/bill/category-tree';
+import { buildCategoryTree, resolveInitialCategoryId } from '@/lib/bill/category-tree';
 import {
   NOTE_MAX_LENGTH,
   billFormReducer,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/bill/bill-form';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { useOfflineStore } from '@/store/offlineStore';
+import { useBillMemoryStore } from '@/store/billMemoryStore';
 import { AccountPickerSheet } from './AccountPickerSheet';
 import { BillFormBody } from './BillFormBody';
 import { SheetTypeSegment } from './SheetTypeSegment';
@@ -54,12 +55,20 @@ export function BillCreateSheet({
   const [categoryError, setCategoryError] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const isOnline = useOfflineStore((store) => store.isOnline);
+  const remembered = useBillMemoryStore((store) => store.byLedger[ledgerId]);
+  const remember = useBillMemoryStore((store) => store.remember);
 
   // 每次打开都重置表单。用渲染期比较代替 effect，避免级联渲染与首帧闪旧值。
   if (wasOpen !== open) {
     setWasOpen(open);
     if (open) {
-      dispatch({ kind: 'reset', now: new Date() });
+      dispatch({
+        kind: 'reset',
+        now: new Date(),
+        categoryId: null,
+        accountId: remembered?.accountId ?? null,
+        payerId: remembered?.payerId ?? null,
+      });
       setCategoryError(false);
       setConfirmDiscard(false);
     }
@@ -95,11 +104,34 @@ export function BillCreateSheet({
   );
   const accounts = accountsQuery.data?.items ?? [];
 
+  /**
+   * 有效分类 = 用户本次选的，否则回退到「上次用过的 / 该类型第一个」。
+   *
+   * 不用 effect 写入 state：分类是异步加载的，等数据到位再 setState 会违反
+   * react-hooks/set-state-in-effect，而且会和用户手选打架。
+   * 直接在渲染期派生：`state.categoryId` 一旦被用户设定就不再回退，
+   * 因此这里不存在「覆盖用户选择」的问题。
+   */
+  const effectiveCategoryId =
+    state.categoryId ??
+    resolveInitialCategoryId(
+      categoryNodes,
+      remembered?.categoryByType?.[state.type] ?? null,
+    );
+
+  // 下游（分类选择、路径文案、提交）统一消费这份带预选的状态。
+  const formState = React.useMemo(
+    () => (effectiveCategoryId === state.categoryId
+      ? state
+      : { ...state, categoryId: effectiveCategoryId }),
+    [state, effectiveCategoryId],
+  );
+
   const amount = parseAmountText(state.amountText);
   // 未来时间由事件处理器判定后写入 state.timeError：渲染期不读取当前时钟。
   const isFutureTime = state.timeError !== null;
   const canSubmit =
-    amount.cents !== null && state.categoryId !== null && !isFutureTime && !state.submitting;
+    amount.cents !== null && effectiveCategoryId !== null && !isFutureTime && !state.submitting;
   /**
    * 提交键的禁用只覆盖「无论怎么点都不可能成功」的情况：金额非法、时间为未来、离线。
    * 未选分类不在此列——用户需要能点一下，才看得到高亮和滚动引导。
@@ -113,7 +145,7 @@ export function BillCreateSheet({
         type: state.type,
         amountCents: amount.cents ?? 0,
         occurredAt: state.occurredAt,
-        categoryId: state.categoryId ?? '',
+        categoryId: effectiveCategoryId ?? '',
         accountId: state.accountId,
         title: state.title.trim() || null,
         note: state.note.trim() || null,
@@ -124,7 +156,7 @@ export function BillCreateSheet({
   const submit = async (keepOpen: boolean): Promise<void> => {
     if (state.submitting) return;
 
-    if (state.categoryId === null) {
+    if (effectiveCategoryId === null) {
       // 未选分类：分类区就在滚动容器顶部，滚回顶部并在标题上高亮。
       setCategoryError(true);
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -149,6 +181,13 @@ export function BillCreateSheet({
         clientRequestId: crypto.randomUUID(),
         occurredAt: new Date().toISOString(),
       });
+      // 记下本次选择，下次打开直接预选。
+      remember(ledgerId, state.type, {
+        categoryId: effectiveCategoryId,
+        accountId: state.accountId,
+        payerId: state.payerId,
+      });
+
       if (!keepOpen) onOpenChange(false);
       onCreated?.();
     } catch (error) {
@@ -223,7 +262,7 @@ export function BillCreateSheet({
         </div>
 
         <BillFormBody
-          state={state}
+          state={formState}
           dispatch={dispatch}
           categoryNodes={categoryNodes}
           categories={categories ?? []}
