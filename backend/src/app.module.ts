@@ -12,6 +12,7 @@ import { InvitationModule } from './modules/invitation/invitation.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TransactionModule } from './modules/transaction/transaction.module';
     InvitationModule,
     UserModule,
     TransactionModule,
+    StatisticsModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
