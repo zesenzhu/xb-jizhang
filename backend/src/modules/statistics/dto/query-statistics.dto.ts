@@ -1,4 +1,6 @@
+import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsISO8601,
   IsOptional,
@@ -117,6 +119,25 @@ export class QueryStatisticsDto {
   @IsOptional()
   @IsIn(['EXPENSE', 'INCOME', 'NET'])
   metric?: 'EXPENSE' | 'INCOME' | 'NET';
+
+  @IsOptional()
+  @IsIn(['ROOT', 'CHILD'])
+  categoryLevel?: 'ROOT' | 'CHILD';
+
+  @IsOptional()
+  @IsIn(['AMOUNT', 'PERCENTAGE'])
+  sortBy?: 'AMOUNT' | 'PERCENTAGE';
+
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC';
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  includeComparison?: boolean;
 
   @IsOptional()
   @IsUUID()

@@ -143,3 +143,131 @@ describe('StatisticsController', () => {
     expect(service.overview).toHaveBeenCalledWith('user-1', 'ledger-1', query);
   });
 });
+
+describe('StatisticsController categories', () => {
+  const callCategories = (
+    controller: StatisticsController,
+    query: Record<string, unknown>,
+  ) => controller.categories({ id: 'user-1' }, 'ledger-1', query);
+
+  it('给定分类请求字符串参数，当 Controller 接收查询，则注册 GET categories 并传递用户、账本和规范化参数', async () => {
+    const service = {
+      categories: jest.fn().mockResolvedValue({ totalCents: 0, items: [] }),
+    };
+    const controller = new StatisticsController(
+      service as unknown as StatisticsService,
+    );
+    const query = {
+      period: 'MONTH',
+      anchorDate: '2026-10-15',
+      categoryLevel: 'CHILD',
+      categoryRootId: 'c870a1fa-2600-4c29-b482-7c8132123456',
+      type: 'INCOME',
+      includeComparison: 'false',
+      sortBy: 'PERCENTAGE',
+      sortOrder: 'ASC',
+      payerId: 'c870a1fa-2600-4c29-b482-7c8132123457',
+      keyword: ' Lunch ',
+    };
+    await expect(callCategories(controller, query)).resolves.toEqual({
+      totalCents: 0,
+      items: [],
+    });
+    expect(service.categories).toHaveBeenCalledWith(
+      'user-1',
+      'ledger-1',
+      expect.objectContaining({
+        ...query,
+        includeComparison: false,
+        keyword: 'Lunch',
+      }),
+    );
+    const action = controller.categories;
+    expect(Reflect.getMetadata('path', action)).toBe('categories');
+    expect(Reflect.getMetadata('method', action)).toBe(0);
+    expect(
+      Reflect.getMetadata('__guards__', StatisticsController),
+    ).toHaveLength(1);
+  });
+
+  it.each(['true', 'false'])(
+    '给定 includeComparison=%s，当校验分类 DTO，则转换为布尔值且不丢弃分类参数',
+    (value) => {
+      const dto = plainToInstance(QueryStatisticsDto, {
+        period: 'ALL',
+        categoryLevel: 'ROOT',
+        sortBy: 'AMOUNT',
+        sortOrder: 'DESC',
+        includeComparison: value,
+      });
+      expect(validateSync(dto)).toHaveLength(0);
+      expect(dto).toEqual(
+        expect.objectContaining({ includeComparison: value === 'true' }),
+      );
+    },
+  );
+
+  it.each([
+    { categoryLevel: 'LEAF' },
+    { sortBy: 'NAME' },
+    { sortOrder: 'UP' },
+    { includeComparison: '1' },
+    { includeComparison: '' },
+  ])('给定非法分类枚举或布尔值 %j，当校验 DTO，则拒绝该参数', (query) => {
+    expect(
+      validateSync(plainToInstance(QueryStatisticsDto, query)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [{ categoryLevel: 'LEAF' }, 40021],
+    [{ includeComparison: 'yes' }, 40021],
+    [{ categoryRootId: 'not-a-uuid' }, 40021],
+    [
+      {
+        categoryId: 'c870a1fa-2600-4c29-b482-7c8132123456',
+        categoryRootId: 'c870a1fa-2600-4c29-b482-7c8132123457',
+      },
+      40023,
+    ],
+  ])(
+    '给定非法 HTTP 分类参数 %j，当 Controller 校验，则映射领域错误码 %s',
+    async (query, code) => {
+      const service = { categories: jest.fn() };
+      const controller = new StatisticsController(
+        service as unknown as StatisticsService,
+      );
+      await expect(
+        callCategories(controller, {
+          period: 'MONTH',
+          anchorDate: '2026-10-15',
+          ...query,
+        }),
+      ).rejects.toMatchObject({ response: { code } });
+      expect(service.categories).not.toHaveBeenCalled();
+    },
+  );
+
+  it('给定空关键词和 includeComparison=true，当接收分类查询，则保留 true 并忽略空关键词', async () => {
+    const service = {
+      categories: jest.fn().mockResolvedValue({ items: [] }),
+    };
+    await callCategories(
+      new StatisticsController(service as unknown as StatisticsService),
+      {
+        period: 'MONTH',
+        anchorDate: '2026-10-15',
+        keyword: '  ',
+        includeComparison: 'true',
+      },
+    );
+    expect(service.categories).toHaveBeenCalledWith(
+      'user-1',
+      'ledger-1',
+      expect.objectContaining({
+        keyword: undefined,
+        includeComparison: true,
+      }),
+    );
+  });
+});

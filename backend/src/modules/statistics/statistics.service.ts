@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Temporal } from '@js-temporal/polyfill';
+import type { Category } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveStatisticsDateRange } from './statistics-date-range';
 import {
@@ -18,12 +19,33 @@ import {
 import type {
   PeriodStatisticsOverview,
   StatisticsAggregate,
+  StatisticsCategories,
+  StatisticsCategoryItem,
   StatisticsDateRange,
   StatisticsOverview,
   StatisticsPeriods,
   StatisticsQuery,
   StatisticsTrend,
 } from './statistics.types';
+
+type CategoryMetadata = Pick<
+  Category,
+  'id' | 'parentId' | 'name' | 'icon' | 'color'
+>;
+interface CategoryAggregate {
+  categoryId: string | null;
+  _sum: { amountCents: number | null };
+  _count: { id: number };
+}
+interface CategoryBucket {
+  category: CategoryMetadata | null;
+  amountCents: number;
+  transactionCount: number;
+}
+
+function percentage(amount: number, total: number): number {
+  return total === 0 ? 0 : Math.round((amount / total) * 10000) / 100;
+}
 
 function toSafeInteger(value: number | bigint | string): number {
   const result = Number(value);
@@ -43,6 +65,262 @@ function aggregateCents(
 @Injectable()
 export class StatisticsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async categories(
+    userId: string,
+    ledgerId: string,
+    query: StatisticsQuery,
+  ): Promise<StatisticsCategories> {
+    const { timezone } = await this.getActiveLedgerContext(userId, ledgerId);
+    this.validateCategoryQuery(query);
+    const type = query.type ?? 'EXPENSE';
+    if (query.categoryRootId !== undefined) {
+      const root = await this.prisma.category.findFirst({
+        where: {
+          id: query.categoryRootId,
+          ledgerId,
+          type,
+          parentId: null,
+        },
+        select: { id: true },
+      });
+      if (!root) throw this.notFoundException();
+    }
+    const range = await this.resolveDateRange(
+      userId,
+      ledgerId,
+      query,
+      timezone,
+    );
+    if (range.startAt === null || range.endAt === null) {
+      return {
+        ledgerId,
+        type,
+        totalCents: 0,
+        range,
+        comparisonRange: null,
+        items: [],
+      };
+    }
+    const comparisonRange = query.includeComparison
+      ? this.categoryComparisonRange(range)
+      : null;
+    const aggregate = (startAt: string, endAt: string) =>
+      this.prisma.transaction.groupBy({
+        by: ['categoryId'],
+        where: buildStatisticsWhere(
+          userId,
+          ledgerId,
+          { ...query, type },
+          {
+            gte: new Date(startAt),
+            lt: new Date(endAt),
+          },
+        ),
+        _sum: { amountCents: true },
+        _count: { id: true },
+      });
+    const [metadata, currentRows, previousRows] = await Promise.all([
+      this.prisma.category.findMany({
+        // Inactive categories remain part of historical statistics.
+        where: { ledgerId, type },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          icon: true,
+          color: true,
+        },
+      }),
+      aggregate(range.startAt, range.endAt),
+      comparisonRange
+        ? aggregate(comparisonRange.startAt, comparisonRange.endAt)
+        : Promise.resolve([]),
+    ]);
+    const byId = new Map(metadata.map((category) => [category.id, category]));
+    const current = this.categoryBuckets(currentRows, byId, query);
+    const previous = this.categoryBuckets(previousRows, byId, query);
+    const totalCents = toSafeInteger(
+      [...current.values()].reduce(
+        (sum, bucket) => sum + bucket.amountCents,
+        0,
+      ),
+    );
+    const previousTotal = toSafeInteger(
+      [...previous.values()].reduce(
+        (sum, bucket) => sum + bucket.amountCents,
+        0,
+      ),
+    );
+    const items: StatisticsCategoryItem[] = [];
+    for (const id of new Set([...current.keys(), ...previous.keys()])) {
+      const now = current.get(id);
+      const before = previous.get(id);
+      const amountCents = now?.amountCents ?? 0;
+      const previousAmount = before?.amountCents ?? 0;
+      if (amountCents === 0 && previousAmount === 0) continue;
+      const category = (now ?? before)!.category;
+      const direct =
+        query.categoryLevel === 'CHILD' &&
+        category?.id === query.categoryRootId;
+      const rootView = query.categoryLevel !== 'CHILD';
+      const currentPercentage = percentage(amountCents, totalCents);
+      items.push({
+        categoryId: id,
+        categoryRootId: category ? (category.parentId ?? category.id) : null,
+        parentId: category?.parentId ?? null,
+        bucketType:
+          category === null
+            ? 'UNCATEGORIZED'
+            : direct
+              ? 'ROOT_DIRECT'
+              : 'CATEGORY',
+        name:
+          category === null
+            ? '未分类'
+            : direct
+              ? `${category.name}（未细分）`
+              : category.name,
+        icon: category?.icon ?? null,
+        color: category?.color ?? null,
+        amountCents,
+        percentage: currentPercentage,
+        transactionCount: now?.transactionCount ?? 0,
+        comparison: comparisonRange
+          ? {
+              amountCents: previousAmount,
+              amountDeltaCents: amountCents - previousAmount,
+              percentagePointDelta:
+                previousTotal === 0
+                  ? null
+                  : Math.round(
+                      (currentPercentage -
+                        percentage(previousAmount, previousTotal)) *
+                        100,
+                    ) / 100,
+            }
+          : null,
+        drilldown: {
+          ...(rootView && category
+            ? { categoryRootId: category.id }
+            : { categoryId: id }),
+          from: range.startAt,
+          to: range.endAt,
+          type,
+        },
+      });
+    }
+    const field = query.sortBy === 'PERCENTAGE' ? 'percentage' : 'amountCents';
+    const direction = query.sortOrder === 'ASC' ? 1 : -1;
+    items.sort(
+      (a, b) =>
+        direction * (a[field] - b[field]) ||
+        a.name.localeCompare(b.name) ||
+        (a.categoryId ?? '').localeCompare(b.categoryId ?? ''),
+    );
+    return {
+      ledgerId,
+      type,
+      totalCents,
+      range,
+      comparisonRange: comparisonRange
+        ? {
+            fromDate: comparisonRange.fromDate,
+            toDate: comparisonRange.toDate,
+          }
+        : null,
+      items,
+    };
+  }
+
+  private validateCategoryQuery(query: StatisticsQuery): void {
+    if (
+      (query.categoryLevel === 'CHILD' && query.categoryRootId === undefined) ||
+      (query.categoryId !== undefined && query.categoryRootId !== undefined)
+    ) {
+      throw new BadRequestException({
+        code: 40023,
+        message: '分类参数冲突或缺少一级分类',
+        data: null,
+      });
+    }
+    if (
+      query.categoryId !== undefined ||
+      query.from !== undefined ||
+      query.to !== undefined ||
+      (query.type !== undefined &&
+        !['EXPENSE', 'INCOME'].includes(query.type)) ||
+      (query.categoryLevel !== undefined &&
+        !['ROOT', 'CHILD'].includes(query.categoryLevel)) ||
+      (query.sortBy !== undefined &&
+        !['AMOUNT', 'PERCENTAGE'].includes(query.sortBy)) ||
+      (query.sortOrder !== undefined &&
+        !['ASC', 'DESC'].includes(query.sortOrder)) ||
+      (query.includeComparison !== undefined &&
+        typeof query.includeComparison !== 'boolean') ||
+      (query.period === 'ALL' && query.includeComparison)
+    )
+      throw this.invalidInputException();
+  }
+
+  private categoryComparisonRange(range: StatisticsDateRange): {
+    fromDate: string;
+    toDate: string;
+    startAt: string;
+    endAt: string;
+  } {
+    const end = Temporal.PlainDate.from(range.fromDate!);
+    const start =
+      range.period === 'MONTH'
+        ? end.subtract({ months: 1 })
+        : range.period === 'YEAR'
+          ? end.subtract({ years: 1 })
+          : end.subtract({
+              days:
+                range.period === 'WEEK'
+                  ? 7
+                  : end.until(Temporal.PlainDate.from(range.toDate!), {
+                      largestUnit: 'day',
+                    }).days + 1,
+            });
+    return {
+      fromDate: start.toString(),
+      toDate: end.subtract({ days: 1 }).toString(),
+      startAt: start
+        .toZonedDateTime({ timeZone: range.timezone, plainTime: '00:00' })
+        .toInstant()
+        .toString({ fractionalSecondDigits: 3 }),
+      endAt: range.startAt!,
+    };
+  }
+
+  private categoryBuckets(
+    rows: CategoryAggregate[],
+    metadata: Map<string, CategoryMetadata>,
+    query: StatisticsQuery,
+  ): Map<string | null, CategoryBucket> {
+    const buckets = new Map<string | null, CategoryBucket>();
+    for (const row of rows) {
+      let category =
+        row.categoryId === null ? null : metadata.get(row.categoryId);
+      if (category === undefined) continue;
+      if (query.categoryLevel !== 'CHILD' && category?.parentId)
+        category = metadata.get(category.parentId);
+      if (category === undefined) continue;
+      const id = category?.id ?? null;
+      const bucket = buckets.get(id) ?? {
+        category,
+        amountCents: 0,
+        transactionCount: 0,
+      };
+      bucket.amountCents = toSafeInteger(
+        bucket.amountCents + (row._sum.amountCents ?? 0),
+      );
+      bucket.transactionCount += row._count.id;
+      buckets.set(id, bucket);
+    }
+    return buckets;
+  }
 
   async overview(
     userId: string,

@@ -29,6 +29,10 @@ export interface StatisticsQuery extends StatisticsDateRangeQuery {
   payerId?: string;
   keyword?: string;
   metric?: StatisticsTrendMetric;
+  categoryLevel?: 'ROOT' | 'CHILD';
+  sortBy?: 'AMOUNT' | 'PERCENTAGE';
+  sortOrder?: 'ASC' | 'DESC';
+  includeComparison?: boolean;
 }
 
 export interface StatisticsDateRange {
@@ -113,4 +117,38 @@ export interface StatisticsPeriods {
   range: StatisticsDateRange;
   summary: StatisticsPeriodsSummary;
   items: StatisticsPeriodsItem[];
+}
+
+export interface StatisticsCategoryItem {
+  categoryId: string | null;
+  categoryRootId: string | null;
+  parentId: string | null;
+  bucketType: 'CATEGORY' | 'ROOT_DIRECT' | 'UNCATEGORIZED';
+  name: string;
+  icon: string | null;
+  color: string | null;
+  amountCents: number;
+  percentage: number;
+  transactionCount: number;
+  comparison: {
+    amountCents: number;
+    amountDeltaCents: number;
+    percentagePointDelta: number | null;
+  } | null;
+  drilldown: {
+    categoryId?: string | null;
+    categoryRootId?: string;
+    from: string;
+    to: string;
+    type: 'EXPENSE' | 'INCOME';
+  };
+}
+
+export interface StatisticsCategories {
+  ledgerId: string;
+  type: 'EXPENSE' | 'INCOME';
+  totalCents: number;
+  range: StatisticsDateRange;
+  comparisonRange: { fromDate: string; toDate: string } | null;
+  items: StatisticsCategoryItem[];
 }
