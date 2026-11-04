@@ -86,7 +86,7 @@ describe('AuthService', () => {
     dependencies.transactionClient.ledgerMember.create.mockResolvedValue({
       id: 'member-1',
     });
-    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 4 });
+    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 65 });
     dependencies.transactionClient.refreshSession.create.mockResolvedValue({
       id: 'session-1',
     });
@@ -124,6 +124,16 @@ describe('AuthService', () => {
           expect.objectContaining({ ledgerId: 'ledger-1', type: 'INCOME', isSystem: true }),
         ]),
       }),
+    );
+    const defaultCategories = dependencies.transactionClient.category.createMany.mock.calls[0][0].data;
+    expect(defaultCategories).toHaveLength(65);
+    expect(defaultCategories).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'EXPENSE', name: '餐饮', parentId: null }),
+        expect.objectContaining({ type: 'EXPENSE', name: '早餐', parentId: expect.any(String) }),
+        expect.objectContaining({ type: 'INCOME', name: '工资收入', parentId: null }),
+        expect.objectContaining({ type: 'INCOME', name: '奖金', parentId: expect.any(String) }),
+      ]),
     );
     expect(dependencies.transactionClient.refreshSession.create).toHaveBeenCalled();
     expect(result.user).toEqual(safeUser);

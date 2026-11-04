@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoryService } from './category.service';
 
@@ -12,6 +12,7 @@ describe('CategoryService', () => {
     name: '餐饮',
     icon: null,
     color: null,
+    parentId: null,
     sortOrder: 10,
     isSystem: false,
     isActive: true,
@@ -121,6 +122,7 @@ describe('CategoryService', () => {
           ledgerId,
           type: 'EXPENSE',
           name: '餐饮',
+          parentId: null,
           sortOrder: 10,
           isSystem: false,
         },
@@ -143,6 +145,74 @@ describe('CategoryService', () => {
         name: '餐饮',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('给定同账本同类型一级分类，当 Owner 创建二级分类，则保存父级关系', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst.mockResolvedValue({
+      ...category,
+      id: 'category-parent',
+      name: '餐饮',
+      parentId: null,
+    });
+    dependencies.prisma.category.create.mockResolvedValue({
+      ...category,
+      id: 'category-child',
+      name: '早餐',
+      parentId: 'category-parent',
+    });
+
+    const result = await dependencies.service.create(userId, ledgerId, {
+      type: 'EXPENSE',
+      name: ' 早餐 ',
+      parentId: 'category-parent',
+    });
+
+    expect(dependencies.prisma.category.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: '早餐',
+          parentId: 'category-parent',
+        }),
+      }),
+    );
+    expect(result).toEqual(expect.objectContaining({ parentId: 'category-parent' }));
+  });
+
+  it('给定跨账本或二级分类作为父级，当 Owner 创建分类，则拒绝并且不写入', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst.mockResolvedValue(null);
+
+    await expect(
+      dependencies.service.create(userId, ledgerId, {
+        type: 'EXPENSE',
+        name: '早餐',
+        parentId: 'other-ledger-category',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(dependencies.prisma.category.create).not.toHaveBeenCalled();
+
+    dependencies.prisma.category.findFirst.mockResolvedValue({
+      ...category,
+      id: 'category-child-parent',
+      parentId: 'category-parent',
+    });
+    await expect(
+      dependencies.service.create(userId, ledgerId, {
+        type: 'EXPENSE',
+        name: '早餐',
+        parentId: 'category-child-parent',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.category.create).not.toHaveBeenCalled();
   });
 
   it('给定其他账本的分类，当用户编辑分类，则返回资源不存在错误', async () => {
@@ -184,5 +254,53 @@ describe('CategoryService', () => {
       }),
     );
     expect(result).toEqual(expect.objectContaining({ name: '新餐饮' }));
+  });
+
+  it('给定 Owner 把一级分类挂到二级父级，当编辑分类，则拒绝形成三级分类', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst
+      .mockResolvedValueOnce(category)
+      .mockResolvedValueOnce({ ...category, id: 'category-child-parent', parentId: 'category-parent' });
+
+    await expect(
+      dependencies.service.update(userId, ledgerId, 'category-1', {
+        parentId: 'category-child-parent',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('给定有子分类的一级分类，当 Owner 把它移动到另一个父级，则拒绝形成三级分类', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.prisma.category.count.mockResolvedValue(1);
+
+    await expect(
+      dependencies.service.update(userId, ledgerId, 'category-1', { parentId: 'category-parent' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('给定有启用子分类的一级分类，当 Owner 停用父级，则拒绝留下孤立可用子分类', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.prisma.category.count.mockResolvedValue(1);
+
+    await expect(
+      dependencies.service.update(userId, ledgerId, 'category-1', { isActive: false }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
   });
 });

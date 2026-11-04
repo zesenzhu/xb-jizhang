@@ -31,6 +31,7 @@ export class CategoryController {
     const input: CreateCategoryInput = {
       type: dto.type,
       name: dto.name,
+      parentId: dto.parentId,
       sortOrder: dto.sortOrder,
       icon: dto.icon,
       color: dto.color,
@@ -47,6 +48,7 @@ export class CategoryController {
   ) {
     const input: UpdateCategoryInput = {
       name: dto.name,
+      parentId: dto.parentId,
       sortOrder: dto.sortOrder,
       icon: dto.icon,
       color: dto.color,

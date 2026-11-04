@@ -37,7 +37,7 @@ const transactionSelect = {
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
-  category: { select: { id: true, type: true, name: true } },
+  category: { select: { id: true, type: true, name: true, parentId: true } },
   account: { select: { id: true, name: true, visibility: true } },
   payer: { select: { id: true, nickname: true } },
 } as const;

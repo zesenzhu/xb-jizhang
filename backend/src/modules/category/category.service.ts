@@ -19,6 +19,7 @@ const categorySelect = {
   ledgerId: true,
   type: true,
   name: true,
+  parentId: true,
   icon: true,
   color: true,
   sortOrder: true,
@@ -83,6 +84,7 @@ export class CategoryService {
     await this.requireOwner(userId, ledgerId);
     const name = input.name.trim();
     if (!name) throw this.invalidNameException();
+    const parentId = await this.validateParent(ledgerId, input.type, input.parentId ?? null);
 
     try {
       const category = await this.prisma.category.create({
@@ -90,6 +92,7 @@ export class CategoryService {
           ledgerId,
           type: input.type,
           name,
+          parentId,
           sortOrder: input.sortOrder ?? 0,
           isSystem: false,
           ...(input.icon === undefined ? {} : { icon: input.icon }),
@@ -117,9 +120,25 @@ export class CategoryService {
     });
     if (!category) throw this.notFoundException();
     if (input.name !== undefined && !input.name.trim()) throw this.invalidNameException();
+    const parentId =
+      input.parentId === undefined
+        ? category.parentId
+        : await this.validateParent(ledgerId, category.type, input.parentId);
+    if (parentId === category.id) throw this.invalidParentException();
+    if (parentId !== null && category.parentId === null) {
+      const childCount = await this.prisma.category.count({ where: { parentId: category.id } });
+      if (childCount > 0) throw this.invalidParentException();
+    }
+    if (input.isActive === false) {
+      const activeChildCount = await this.prisma.category.count({
+        where: { parentId: category.id, isActive: true },
+      });
+      if (activeChildCount > 0) throw this.invalidParentException('请先停用子分类');
+    }
 
     const data: Prisma.CategoryUpdateManyMutationInput = {
       ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      ...(input.parentId === undefined ? {} : { parentId }),
       ...(input.sortOrder === undefined ? {} : { sortOrder: input.sortOrder }),
       ...(input.icon === undefined ? {} : { icon: input.icon }),
       ...(input.color === undefined ? {} : { color: input.color }),
@@ -152,6 +171,22 @@ export class CategoryService {
     return member;
   }
 
+  /** 父级必须是当前账本同类型的一级分类，避免跨账本引用和三级分类。 */
+  private async validateParent(
+    ledgerId: string,
+    type: CategorySummary['type'],
+    parentId: string | null | undefined,
+  ): Promise<string | null> {
+    if (parentId === null || parentId === undefined) return null;
+    const parent = await this.prisma.category.findFirst({
+      where: { id: parentId, ledgerId, type, isActive: true },
+      select: { id: true, parentId: true },
+    });
+    if (!parent) throw this.notFoundException();
+    if (parent.parentId !== null) throw this.invalidParentException();
+    return parent.id;
+  }
+
   private async getMembership(userId: string, ledgerId: string) {
     return this.prisma.ledgerMember.findUnique({
       where: { ledgerId_userId: { ledgerId, userId } },
@@ -177,5 +212,9 @@ export class CategoryService {
 
   private duplicateException(): ConflictException {
     return new ConflictException({ code: 40921, message: '同类型分类名称已存在', data: null });
+  }
+
+  private invalidParentException(message = '分类父级必须是同类型一级分类'): BadRequestException {
+    return new BadRequestException({ code: 40021, message, data: null });
   }
 }

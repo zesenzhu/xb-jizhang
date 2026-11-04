@@ -71,7 +71,7 @@ describe('LedgerService', () => {
       role: 'OWNER',
       joinedAt: updatedAt,
     });
-    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 4 });
+    dependencies.transactionClient.category.createMany.mockResolvedValue({ count: 65 });
 
     const result = await dependencies.service.create(userId, {
       name: ' 家庭账本 ',
@@ -101,6 +101,14 @@ describe('LedgerService', () => {
           expect.objectContaining({ ledgerId: 'ledger-1', type: 'INCOME', isSystem: true }),
         ]),
       }),
+    );
+    const defaultCategories = dependencies.transactionClient.category.createMany.mock.calls[0][0].data;
+    expect(defaultCategories).toHaveLength(65);
+    expect(defaultCategories).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: '餐饮', parentId: null }),
+        expect.objectContaining({ name: '早餐', parentId: expect.any(String) }),
+      ]),
     );
     expect(result).toEqual(expect.objectContaining({ id: 'ledger-1', memberRole: 'OWNER' }));
   });

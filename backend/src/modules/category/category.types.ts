@@ -10,6 +10,7 @@ export interface CategoryQuery {
 export interface CreateCategoryInput {
   type: CategoryType;
   name: string;
+  parentId?: string | null;
   sortOrder?: number;
   icon?: string | null;
   color?: string | null;
@@ -17,6 +18,7 @@ export interface CreateCategoryInput {
 
 export interface UpdateCategoryInput {
   name?: string;
+  parentId?: string | null;
   sortOrder?: number;
   icon?: string | null;
   color?: string | null;
@@ -28,6 +30,7 @@ export interface CategorySummary {
   ledgerId: string;
   type: CategoryType;
   name: string;
+  parentId: string | null;
   icon: string | null;
   color: string | null;
   sortOrder: number;

@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsIn(['EXPENSE', 'INCOME'])
@@ -7,6 +7,10 @@ export class CreateCategoryDto {
   @IsString()
   @Length(1, 50)
   name!: string;
+
+  @IsOptional()
+  @IsUUID()
+  parentId?: string | null;
 
   @IsOptional()
   @IsInt()

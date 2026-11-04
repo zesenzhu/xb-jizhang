@@ -27,13 +27,14 @@ describe('CategoryController', () => {
     await controller.create(
       { id: 'user-1' },
       'ledger-1',
-      { type: 'EXPENSE', name: '餐饮', sortOrder: 10 },
+      { type: 'EXPENSE', name: '早餐', sortOrder: 10, parentId: 'category-parent' },
     );
 
     expect(service.create).toHaveBeenCalledWith('user-1', 'ledger-1', {
       type: 'EXPENSE',
-      name: '餐饮',
+      name: '早餐',
       sortOrder: 10,
+      parentId: 'category-parent',
       icon: undefined,
       color: undefined,
     });
@@ -47,12 +48,13 @@ describe('CategoryController', () => {
       { id: 'user-1' },
       'ledger-1',
       'category-1',
-      { name: '新餐饮', sortOrder: 20, isActive: false },
+      { name: '新餐饮', sortOrder: 20, isActive: false, parentId: null },
     );
 
     expect(service.update).toHaveBeenCalledWith('user-1', 'ledger-1', 'category-1', {
       name: '新餐饮',
       sortOrder: 20,
+      parentId: null,
       icon: undefined,
       color: undefined,
       isActive: false,
