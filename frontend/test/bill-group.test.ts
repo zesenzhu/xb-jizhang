@@ -23,7 +23,7 @@ function bill(overrides: Partial<TransactionSummary> & { id: string; occurredAt:
     deletedAt: null,
     createdAt: overrides.occurredAt,
     updatedAt: overrides.occurredAt,
-    category: { id: 'category-1', type: 'EXPENSE', name: '餐饮' },
+    category: { id: 'category-1', type: 'EXPENSE', name: '餐饮', parentId: null },
     account: null,
     payer: null,
     ...overrides,
