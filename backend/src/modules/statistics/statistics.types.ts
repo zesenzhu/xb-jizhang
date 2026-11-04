@@ -6,6 +6,8 @@ export interface StatisticsQuery {
   type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
   categoryId?: string;
   accountId?: string;
+  payerId?: string;
+  keyword?: string;
 }
 
 export interface StatisticsOverview {

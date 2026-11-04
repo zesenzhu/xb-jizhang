@@ -28,6 +28,8 @@ describe('StatisticsService', () => {
       type: undefined,
       categoryId: 'category-1',
       accountId: 'account-1',
+      payerId: 'user-2',
+      keyword: ' 早餐 ',
     });
 
     expect(dependencies.prisma.transaction.groupBy).toHaveBeenCalledWith({
@@ -38,6 +40,7 @@ describe('StatisticsService', () => {
         type: { in: ['EXPENSE', 'INCOME'] },
         categoryId: 'category-1',
         accountId: 'account-1',
+        payerId: 'user-2',
         occurredAt: {
           gte: new Date('2026-10-01T00:00:00.000Z'),
           lt: new Date('2026-11-01T00:00:00.000Z'),
@@ -47,6 +50,12 @@ describe('StatisticsService', () => {
             OR: [
               { accountId: null },
               { account: { OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }] } },
+            ],
+          },
+          {
+            OR: [
+              { title: { contains: '早餐', mode: 'insensitive' } },
+              { note: { contains: '早餐', mode: 'insensitive' } },
             ],
           },
         ],

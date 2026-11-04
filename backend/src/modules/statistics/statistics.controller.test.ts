@@ -11,6 +11,8 @@ describe('StatisticsController', () => {
       type: 'EXPENSE' as const,
       categoryId: 'category-1',
       accountId: 'account-1',
+      payerId: 'user-2',
+      keyword: '早餐',
     };
 
     await controller.overview({ id: 'user-1' }, 'ledger-1', query);

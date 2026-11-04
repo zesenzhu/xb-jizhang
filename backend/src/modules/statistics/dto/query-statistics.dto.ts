@@ -1,4 +1,4 @@
-import { IsIn, IsISO8601, IsOptional, IsUUID } from 'class-validator';
+import { IsIn, IsISO8601, IsOptional, IsString, IsUUID, Length } from 'class-validator';
 
 export class QueryStatisticsDto {
   @IsOptional()
@@ -20,4 +20,13 @@ export class QueryStatisticsDto {
   @IsOptional()
   @IsUUID()
   accountId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  payerId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  keyword?: string;
 }

@@ -19,14 +19,19 @@ export class StatisticsService {
     if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
 
     const occurredAt = this.buildDateRange(query.from, query.to);
-    const visibility: Prisma.TransactionWhereInput = {
-      AND: [
-        {
+    const keyword = query.keyword?.trim();
+    const keywordCondition: Prisma.TransactionWhereInput | undefined = keyword
+      ? {
           OR: [
-            { accountId: null },
-            { account: { OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }] } },
+            { title: { contains: keyword, mode: 'insensitive' } },
+            { note: { contains: keyword, mode: 'insensitive' } },
           ],
-        },
+        }
+      : undefined;
+    const visibilityCondition: Prisma.TransactionWhereInput = {
+      OR: [
+        { accountId: null },
+        { account: { OR: [{ visibility: 'SHARED' }, { visibility: 'PRIVATE', ownerId: userId }] } },
       ],
     };
     const where: Prisma.TransactionWhereInput = {
@@ -35,8 +40,9 @@ export class StatisticsService {
       type: query.type ?? { in: ['EXPENSE', 'INCOME'] },
       ...(query.categoryId === undefined ? {} : { categoryId: query.categoryId }),
       ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
+      ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
       ...(occurredAt === undefined ? {} : { occurredAt }),
-      ...visibility,
+      AND: [visibilityCondition, ...(keywordCondition ? [keywordCondition] : [])],
     };
 
     const grouped = await this.prisma.transaction.groupBy({
