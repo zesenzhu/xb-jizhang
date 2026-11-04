@@ -35,28 +35,53 @@ updatedAt: 2026-11-04
 
 尚未设计（后续迭代按需新增文件）：账本切换面板、筛选面板、个人中心改版。
 
-## 后端能力缺口
+## 后端能力现状
 
-对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对结论。**缺口在对应页面文档里会被引用，修复后需同步删除引用。**
+对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对结论。**后端正在按 API 文档补实现，本表需在每次后端提交后复核；缺口修复后同步删除对应页面文档里的降级说明。**
 
-### 阻断项
+### 已具备（前端可直接用）
 
-| # | 缺口 | 证据 | 阻塞页面 |
+| 能力 | 接口 | 证据 |
+| --- | --- | --- |
+| 账单创建（账户可选、幂等、事务） | `POST /ledgers/:id/transactions` | `create-transaction.dto.ts` 的 `accountId` 为 `@IsOptional` |
+| 账单编辑 + 版本冲突 | `PATCH /ledgers/:id/transactions/:tid` | `transaction.service.ts` 的 `update`，`40922` |
+| 账单软删除 + 角色边界 | `DELETE /ledgers/:id/transactions/:tid` | `OWNER` 全部、`EDITOR` 仅自己创建 |
+| 无账户账单参与列表与统计 | 列表 `where` 与统计 `where` 均含 `accountId: null` | `transaction.service.ts`、`statistics.service.ts` |
+| **收支概览聚合** | `GET /ledgers/:id/statistics/overview` | 已实现，返回 `totalIncomeCents` / `totalExpenseCents` / `netCents` / `transactionCount` |
+
+概览接口改变了前端的统计实现：不再需要前端累加分页，直接按同一组筛选条件请求聚合结果即可。`docs/api/统计接口.md` 明确「服务端聚合结果为唯一口径，前端不重复计算」。
+
+### 仍缺（阻塞对应页面）
+
+| # | 缺口 | 证据（当前 HEAD） | 阻塞页面 |
 | --- | --- | --- | --- |
-| B1 | 分类无层级字段 | `schema.prisma` Category 无 `parentId` | 分类选择 |
-| B2 | 默认分类仅 4 条 | `category.constants.ts` 实测 4 条，需求 9.2 要 16 个一级 | 分类选择 |
-| B3 | 账本无时区 | Ledger 模型无 `timezone` | 账单页（日期分组） |
-| B4 | 无撤销删除接口 | 有 `DELETE`，无 `RESTORE` 路由 | 账单详情 |
+| B1 | 分类无层级字段 | `schema.prisma` Category 无 `parentId`；`账户与分类接口.md` 未提层级 | 分类选择 |
+| B2 | 默认分类仅 4 条 | `category.constants.ts` 实测 4 条；需求 9.2 要 16 个一级 + 二级 | 分类选择 |
+| B3 | 账本无时区 | Ledger 模型无 `timezone`；`账本与成员接口.md` 摘要字段无该字段 | 账单页（日期分组） |
+| B4 | 无撤销删除接口 | 有 `DELETE`，controller 无 `restore` 路由 | 账单详情 |
 | B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById` | 账单页（筛选） |
-| B6 | 关键词不匹配分类名 | `keywordCondition` 只覆盖 `title`/`note` | 账单页（搜索） |
+| B6 | 关键词不匹配分类名 | `keywordCondition` 只覆盖 `title` / `note` | 账单页（搜索） |
 
-### 已核实的实现缺陷
+### 已知偏差（可降级）
 
-| # | 问题 | 证据 | 影响 |
+| # | 问题 | 证据 | 前端处理 |
 | --- | --- | --- | --- |
-| D1 | 列表过滤掉无账户账单 | `transaction.service.ts` 的 `where` 用 `account: { OR: [...] }`，Prisma 对可选关系过滤等价 `is`，排除 `accountId=null` | 需求 AC7：不填账户的账单在列表不可见 |
-| D2 | `note` 上限 2000 | `create-transaction.dto.ts` / `update-transaction.dto.ts` 均为 `@Length(1,2000)` | 需求要求 200，前端自行限制 |
-| D3 | 详情无分类图标、无成员昵称 | `transactionSelect` 只取 `category{id,type,name}`，`createdById` 是裸 ID | 前端用首字 + 成员表映射降级 |
+| D2 | `note` 上限 2000 | `create` / `update` DTO 均为 `@Length(1,2000)` | 需求要求 200，前端自行限制 |
+| D3 | 详情无分类图标、无成员昵称 | `transactionSelect` 只取 `category{id,type,name}`，`createdById` 为裸 ID | 名称首字 + 成员表映射 |
+| D4 | 统计筛选少于列表筛选 | 统计支持 `from/to/type/categoryId/accountId`；列表另有 `keyword`、`payerId` | 见下方「概览与列表筛选不一致」 |
+
+### 概览与列表筛选不一致（需后端补齐）
+
+需求 6.1 要求「概览金额、每日合计和账单列表必须使用同一组已生效筛选条件」，但两个接口的参数集不同：
+
+| 参数 | 列表 | 统计 |
+| --- | --- | --- |
+| `from` / `to` / `type` / `categoryId` / `accountId` | ✅ | ✅ |
+| `keyword` | ✅ | ❌ |
+| `payerId` | ✅ | ❌ |
+| `createdById` | ❌ | ❌ |
+
+后果：用户输入关键词后，列表缩小但概览不变，违反需求 6.1。一期前端处理：**有关键词或付款人筛选时，概览区显示「概览未跟随该条件」提示**，不静默展示不一致的数字。后端补齐参数后移除该提示。
 
 ## 全局样式约束
 
@@ -136,9 +161,9 @@ toast.action('已删除', { label: '撤销', onClick })
 
 | 迭代 | 页面 | 后端前置 |
 | --- | --- | --- |
-| 一 | 账单页（只读） | 无；概览用前端聚合兜底 |
+| 一 | 账单页（只读） | 无；概览已可用 `statistics/overview` |
 | 二 | 记账抽屉 + 分类选择 | B1、B2 |
 | 三 | 账单详情 | B5、B6；B4 视产品结论 |
-| 四 | 时区统一、概览接口、暗色补齐、死代码清理 | B3、统计接口 |
+| 四 | 时区统一、暗色补齐、死代码清理 | B3 |
 
 每迭代结束执行 `pnpm typecheck`、`pnpm test`、`pnpm lint`，并在浏览器验收该页面文档的「验收清单」。
