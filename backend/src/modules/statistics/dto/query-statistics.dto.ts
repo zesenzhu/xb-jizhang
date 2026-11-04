@@ -66,6 +66,16 @@ function isValidPeriodContract(
   return true;
 }
 
+function isCategoryFilterExclusive(
+  value: unknown,
+  args: ValidationArguments,
+): boolean {
+  return (
+    !hasValue(value) ||
+    !hasValue((args.object as { categoryId?: string }).categoryId)
+  );
+}
+
 export class QueryStatisticsDto {
   @ValidateBy({
     name: 'statisticsPeriodContract',
@@ -107,6 +117,14 @@ export class QueryStatisticsDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  @ValidateBy({
+    name: 'categoryFilterExclusive',
+    validator: { validate: isCategoryFilterExclusive },
+  })
+  categoryRootId?: string;
 
   @IsOptional()
   @IsUUID()

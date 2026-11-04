@@ -17,6 +17,17 @@ export interface StatisticsDateRangeQuery {
   granularity?: StatisticsGranularity;
 }
 
+export interface StatisticsQuery extends StatisticsDateRangeQuery {
+  from?: string;
+  to?: string;
+  type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
+  categoryId?: string;
+  categoryRootId?: string;
+  accountId?: string;
+  payerId?: string;
+  keyword?: string;
+}
+
 export interface StatisticsDateRange {
   period: StatisticsPeriod;
   timezone: string;
@@ -27,17 +38,7 @@ export interface StatisticsDateRange {
   granularity: ResolvedStatisticsGranularity;
 }
 
-export interface StatisticsQuery extends StatisticsDateRangeQuery {
-  from?: string;
-  to?: string;
-  type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
-  categoryId?: string;
-  accountId?: string;
-  payerId?: string;
-  keyword?: string;
-}
-
-export interface StatisticsOverview {
+export interface LegacyStatisticsOverview {
   from: string | null;
   to: string | null;
   totalIncomeCents: number;
@@ -45,3 +46,17 @@ export interface StatisticsOverview {
   netCents: number;
   transactionCount: number;
 }
+
+export interface PeriodStatisticsOverview {
+  ledgerId: string;
+  range: StatisticsDateRange;
+  totalIncomeCents: number;
+  totalExpenseCents: number;
+  netCents: number;
+  averageDailyExpenseCents: number;
+  effectiveDayCount: number;
+  transactionCount: number;
+}
+
+export type StatisticsOverview =
+  LegacyStatisticsOverview | PeriodStatisticsOverview;

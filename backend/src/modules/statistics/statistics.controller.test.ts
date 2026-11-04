@@ -68,6 +68,17 @@ describe('StatisticsController', () => {
     );
   });
 
+  it('给定同时填写 categoryId 和 categoryRootId，当校验 DTO，则拒绝互斥分类', () => {
+    const dto = plainToInstance(QueryStatisticsDto, {
+      categoryId: 'c870a1fa-2600-4c29-b482-7c8132123456',
+      categoryRootId: 'c870a1fa-2600-4c29-b482-7c8132123457',
+    });
+
+    expect(validateSync(dto).map(({ property }) => property)).toContain(
+      'categoryRootId',
+    );
+  });
+
   it('给定统计概览请求，当 Controller 接收筛选条件，则传递认证用户、账本和查询参数', async () => {
     const service = {
       overview: jest.fn().mockResolvedValue({ totalIncomeCents: 10000 }),
