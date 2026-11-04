@@ -183,9 +183,11 @@ describe('statistics query builder', () => {
       'MONTH',
     );
 
-    expect(query.sql).toContain('DATE_TRUNC(?,');
-    expect(query.sql).toContain("AT TIME ZONE 'UTC' AT TIME ZONE ?");
-    expect(query.sql).toContain('GROUP BY DATE_TRUNC(?,');
+    expect(query.sql).toContain('WITH bucketed AS');
+    expect(query.sql.match(/DATE_TRUNC\(\?/g)).toHaveLength(1);
+    expect(query.sql.match(/AT TIME ZONE 'UTC' AT TIME ZONE \?/g)).toHaveLength(1);
+    expect(query.sql).toContain('GROUP BY "bucket"');
+    expect(query.sql).not.toContain('GROUP BY DATE_TRUNC');
     expect(query.sql).toContain('t."deleted_at" IS NULL');
     expect(query.sql).toContain('a."visibility" = \'PRIVATE\'');
     expect(query.sql).toContain('l."status" = \'ACTIVE\'');

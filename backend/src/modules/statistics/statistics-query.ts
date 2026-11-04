@@ -229,15 +229,24 @@ export function buildStatisticsPeriodAggregateQuery(
   )`;
   const bucket = Prisma.sql`DATE_TRUNC(${granularity.toLowerCase()}, ${localOccurredAt})`;
 
+  // PostgreSQL 要求分组表达式完全匹配；先在 CTE 中计算一次参数化分桶值。
   return Prisma.sql`
+    WITH bucketed AS (
+      SELECT
+        ${bucket} AS "bucket",
+        t."id" AS "transactionId",
+        t."type" AS "transactionType",
+        t."amount_cents" AS "amountCents"
+      ${statisticsFromJoins()}
+      WHERE ${Prisma.join(conditions, ' AND ')}
+    )
     SELECT
-      TO_CHAR(${bucket}, 'YYYY-MM-DD') AS "periodStart",
-      COALESCE(SUM(t."amount_cents") FILTER (WHERE t."type" = 'EXPENSE'), 0)::text AS "expenseCents",
-      COALESCE(SUM(t."amount_cents") FILTER (WHERE t."type" = 'INCOME'), 0)::text AS "incomeCents",
-      COUNT(t."id")::int AS "transactionCount"
-    ${statisticsFromJoins()}
-    WHERE ${Prisma.join(conditions, ' AND ')}
-    GROUP BY ${bucket}
-    ORDER BY ${bucket}
+      TO_CHAR("bucket", 'YYYY-MM-DD') AS "periodStart",
+      COALESCE(SUM("amountCents") FILTER (WHERE "transactionType" = 'EXPENSE'), 0)::text AS "expenseCents",
+      COALESCE(SUM("amountCents") FILTER (WHERE "transactionType" = 'INCOME'), 0)::text AS "incomeCents",
+      COUNT("transactionId")::int AS "transactionCount"
+    FROM bucketed
+    GROUP BY "bucket"
+    ORDER BY "bucket"
   `;
 }
