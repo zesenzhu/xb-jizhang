@@ -3,6 +3,8 @@ import {
   queryKeys,
   queryStaleTime,
 } from '../src/lib/query/query-config';
+import { ApiRequestError } from '../src/lib/api/errors';
+import { shouldRetryQuery } from '../src/components/providers/QueryProvider';
 
 assert.deepEqual(queryKeys.ledgers.list({ page: 1, pageSize: 20 }), [
   'ledgers',
@@ -45,5 +47,14 @@ assert.deepEqual(
   queryKeys.statistics.overview('ledger-1', { to: 'b', from: 'a', type: undefined }),
   queryKeys.statistics.overview('ledger-1', { from: 'a', to: 'b' }),
 );
+
+assert.equal(shouldRetryQuery(0, new ApiRequestError({
+  success: false,
+  code: 40101,
+  message: '登录状态已失效',
+  data: null,
+}, 401)), false);
+assert.equal(shouldRetryQuery(0, new Error('网络暂时不可用')), true);
+assert.equal(shouldRetryQuery(1, new Error('网络暂时不可用')), false);
 
 console.log('query config contract passed');

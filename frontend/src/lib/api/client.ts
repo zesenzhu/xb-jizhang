@@ -42,9 +42,22 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     },
   });
   const refreshQueue = createRefreshQueue();
+  let authFailureNotified = false;
+
+  const notifyAuthFailure = (): void => {
+    if (authFailureNotified) return;
+    authFailureNotified = true;
+    options.onRefreshFailure();
+  };
 
   client.interceptors.response.use(
-    (response: AxiosResponse) => response,
+    (response: AxiosResponse) => {
+      // 登录成功后允许下一次会话再次执行失效处理。
+      if (shouldSkipAuthRefresh(response.config.url, options.skipRefreshPaths ?? [])) {
+        authFailureNotified = false;
+      }
+      return response;
+    },
     async (error: unknown) => {
       const responseStatus = axios.isAxiosError(error) ? error.response?.status : undefined;
       const requestConfig = axios.isAxiosError(error)
@@ -57,10 +70,19 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
 
       if (
         responseStatus !== 401 ||
-        requestConfig === undefined ||
-        requestConfig._authRetry === true ||
         isAuthRequest
       ) {
+        return Promise.reject(toApiError(error));
+      }
+
+      if (requestConfig === undefined) {
+        notifyAuthFailure();
+        return Promise.reject(toApiError(error));
+      }
+
+      // 刷新成功后重放仍返回 401，说明当前会话已经不可恢复，必须全局退出。
+      if (requestConfig._authRetry === true) {
+        notifyAuthFailure();
         return Promise.reject(toApiError(error));
       }
 
@@ -71,7 +93,7 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
         });
         return client.request(requestConfig as AxiosRequestConfig);
       } catch (refreshError) {
-        options.onRefreshFailure();
+        notifyAuthFailure();
         return Promise.reject(toApiError(refreshError));
       }
     },
