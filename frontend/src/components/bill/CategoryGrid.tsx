@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CategoryNode } from '@/lib/bill/category-tree';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 
 export interface CategoryGridProps {
   /** 已按类型过滤并构造成两级树的分类 */
@@ -14,6 +15,9 @@ export interface CategoryGridProps {
   isLoading?: boolean;
   errorMessage?: string | null;
   onRetry?: () => void;
+  /** 有分类管理权限（OWNER）时才渲染「＋」 */
+  canManage?: boolean;
+  onCreate?: () => void;
 }
 
 const SKELETON_COUNT = 15;
@@ -21,8 +25,9 @@ const SKELETON_COUNT = 15;
 /**
  * 记账面板正中的分类九宫格。
  *
- * 分类是记账唯一必填项，所以占据可滚动区域的主体：顶部类型切换与底部键盘固定，
- * 只有这一块滚动。有子分类的一级分类点开后在下方展开子类，不弹第二层面板。
+ * 有子分类的一级分类在图标右下角显示角标，点击打开**独立的二级抽屉**，
+ * 而不是在九宫格下方就地展开 —— 就地展开会把下面的字段区推走，
+ * 视觉上像一张被截断的长列表，且和底部金额卡挤在一起。
  */
 export function CategoryGrid({
   nodes,
@@ -31,6 +36,8 @@ export function CategoryGrid({
   isLoading = false,
   errorMessage = null,
   onRetry,
+  canManage = false,
+  onCreate,
 }: CategoryGridProps): React.JSX.Element {
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const expanded = expandedId ? nodes.find((node) => node.id === expandedId) : undefined;
@@ -66,11 +73,25 @@ export function CategoryGrid({
   }
 
   if (nodes.length === 0) {
-    return <p className="px-4 py-8 text-center text-sm text-text-muted">当前账本还没有可用的分类。</p>;
+    return (
+      <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+        <p className="text-sm text-text-muted">当前账本还没有可用的分类。</p>
+        {canManage && onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white active:scale-95"
+          >
+            <Plus size={14} strokeWidth={2.8} />
+            新增分类
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="pb-2">
+    <>
       <div className="grid grid-cols-5 gap-y-3.5 px-4 pb-3 pt-1">
         {nodes.map((node) => {
           const selected = node.id === selectedId;
@@ -81,16 +102,20 @@ export function CategoryGrid({
               type="button"
               onClick={() => {
                 if (hasChildren) {
-                  setExpandedId((value) => (value === node.id ? null : node.id));
+                  setExpandedId(node.id);
                   return;
                 }
                 onSelect(node.id);
               }}
               aria-pressed={selected}
-              aria-expanded={hasChildren ? expandedId === node.id : undefined}
               className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
             >
-              <CategoryBubble name={node.name} color={node.color} selected={selected} hasChildren={hasChildren} />
+              <CategoryBubble
+                name={node.name}
+                color={node.color}
+                selected={selected}
+                hasChildren={hasChildren}
+              />
               <span
                 className={cn(
                   'max-w-full truncate text-[11px] leading-none',
@@ -102,35 +127,124 @@ export function CategoryGrid({
             </button>
           );
         })}
+
+        {canManage && onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            aria-label="新增分类"
+            className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
+          >
+            <span className="flex size-11 items-center justify-center rounded-full border border-dashed border-app-border text-text-tertiary">
+              <Plus size={18} />
+            </span>
+            <span className="max-w-full truncate text-[11px] leading-none text-text-tertiary">新增</span>
+          </button>
+        )}
       </div>
 
-      {expanded && (
-        <div className="mx-4 mb-2 overflow-hidden rounded-2xl border border-app-border">
-          <p className="flex items-center gap-1.5 bg-app-card-subtle px-3 py-2 text-[11px] font-semibold text-text-muted">
-            {expanded.name}
-            <ChevronRight size={12} />
-            选择子分类，或直接记到「{expanded.name}」
-          </p>
-          <div className="divide-y divide-app-divider">
-            <CategoryRow
-              label={expanded.name}
-              hint="记到一级"
-              color={expanded.color}
-              selected={expanded.id === selectedId}
-              onClick={() => onSelect(expanded.id)}
+      <BottomSheet
+        open={expanded !== undefined}
+        onOpenChange={(next) => {
+          if (!next) setExpandedId(null);
+        }}
+        layer="nested"
+        title={expanded?.name ?? ''}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
+          {expanded && (
+            <CategoryChildList
+              node={expanded}
+              selectedId={selectedId}
+              onPick={(categoryId) => {
+                onSelect(categoryId);
+                setExpandedId(null);
+              }}
             />
-            {expanded.children.map((child) => (
-              <CategoryRow
-                key={child.id}
-                label={child.name}
-                color={child.color}
-                selected={child.id === selectedId}
-                onClick={() => onSelect(child.id)}
-              />
-            ))}
-          </div>
+          )}
         </div>
-      )}
+      </BottomSheet>
+    </>
+  );
+}
+
+/**
+ * 二级分类列表。
+ *
+ * 一级自身始终在首行且可选（需求 7.5：直接选一级不自动猜测二级），
+ * 子分类按后端 `sortOrder` 顺序排列。
+ */
+function CategoryChildList({
+  node,
+  selectedId,
+  onPick,
+}: {
+  node: CategoryNode;
+  selectedId: string | null;
+  onPick: (categoryId: string) => void;
+}): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => onPick(node.id)}
+        aria-pressed={node.id === selectedId}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
+          node.id === selectedId
+            ? 'border-primary/40 bg-primary/10'
+            : 'border-app-border bg-app-card active:bg-app-card-subtle',
+        )}
+      >
+        <CategoryBubble name={node.name} color={node.color} selected={false} hasChildren={false} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-text-main">{node.name}</span>
+          <span className="mt-0.5 block text-[11px] text-text-tertiary">只记到一级分类</span>
+        </span>
+        {node.id === selectedId && (
+          <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>
+        )}
+      </button>
+
+      <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border">
+        {node.children.map((child) => {
+          const selected = child.id === selectedId;
+          return (
+            <button
+              key={child.id}
+              type="button"
+              onClick={() => onPick(child.id)}
+              aria-pressed={selected}
+              className={cn(
+                'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                selected ? 'bg-primary/8' : 'bg-app-card active:bg-app-card-subtle',
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                style={{ backgroundColor: child.color ?? paletteFor(child.name) }}
+              >
+                {child.name.trim().slice(0, 1) || '账'}
+              </span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate text-xs',
+                  selected ? 'font-semibold text-primary' : 'text-text-main',
+                )}
+              >
+                {child.name}
+              </span>
+              {selected && <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="flex items-center justify-center gap-1 pt-1 text-[11px] text-text-tertiary">
+        <ChevronLeft size={12} />
+        返回上一级可换其他分类
+      </p>
     </div>
   );
 }
@@ -165,45 +279,6 @@ function CategoryBubble({
         />
       )}
     </span>
-  );
-}
-
-function CategoryRow({
-  label,
-  hint,
-  color,
-  selected,
-  onClick,
-}: {
-  label: string;
-  hint?: string;
-  color: string | null;
-  selected: boolean;
-  onClick: () => void;
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
-        selected ? 'bg-primary/8' : 'bg-app-card active:bg-app-card-subtle',
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className="flex size-7 items-center justify-center rounded-full text-xs font-semibold text-white"
-        style={{ backgroundColor: color ?? paletteFor(label) }}
-      >
-        {label.trim().slice(0, 1) || '账'}
-      </span>
-      <span className={cn('flex-1 text-xs', selected ? 'font-semibold text-primary' : 'text-text-main')}>
-        {label}
-      </span>
-      {hint && <span className="text-[10px] text-text-tertiary">{hint}</span>}
-      {selected && <span className="text-[11px] font-semibold text-primary">已选</span>}
-    </button>
   );
 }
 

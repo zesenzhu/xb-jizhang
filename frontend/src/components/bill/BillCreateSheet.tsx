@@ -9,9 +9,8 @@ import { getCategories } from '@/lib/api/category-api';
 import { getAccounts } from '@/lib/api/account-api';
 import { ApiRequestError } from '@/lib/api/errors';
 import { queryKeys, queryStaleTime } from '@/lib/query/query-config';
-import { amountTextFromCents, parseAmountText } from '@/lib/bill/amount';
-import { buildCategoryTree, categoryPathText } from '@/lib/bill/category-tree';
-import { formatBillTime } from '@/lib/bill/bill-group';
+import { parseAmountText } from '@/lib/bill/amount';
+import { buildCategoryTree } from '@/lib/bill/category-tree';
 import {
   NOTE_MAX_LENGTH,
   billFormReducer,
@@ -19,11 +18,8 @@ import {
 } from '@/lib/bill/bill-form';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { useOfflineStore } from '@/store/offlineStore';
-import { AmountKeypad } from '@/components/mobile/AmountKeypad';
 import { AccountPickerSheet } from './AccountPickerSheet';
-import { CategoryGrid } from './CategoryGrid';
-import { SheetMetaFields } from './SheetMetaFields';
-import { SheetQuickChips } from './SheetQuickChips';
+import { BillFormBody } from './BillFormBody';
 import { SheetTypeSegment } from './SheetTypeSegment';
 
 export interface BillCreateSheetProps {
@@ -31,6 +27,8 @@ export interface BillCreateSheetProps {
   onOpenChange: (open: boolean) => void;
   ledgerId: string;
   ledgerName: string | null;
+  /** 当前成员角色，决定分类管理入口是否可见 */
+  memberRole?: 'OWNER' | 'EDITOR' | 'VIEWER';
   /** 创建成功后回调，用于滚动到列表顶部 */
   onCreated?: () => void;
 }
@@ -40,6 +38,7 @@ export function BillCreateSheet({
   onOpenChange,
   ledgerId,
   ledgerName,
+  memberRole,
   onCreated,
 }: BillCreateSheetProps): React.JSX.Element {
   const queryClient = useQueryClient();
@@ -51,6 +50,7 @@ export function BillCreateSheet({
   const [accountPickerOpen, setAccountPickerOpen] = React.useState(false);
   const [confirmDiscard, setConfirmDiscard] = React.useState(false);
   const [wasOpen, setWasOpen] = React.useState(open);
+  const [showInactive, setShowInactive] = React.useState(false);
   const [categoryError, setCategoryError] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const isOnline = useOfflineStore((store) => store.isOnline);
@@ -72,6 +72,14 @@ export function BillCreateSheet({
     enabled: open && Boolean(ledgerId),
   });
 
+  const canManageCategories = memberRole === 'OWNER';
+  const allCategoriesQuery = useQuery({
+    queryKey: [...queryKeys.categories(ledgerId), 'withInactive'] as const,
+    queryFn: () => getCategories(ledgerId, { pageSize: 100, includeInactive: true }),
+    staleTime: queryStaleTime.categories,
+    enabled: open && canManageCategories && showInactive,
+  });
+
   const accountsQuery = useQuery({
     queryKey: queryKeys.accounts(ledgerId),
     queryFn: () => getAccounts(ledgerId, { pageSize: 100 }),
@@ -88,17 +96,6 @@ export function BillCreateSheet({
   const accounts = accountsQuery.data?.items ?? [];
 
   const amount = parseAmountText(state.amountText);
-  /**
-   * 输入小数点的瞬间 `12.` 还不是合法金额，但用户必须看到自己刚敲下的内容；
-   * 直接回退到 0.00 会像是把输入清空了。
-   */
-  const amountDisplay = state.amountText.endsWith('.')
-    ? `${state.amountText}00`
-    : amount.cents === null
-      ? '0.00'
-      : amountTextFromCents(amount.cents);
-  const categoryPath = categoryPathText(categories ?? [], state.categoryId);
-  const accountName = accounts.find((account) => account.id === state.accountId)?.name ?? null;
   // 未来时间由事件处理器判定后写入 state.timeError：渲染期不读取当前时钟。
   const isFutureTime = state.timeError !== null;
   const canSubmit =
@@ -173,16 +170,6 @@ export function BillCreateSheet({
     return true;
   };
 
-  const handleTimeChange = (value: string): void => {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return;
-    dispatch({
-      kind: 'setOccurredAt',
-      occurredAt: parsed.toISOString(),
-      timeError: parsed.getTime() > Date.now() ? '不能记未来的账' : null,
-    });
-  };
-
   return (
     <>
       <BottomSheet
@@ -235,92 +222,47 @@ export function BillCreateSheet({
           )}
         </div>
 
-        {/* 中部滚动区：分类紧贴顶栏，不额外留白。 */}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div
-            className={cn(
-              'flex items-center justify-between px-4 pb-1 pt-2.5',
-              categoryError && 'bg-rose-50',
-            )}
-          >
-            <span
-              className={cn(
-                'text-[11px] font-semibold',
-                categoryError ? 'text-rose-600' : 'text-text-muted',
-              )}
-            >
-              {categoryError ? '请选择分类' : state.type === 'EXPENSE' ? '选择支出分类' : '选择收入分类'}
-            </span>
-            {categoryPath && (
-              <span className="truncate pl-2 text-[11px] text-primary">已选：{categoryPath}</span>
-            )}
-          </div>
-
-          <CategoryGrid
-            nodes={categoryNodes}
-            selectedId={state.categoryId}
-            onSelect={(categoryId) => {
-              setCategoryError(false);
-              dispatch({ kind: 'setCategory', categoryId });
-            }}
-            isLoading={categoriesQuery.isPending && !categoriesQuery.data}
-            errorMessage={
-              categoriesQuery.isError && !categoriesQuery.data ? '分类加载失败' : null
-            }
-            onRetry={() => void categoriesQuery.refetch()}
-          />
-        </div>
-
-        {/*
-          底部固定区：快捷条 + 金额卡 + 键盘。
-          快捷条与金额卡属于同一个视觉块，键盘永远贴底，中间分类区独立滚动。
-        */}
-        <div className="shrink-0 border-t border-app-divider bg-app-card">
-          <div className="mx-3 mt-2 rounded-2xl bg-app-card-subtle/70 px-3 pb-1.5 pt-2">
-            <SheetQuickChips
-              accountName={accountName}
-              onOpenAccountPicker={() => setAccountPickerOpen(true)}
-            />
-            <div className="flex items-baseline justify-end gap-2">
-              {amount.cents === null && !state.amountText.endsWith('.') && (
-                <span className="text-[11px] text-text-tertiary">请输入金额</span>
-              )}
-              {!isOnline && <span className="text-[11px] text-rose-500">当前离线，无法记账</span>}
-              <span className="font-mono text-[26px] font-bold leading-tight text-text-main">
-                ¥{amountDisplay}
-              </span>
-            </div>
-
-            <div className="mt-1 border-t border-app-divider pt-1.5">
-              <SheetMetaFields
-                occurredAtInput={toLocalInputValue(state.occurredAt)}
-                occurredAtLabel={formatBillTime(state.occurredAt)}
-                title={state.title}
-                note={state.note}
-                noteMaxLength={NOTE_MAX_LENGTH}
-                onOccurredAtChange={handleTimeChange}
-                onTitleChange={(title) => dispatch({ kind: 'setTitle', title })}
-                onNoteChange={(note) => dispatch({ kind: 'setNote', note })}
-                timeError={state.timeError}
-              />
-            </div>
-          </div>
-
-          <div className="px-3 pb-[calc(0.4rem+env(safe-area-inset-bottom))] pt-1.5">
-            <AmountKeypad
-              value={state.amountText}
-              onChange={(amountText) => dispatch({ kind: 'setAmount', amountText })}
-              onSubmit={() => void submit(false)}
-              onSecondarySubmit={() => void submit(true)}
-              submitText="完成"
-              secondarySubmitText="保存再记"
-              isSubmitting={state.submitting}
-              submitDisabled={submitBlocked}
-              insetSafeArea={false}
-              compact
-            />
-          </div>
-        </div>
+        <BillFormBody
+          state={state}
+          dispatch={dispatch}
+          categoryNodes={categoryNodes}
+          categories={categories ?? []}
+          categoriesLoading={categoriesQuery.isPending && !categoriesQuery.data}
+          categoriesError={categoriesQuery.isError && !categoriesQuery.data ? '分类加载失败' : null}
+          onRetryCategories={() => void categoriesQuery.refetch()}
+          categoryError={categoryError}
+          onSelectCategory={(categoryId) => {
+            setCategoryError(false);
+            dispatch({ kind: 'setCategory', categoryId });
+          }}
+          accounts={accounts}
+          onOpenAccountPicker={() => setAccountPickerOpen(true)}
+          isOnline={isOnline}
+          scrollRef={scrollRef}
+          primaryText="完成"
+          secondaryText="保存再记"
+          onSubmit={() => void submit(false)}
+          onSecondarySubmit={() => void submit(true)}
+          submitDisabled={submitBlocked}
+          categoryManage={
+            canManageCategories
+              ? {
+                  ledgerId,
+                  type: state.type,
+                  canManage: canManageCategories,
+                  // 未拉含停用列表前先用启用列表兜底，避免管理面板空白。
+                  allCategories: (showInactive ? allCategoriesQuery.data?.items : categories) ?? [],
+                  isLoadingAll: showInactive && allCategoriesQuery.isPending,
+                  showInactive,
+                  onToggleInactive: () => setShowInactive((value) => !value),
+                  onChanged: () => {
+                    void categoriesQuery.refetch();
+                    void allCategoriesQuery.refetch();
+                  },
+                }
+              : undefined
+          }
+        />
       </BottomSheet>
 
       <AccountPickerSheet
@@ -357,12 +299,4 @@ export function BillCreateSheet({
       </BottomSheet>
     </>
   );
-}
-
-/** 把 ISO 字符串转换为 datetime-local 需要的 `YYYY-MM-DDTHH:mm`（设备本地时区）。 */
-function toLocalInputValue(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const pad = (value: number): string => value.toString().padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

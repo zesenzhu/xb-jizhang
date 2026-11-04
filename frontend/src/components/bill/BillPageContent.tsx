@@ -273,6 +273,7 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
           onOpenChange={setCreateOpen}
           ledgerId={currentLedgerId}
           ledgerName={ledgerQuery.data?.name ?? null}
+          memberRole={ledgerQuery.data?.memberRole}
           onCreated={() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
