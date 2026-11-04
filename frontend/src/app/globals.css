@@ -125,6 +125,44 @@
   --theme-primary-subtle: rgba(245, 158, 11, 0.12);
 }
 
+/* 底部面板升起：位移而非缩放，避免文字在动画中被拉伸。 */
+@keyframes sheet-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* 收起：向下滑出，保持最终位置直到卸载（forwards）。 */
+@keyframes sheet-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
