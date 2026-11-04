@@ -29,8 +29,8 @@ updatedAt: 2026-11-04
 | 页面 | 路由 | 文档 | 状态 |
 | --- | --- | --- | --- |
 | 账单页 | `/user` | [账单页.md](./账单页.md) | 迭代一已交付 |
-| 记账抽屉 | `/user` 浮层 | [记账抽屉.md](./记账抽屉.md) | draft |
-| 分类选择 | 记账抽屉二级浮层 | [分类选择.md](./分类选择.md) | draft |
+| 记账抽屉 | `/user` 浮层 | [记账抽屉.md](./记账抽屉.md) | 迭代二已交付 |
+| 分类选择 | 记账抽屉中部内联 | [分类选择.md](./分类选择.md) | 已并入记账抽屉 |
 | 账单详情 | `/user` 浮层 | [账单详情.md](./账单详情.md) | draft |
 
 尚未设计（后续迭代按需新增文件）：账本切换面板、筛选面板、个人中心改版。
@@ -55,8 +55,8 @@ updatedAt: 2026-11-04
 
 | # | 缺口 | 证据（当前 HEAD） | 阻塞页面 |
 | --- | --- | --- | --- |
-| B1 | 分类无层级字段 | `schema.prisma` Category 无 `parentId`；`账户与分类接口.md` 未提层级 | 分类选择 |
-| B2 | 默认分类仅 4 条 | `category.constants.ts` 实测 4 条；需求 9.2 要 16 个一级 + 二级 | 分类选择 |
+| B1 | 分类无层级字段 | 已修复：`Category.parentId` 支持最多两级 | 已解除 |
+| B2 | 默认分类目录不足 | 已修复：新建账本初始化 16 个一级 + 49 个二级 | 已解除 |
 | B3 | 账本无时区 | Ledger 模型无 `timezone`；`账本与成员接口.md` 摘要字段无该字段 | 账单页（日期分组） |
 | B4 | 无撤销删除接口 | 有 `DELETE`，controller 无 `restore` 路由 | 账单详情 |
 | B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById` | 账单页（筛选） |
@@ -103,7 +103,7 @@ updatedAt: 2026-11-04
 | `animate-in` / `fade-in` / `zoom-in-95` | `dialog.tsx`、`SyncStatusBar`、`AuthCard` | 未安装 `tailwindcss-animate`，**静默无效** |
 | `AmountDisplay` 颜色 | `common/AmountDisplay.tsx` | 硬编码 `text-emerald-400`/`text-rose-400`，未用 token |
 | `.pb-safe` fallback | `globals.css` | 固定 20px，桌面端凭空多间距；改用显式 `env()` |
-| `AmountKeypad` 内嵌 `pb-safe` | `mobile/AmountKeypad.tsx` | 放进抽屉会与抽屉 safe-area 叠加 |
+| `AmountKeypad` 内嵌 `pb-safe` | `mobile/AmountKeypad.tsx` | 已通过 `insetSafeArea={false}` 在抽屉内关闭 |
 
 ### 层级
 
@@ -113,7 +113,7 @@ updatedAt: 2026-11-04
 | FAB | 30 |
 | 底栏 `MobileBottomNav` | 40 |
 | 抽屉 / 详情面板 | 50 |
-| 分类选择（二级浮层） | 60 |
+| 分类选择（已内联，不再占层） | — |
 | Toast | 70 |
 
 ### 安全区
@@ -130,6 +130,7 @@ BottomSheetProps {
   onOpenChange: (open: boolean) => void
   title?: string
   layer?: 'base' | 'nested'   // nested 用于二级浮层
+  variant?: 'sheet' | 'full'  // full 为全屏三段式（顶部固定/中部滚动/底部固定）
   onBeforeClose?: () => boolean  // 返回 false 阻止关闭（未保存确认）
   children: React.ReactNode
 }
@@ -162,7 +163,7 @@ toast.action('已删除', { label: '撤销', onClick })
 | 迭代 | 页面 | 后端前置 |
 | --- | --- | --- |
 | 一 | 账单页（只读）✅ 已交付 | 无；概览已可用 `statistics/overview` |
-| 二 | 记账抽屉 + 分类选择 | B1、B2 |
+| 二 | 记账抽屉 + 分类选择 ✅ 已交付 | 无；分类接口已支持两级和内置默认目录 |
 | 三 | 账单详情 | B5、B6；B4 视产品结论 |
 | 四 | 时区统一、暗色补齐、死代码清理 | B3 |
 
