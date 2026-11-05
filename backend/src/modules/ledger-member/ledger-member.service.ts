@@ -14,6 +14,7 @@ const memberSelect = {
 } as const;
 
 type MemberRecord = Prisma.LedgerMemberGetPayload<{ select: typeof memberSelect }>;
+type PrismaClientLike = PrismaService | Prisma.TransactionClient;
 
 function toMemberSummary(member: MemberRecord): LedgerMemberSummary {
   return member;
@@ -55,19 +56,20 @@ export class LedgerMemberService {
     memberId: string,
     role: 'OWNER' | 'EDITOR' | 'VIEWER',
   ): Promise<LedgerMemberSummary> {
-    const actor = await this.requireOwner(userId, ledgerId);
-    const target = await this.getMemberById(ledgerId, memberId);
-    if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
-
-    if (target.id === actor.id && role !== 'OWNER') {
-      await this.ensureAnotherOwner(ledgerId, actor.id);
-    }
-    if (target.role === 'OWNER' && role !== 'OWNER') {
-      await this.ensureAnotherOwner(ledgerId, target.id);
-    }
-    if (target.role === role) return toMemberSummary(target);
-
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockLedger(transaction, ledgerId);
+      const actor = await this.requireOwner(userId, ledgerId, transaction);
+      const target = await this.getMemberById(ledgerId, memberId, transaction);
+      if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
+
+      if (target.id === actor.id && role !== 'OWNER') {
+        await this.ensureAnotherOwner(ledgerId, actor.id, transaction);
+      }
+      if (target.role === 'OWNER' && role !== 'OWNER') {
+        await this.ensureAnotherOwner(ledgerId, target.id, transaction);
+      }
+      if (target.role === role) return toMemberSummary(target);
+
       const updated = await transaction.ledgerMember.updateMany({
         where: { id: memberId, ledgerId, status: 'ACTIVE' },
         data: { role },
@@ -83,13 +85,16 @@ export class LedgerMemberService {
   }
 
   async remove(userId: string, ledgerId: string, memberId: string): Promise<null> {
-    const actor = await this.requireOwner(userId, ledgerId);
-    const target = await this.getMemberById(ledgerId, memberId);
-    if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
-    if (target.id === actor.id) throw this.conflictException('不能移除自己，请使用退出接口');
-    if (target.role === 'OWNER') await this.ensureAnotherOwner(ledgerId, target.id);
-
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockLedger(transaction, ledgerId);
+      const actor = await this.requireOwner(userId, ledgerId, transaction);
+      const target = await this.getMemberById(ledgerId, memberId, transaction);
+      if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
+      if (target.id === actor.id) throw this.conflictException('不能移除自己，请使用退出接口');
+      if (target.role === 'OWNER') {
+        await this.ensureAnotherOwner(ledgerId, target.id, transaction);
+      }
+
       await this.lockUser(transaction, target.userId);
       const updated = await transaction.ledgerMember.updateMany({
         where: { id: memberId, ledgerId, status: 'ACTIVE' },
@@ -101,11 +106,14 @@ export class LedgerMemberService {
   }
 
   async leave(userId: string, ledgerId: string): Promise<null> {
-    const actor = await this.getMembership(userId, ledgerId);
-    if (!actor || actor.status !== 'ACTIVE') throw this.notFoundException();
-    if (actor.role === 'OWNER') await this.ensureAnotherOwner(ledgerId, actor.id);
-
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockLedger(transaction, ledgerId);
+      const actor = await this.getMembership(userId, ledgerId, transaction);
+      if (!actor || actor.status !== 'ACTIVE') throw this.notFoundException();
+      if (actor.role === 'OWNER') {
+        await this.ensureAnotherOwner(ledgerId, actor.id, transaction);
+      }
+
       await this.lockUser(transaction, userId);
       const updated = await transaction.ledgerMember.updateMany({
         where: { id: actor.id, ledgerId, userId, status: 'ACTIVE' },
@@ -121,16 +129,17 @@ export class LedgerMemberService {
     ledgerId: string,
     targetMemberId: string,
   ): Promise<OwnershipTransferResult> {
-    const actor = await this.requireOwner(userId, ledgerId);
-    const target = await this.getMemberById(ledgerId, targetMemberId);
-    if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
-    if (target.id === actor.id || target.role === 'OWNER') {
-      const currentOwner = await this.getMemberById(ledgerId, actor.id);
-      if (!currentOwner) throw this.notFoundException();
-      return { previousOwner: toMemberSummary(currentOwner), newOwner: toMemberSummary(target) };
-    }
-
     return this.prisma.$transaction(async (transaction) => {
+      await this.lockLedger(transaction, ledgerId);
+      const actor = await this.requireOwner(userId, ledgerId, transaction);
+      const target = await this.getMemberById(ledgerId, targetMemberId, transaction);
+      if (!target || target.status !== 'ACTIVE') throw this.notFoundException();
+      if (target.id === actor.id || target.role === 'OWNER') {
+        const currentOwner = await this.getMemberById(ledgerId, actor.id, transaction);
+        if (!currentOwner) throw this.notFoundException();
+        return { previousOwner: toMemberSummary(currentOwner), newOwner: toMemberSummary(target) };
+      }
+
       const previousOwner = await transaction.ledgerMember.updateMany({
         where: { id: actor.id, ledgerId, status: 'ACTIVE', role: 'OWNER' },
         data: { role: 'EDITOR' },
@@ -159,29 +168,52 @@ export class LedgerMemberService {
     await transaction.$queryRaw(Prisma.sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
   }
 
-  private async requireOwner(userId: string, ledgerId: string) {
-    const actor = await this.getMembership(userId, ledgerId);
+  private async lockLedger(transaction: Prisma.TransactionClient, ledgerId: string): Promise<void> {
+    const rows = await transaction.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT id FROM "ledger" WHERE id = ${ledgerId} FOR UPDATE`,
+    );
+    if (rows.length === 0) throw this.notFoundException();
+  }
+
+  private async requireOwner(
+    userId: string,
+    ledgerId: string,
+    client: PrismaClientLike = this.prisma,
+  ) {
+    const actor = await this.getMembership(userId, ledgerId, client);
     if (!actor || actor.status !== 'ACTIVE') throw this.notFoundException();
     if (actor.role !== 'OWNER') throw this.forbiddenException();
     return actor;
   }
 
-  private async getMembership(userId: string, ledgerId: string) {
-    return this.prisma.ledgerMember.findUnique({
+  private async getMembership(
+    userId: string,
+    ledgerId: string,
+    client: PrismaClientLike = this.prisma,
+  ) {
+    return client.ledgerMember.findUnique({
       where: { ledgerId_userId: { ledgerId, userId } },
       select: { id: true, ledgerId: true, userId: true, role: true, status: true },
     });
   }
 
-  private async getMemberById(ledgerId: string, memberId: string) {
-    return this.prisma.ledgerMember.findUnique({
+  private async getMemberById(
+    ledgerId: string,
+    memberId: string,
+    client: PrismaClientLike = this.prisma,
+  ) {
+    return client.ledgerMember.findUnique({
       where: { id: memberId },
       select: memberSelect,
     }).then((member) => (member?.ledgerId === ledgerId ? member : null));
   }
 
-  private async ensureAnotherOwner(ledgerId: string, memberId: string): Promise<void> {
-    const ownerCount = await this.prisma.ledgerMember.count({
+  private async ensureAnotherOwner(
+    ledgerId: string,
+    memberId: string,
+    client: PrismaClientLike = this.prisma,
+  ): Promise<void> {
+    const ownerCount = await client.ledgerMember.count({
       where: { ledgerId, status: 'ACTIVE', role: 'OWNER', NOT: { id: memberId } },
     });
     if (ownerCount < 1) throw this.conflictException('账本至少需要保留一名 Owner');

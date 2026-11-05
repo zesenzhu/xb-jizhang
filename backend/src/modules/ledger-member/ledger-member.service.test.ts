@@ -50,7 +50,7 @@ describe('LedgerMemberService', () => {
     ] as const)('给定 %s 的 %s 仅剩一本账本，当变更，则先锁受影响用户并允许状态变为 %s', async (action, role, status) => {
       const d = createService();
       const target = { ...activeEditor, role };
-      d.prisma.ledgerMember.findUnique.mockImplementation(async ({ where }) =>
+      d.transactionClient.ledgerMember.findUnique.mockImplementation(async ({ where }) =>
         where.id === editorMemberId || where.ledgerId_userId?.userId === editorUserId ? target : activeOwner);
       d.transactionClient.ledgerMember.count.mockResolvedValue(0);
       d.transactionClient.ledgerMember.updateMany.mockResolvedValue({ count: 1 });
@@ -91,7 +91,7 @@ describe('LedgerMemberService', () => {
 
   it('给定 Editor 不是 Owner，当修改成员角色，则拒绝操作', async () => {
     const dependencies = createService();
-    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue(activeEditor);
+    dependencies.transactionClient.ledgerMember.findUnique.mockResolvedValue(activeEditor);
 
     await expect(
       dependencies.service.updateRole(editorUserId, ledgerId, ownerMemberId, 'VIEWER'),
@@ -100,16 +100,19 @@ describe('LedgerMemberService', () => {
 
   it('给定 Owner 修改同一账本的成员，当角色变更，则更新目标成员并返回最新摘要', async () => {
     const dependencies = createService();
-    dependencies.prisma.ledgerMember.findUnique
+    dependencies.transactionClient.ledgerMember.findUnique
       .mockResolvedValueOnce(activeOwner)
-      .mockResolvedValueOnce(activeEditor);
+      .mockResolvedValueOnce({
+        ...activeEditor,
+        user: { id: editorUserId, username: 'editor', nickname: null, avatar: null },
+      })
+      .mockResolvedValueOnce({
+        ...activeEditor,
+        role: 'VIEWER',
+        joinedAt: new Date(),
+        user: { id: editorUserId, username: 'editor', nickname: null, avatar: null },
+      });
     dependencies.transactionClient.ledgerMember.updateMany.mockResolvedValue({ count: 1 });
-    dependencies.transactionClient.ledgerMember.findUnique.mockResolvedValue({
-      ...activeEditor,
-      role: 'VIEWER',
-      joinedAt: new Date(),
-      user: { id: editorUserId, username: 'editor', nickname: null, avatar: null },
-    });
 
     const result = await dependencies.service.updateRole(ownerUserId, ledgerId, editorMemberId, 'VIEWER');
 
@@ -124,8 +127,8 @@ describe('LedgerMemberService', () => {
 
   it('给定目标是最后一个 Owner，当移除或退出，则拒绝并保留成员状态', async () => {
     const dependencies = createService();
-    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue(activeOwner);
-    dependencies.prisma.ledgerMember.count.mockResolvedValue(0);
+    dependencies.transactionClient.ledgerMember.findUnique.mockResolvedValue(activeOwner);
+    dependencies.transactionClient.ledgerMember.count.mockResolvedValue(0);
 
     await expect(
       dependencies.service.remove(ownerUserId, ledgerId, ownerMemberId),
@@ -138,7 +141,7 @@ describe('LedgerMemberService', () => {
 
   it('给定 Owner 转移给同一账本的活跃成员，当执行转移，则在一个事务内完成角色互换', async () => {
     const dependencies = createService();
-    dependencies.prisma.ledgerMember.findUnique
+    dependencies.transactionClient.ledgerMember.findUnique
       .mockResolvedValueOnce(activeOwner)
       .mockResolvedValueOnce(activeEditor);
     dependencies.transactionClient.ledgerMember.updateMany.mockResolvedValue({ count: 1 });
@@ -160,7 +163,7 @@ describe('LedgerMemberService', () => {
 
   it('给定目标成员不属于当前账本，当 Owner 执行移除，则返回资源不存在错误', async () => {
     const dependencies = createService();
-    dependencies.prisma.ledgerMember.findUnique
+    dependencies.transactionClient.ledgerMember.findUnique
       .mockResolvedValueOnce(activeOwner)
       .mockResolvedValueOnce(null);
 
