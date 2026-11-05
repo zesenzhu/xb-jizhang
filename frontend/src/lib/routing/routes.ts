@@ -61,11 +61,19 @@ export function shouldProtectRoute(pathname: string): boolean {
   return false;
 }
 
-export type UserPrimaryTab = 'home' | 'transactions' | 'profile';
+/**
+ * 二期底部主导航固定为三项：账本、统计、我的（二期需求 5.1）。
+ *
+ * 变化点：
+ * - 移除独立「明细」入口，账本页即明细
+ * - 移除底栏中央「记账」入口，记账只保留账本页 FAB
+ * - 移除「资产」入口，二期没有资产功能
+ */
+export type UserPrimaryTab = 'ledger' | 'statistics' | 'profile';
 
 export const USER_PRIMARY_TAB_ROUTES: Record<string, UserPrimaryTab> = {
-  '/user': 'home',
-  '/user/ledger': 'transactions',
+  '/user': 'ledger',
+  '/user/statistics': 'statistics',
   '/user/profile': 'profile',
 };
 

@@ -42,18 +42,23 @@ assert.equal(shouldProtectRoute('/admin/login'), false);
 // 一级 Tab 路由判定与映射断言（一级页面常驻底栏，二级页面自动隐藏）
 assert.equal(isUserPrimaryTabRoute('/user'), true);
 assert.equal(isUserPrimaryTabRoute('/user/'), true);
-assert.equal(isUserPrimaryTabRoute('/user/ledger'), true);
-assert.equal(isUserPrimaryTabRoute('/user/ledger/'), true);
+assert.equal(isUserPrimaryTabRoute('/user/statistics'), true);
+assert.equal(isUserPrimaryTabRoute('/user/statistics/'), true);
 assert.equal(isUserPrimaryTabRoute('/user/profile'), true);
 assert.equal(isUserPrimaryTabRoute('/user/profile/'), true);
 
-assert.equal(getUserPrimaryTab('/user'), 'home');
-assert.equal(getUserPrimaryTab('/user/ledger'), 'transactions');
+// 二期底栏只有账本、统计、我的三项
+assert.equal(getUserPrimaryTab('/user'), 'ledger');
+assert.equal(getUserPrimaryTab('/user/statistics'), 'statistics');
 assert.equal(getUserPrimaryTab('/user/profile'), 'profile');
+// 旧的独立账本列表不再是主导航项
+assert.equal(getUserPrimaryTab('/user/ledger'), null);
 
 // 二级或深层子页面不得判定为一级 Tab
 assert.equal(isUserPrimaryTabRoute('/user/ledger/new'), false);
 assert.equal(isUserPrimaryTabRoute('/user/ledger/abc-123'), false);
+assert.equal(isUserPrimaryTabRoute('/user/ledgers'), false);
+assert.equal(isUserPrimaryTabRoute('/user/ledgers/abc/settings'), false);
 assert.equal(isUserPrimaryTabRoute('/user/login'), false);
 assert.equal(isUserPrimaryTabRoute('/user/register'), false);
 assert.equal(getUserPrimaryTab('/user/ledger/new'), null);
