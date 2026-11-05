@@ -161,7 +161,7 @@ export function LedgerSettingsPage(): React.JSX.Element {
 
   /**
    * 删除阻碍：成员数与账本数是前端可判断的，是否含账单也能用一页的 total 判断出来。
-   * 待处理邀请只有服务端知道（缺 P5），留给 40913 的错误文案兜底。
+   * 待处理邀请可由成员页读取；这里仍把服务端 40913 作为删除资格的最终判断。
    */
   const blockers = React.useMemo(() => {
     if (!ledger) return [];

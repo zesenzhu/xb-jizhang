@@ -15,6 +15,7 @@ import {
 import type { LedgerMemberSummary } from '@/lib/api/member-types';
 import {
   createInvitation,
+  getLedgerInvitations,
   revokeInvitation,
 } from '@/lib/api/invitation-api';
 import { queryKeys, queryStaleTime } from '@/lib/query/query-config';
@@ -85,6 +86,13 @@ export function MembersPage(): React.JSX.Element {
   const selfMember = members.find((member) => member.user.id === currentUserId) ?? null;
   const canLeave = Boolean(selfMember && ledger && ledger.type === 'SHARED' && !isOwner);
 
+  const invitationsQuery = useQuery({
+    queryKey: queryKeys.ledgerInvitations(ledgerId),
+    queryFn: () => getLedgerInvitations(ledgerId),
+    staleTime: queryStaleTime.invitations,
+    enabled: Boolean(ledgerId && isOwner && ledger?.type === 'SHARED'),
+  });
+
   const refreshMembership = async (): Promise<void> => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.members(ledgerId) }),
@@ -140,7 +148,7 @@ export function MembersPage(): React.JSX.Element {
   const inviteMutation = useMutation({
     mutationFn: (input: { targetEmail: string; role: 'EDITOR' | 'VIEWER' }) =>
       createInvitation(ledgerId, input),
-    onSuccess: (invitation) => {
+    onSuccess: async (invitation) => {
       const token = invitation.inviteToken;
       if (!token) return;
       const inviteLink = buildInviteLink(token);
@@ -150,7 +158,6 @@ export function MembersPage(): React.JSX.Element {
         expiresAt: invitation.expiresAt,
         inviteLink,
       });
-      // 账本邀请列表接口缺失（P5），只能把本次会话新建的邀请留在内存里供撤销。
       addSessionInvitation(ledgerId, {
         id: invitation.id,
         ledgerId,
@@ -159,13 +166,17 @@ export function MembersPage(): React.JSX.Element {
         expiresAt: invitation.expiresAt,
         inviteLink,
       });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ledgerInvitations(ledgerId) });
     },
   });
 
   const revokeMutation = useMutation({
     mutationFn: (invitation: PendingInvitation) => revokeInvitation(ledgerId, invitation.id),
     onMutate: (invitation) => setPendingInvitationId(invitation.id),
-    onSuccess: (_data, invitation) => removeSessionInvitation(ledgerId, invitation.id),
+    onSuccess: async (_data, invitation) => {
+      removeSessionInvitation(ledgerId, invitation.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ledgerInvitations(ledgerId) });
+    },
     onSettled: () => setPendingInvitationId(null),
   });
 
@@ -208,12 +219,42 @@ export function MembersPage(): React.JSX.Element {
         ? 'error'
         : 'ready';
 
-  const invitations = sessionInvitations.map<PendingInvitation>((item) => ({
-    id: item.id,
-    targetEmail: item.targetEmail,
-    role: item.role,
-    expiresAt: item.expiresAt,
-  }));
+  const invitations = React.useMemo<PendingInvitation[]>(() => {
+    const sessionById = new Map(sessionInvitations.map((item) => [item.id, item]));
+    const serverInvitations = invitationsQuery.data ?? [];
+    const merged = serverInvitations.map<PendingInvitation>((item) => ({
+      id: item.id,
+      targetEmail: item.targetEmail,
+      role: item.role,
+      createdAt: item.createdAt,
+      expiresAt: item.expiresAt,
+      inviteLink: sessionById.get(item.id)?.inviteLink,
+    }));
+    const serverIds = new Set(serverInvitations.map((item) => item.id));
+    for (const item of sessionInvitations) {
+      if (!serverIds.has(item.id)) {
+        merged.push({
+          id: item.id,
+          targetEmail: item.targetEmail,
+          role: item.role,
+          expiresAt: item.expiresAt,
+          inviteLink: item.inviteLink,
+        });
+      }
+    }
+    return merged;
+  }, [invitationsQuery.data, sessionInvitations]);
+
+  const invitationState: 'loading' | 'error' | 'empty' | 'ready' =
+    !isOwner || ledger?.type !== 'SHARED'
+      ? 'empty'
+      : invitationsQuery.isPending && !invitationsQuery.data
+        ? 'loading'
+        : invitationsQuery.isError && !invitationsQuery.data
+          ? 'error'
+          : invitations.length === 0
+            ? 'empty'
+            : 'ready';
 
   return (
     <>
@@ -237,12 +278,12 @@ export function MembersPage(): React.JSX.Element {
           setInviteResult(null);
           setInviteOpen(true);
         }}
-        // P5：没有账本邀请列表接口，因此状态固定为「不可用」，只展示会话内新建的邀请。
-        invitationState="unavailable"
+        invitationState={invitationState}
         invitations={invitations}
         pendingInvitationId={pendingInvitationId}
         onRevokeInvitation={(invitation) => revokeMutation.mutate(invitation)}
-        invitationNotice={errorText(revokeMutation.error)}
+        onRetryInvitations={() => void invitationsQuery.refetch()}
+        invitationNotice={errorText(revokeMutation.error) ?? errorText(invitationsQuery.error)}
         canTransfer={Boolean(isOwner && members.length > 1)}
         onTransfer={() => {
           transferMutation.reset();

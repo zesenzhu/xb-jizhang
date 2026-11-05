@@ -20,6 +20,7 @@ export interface InvitationSummary {
   targetEmail: string;
   role: InvitationRole;
   status: InvitationStatus;
+  createdAt: string;
   expiresAt: string;
   /** 只在创建成功的响应里出现一次；后续查询永远拿不到 */
   inviteToken?: string;

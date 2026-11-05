@@ -11,11 +11,13 @@ export interface PendingInvitation {
   id: string;
   targetEmail: string;
   role: 'EDITOR' | 'VIEWER';
+  createdAt?: string;
   expiresAt: string;
+  inviteLink?: string;
 }
 
 export interface InvitationListProps {
-  state: 'unavailable' | 'loading' | 'error' | 'empty' | 'ready';
+  state: 'loading' | 'error' | 'empty' | 'ready';
   invitations: readonly PendingInvitation[];
   onRevoke?: (i: PendingInvitation) => void;
   pendingInvitationId?: string | null;
@@ -41,39 +43,7 @@ export function InvitationList({
         </div>
       )}
 
-      {/* 状态 1: unavailable */}
-      {state === 'unavailable' && (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-app-border bg-app-card p-4 space-y-1.5">
-            <div className="flex items-center gap-2 text-sm font-medium text-text-main">
-              <Info className="size-4 text-text-tertiary" aria-hidden="true" />
-              <span>服务端暂未提供账本邀请列表接口，无法展示全部待处理邀请</span>
-            </div>
-            <p className="text-xs text-text-muted leading-relaxed">
-              下方仅显示你在本次会话中新建的邀请。如需撤销其他已发出的邀请，请联系管理员或等待后续版本支持。
-            </p>
-          </div>
-
-          {invitations.length > 0 ? (
-            <div className="divide-y divide-app-divider rounded-2xl border border-app-border bg-app-card overflow-hidden">
-              {invitations.map((inv) => (
-                <InvitationRow
-                  key={inv.id}
-                  invitation={inv}
-                  onRevoke={onRevoke}
-                  isPending={pendingInvitationId === inv.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-app-border bg-app-card p-6 text-center text-text-muted text-xs">
-              本次会话暂无新建邀请
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 状态 2: loading */}
+      {/* 状态 1: loading */}
       {state === 'loading' && (
         <div className="divide-y divide-app-divider rounded-2xl border border-app-border bg-app-card overflow-hidden">
           {Array.from({ length: 2 }).map((_, idx) => (
@@ -91,7 +61,7 @@ export function InvitationList({
         </div>
       )}
 
-      {/* 状态 3: error */}
+      {/* 状态 2: error */}
       {state === 'error' && (
         <div className="rounded-2xl border border-app-border bg-app-card p-6 text-center space-y-3">
           <div className="flex items-center justify-center gap-2 text-sm text-rose-600 font-medium">
@@ -111,14 +81,14 @@ export function InvitationList({
         </div>
       )}
 
-      {/* 状态 4: empty */}
+      {/* 状态 3: empty */}
       {state === 'empty' && (
         <div className="rounded-2xl border border-app-border bg-app-card p-6 text-center text-text-muted text-sm">
           暂无待处理邀请
         </div>
       )}
 
-      {/* 状态 5: ready */}
+      {/* 状态 4: ready */}
       {state === 'ready' && (
         <div className="divide-y divide-app-divider rounded-2xl border border-app-border bg-app-card overflow-hidden">
           {invitations.map((inv) => (

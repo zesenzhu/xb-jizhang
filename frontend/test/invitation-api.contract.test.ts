@@ -3,6 +3,7 @@ import {
   acceptInvitation,
   createInvitation,
   declineInvitation,
+  getLedgerInvitations,
   getMyInvitations,
   revokeInvitation,
 } from '../src/lib/api/invitation-api';
@@ -24,7 +25,8 @@ void (async () => {
 
   userClient.defaults.adapter = async (config) => {
     requests.push(config);
-    const data = config.url === '/invitations'
+    const data = config.url === '/invitations' ||
+      (config.method === 'get' && config.url === '/ledgers/ledger-1/invitations')
       ? [invitation]
       : config.url === '/invitations/accept'
         ? {
@@ -61,6 +63,7 @@ void (async () => {
       role: 'EDITOR',
     });
     const revoked = await revokeInvitation('ledger-1', 'invitation-1');
+    const ledgerInvitations = await getLedgerInvitations('ledger-1');
     const mine = await getMyInvitations();
     const accepted = await acceptInvitation('one-time-token');
     const declined = await declineInvitation('one-time-token');
@@ -68,6 +71,7 @@ void (async () => {
     // Token 只在创建响应里出现；后续查询拿不到（这是「我的邀请」不能凭空给接受按钮的原因）。
     assert.equal(created.inviteToken, 'one-time-token');
     assert.equal(revoked, null);
+    assert.equal(ledgerInvitations.length, 1);
     assert.equal(mine.length, 1);
     assert.equal(accepted.memberRole, 'EDITOR');
     assert.equal(declined, null);
@@ -86,19 +90,21 @@ void (async () => {
     );
     assert.deepEqual(
       { method: requests[2]?.method, url: requests[2]?.url },
+      { method: 'get', url: '/ledgers/ledger-1/invitations' },
+    );
+    assert.deepEqual(
+      { method: requests[3]?.method, url: requests[3]?.url },
       { method: 'get', url: '/invitations' },
     );
     assert.deepEqual(
-      { method: requests[3]?.method, url: requests[3]?.url, data: JSON.parse(String(requests[3]?.data)) },
+      { method: requests[4]?.method, url: requests[4]?.url, data: JSON.parse(String(requests[4]?.data)) },
       { method: 'post', url: '/invitations/accept', data: { token: 'one-time-token' } },
     );
     assert.deepEqual(
-      { method: requests[4]?.method, url: requests[4]?.url, data: JSON.parse(String(requests[4]?.data)) },
+      { method: requests[5]?.method, url: requests[5]?.url, data: JSON.parse(String(requests[5]?.data)) },
       { method: 'post', url: '/invitations/decline', data: { token: 'one-time-token' } },
     );
 
-    // P5 缺口：绝不能调用不存在的「账本邀请列表」接口。
-    // 这里用白名单断言，任何新增的路径都必须先在服务端实现并同步更新本断言。
     const allowed = new Set([
       '/ledgers/ledger-1/invitations',
       '/ledgers/ledger-1/invitations/invitation-1',
@@ -112,7 +118,7 @@ void (async () => {
         `invitation-api 调用了未登记的路径：${String(request.url)}`,
       );
     }
-    assert.ok(!requests.some((request) => request.method === 'get' && String(request.url).startsWith('/ledgers/')));
+    assert.ok(requests.some((request) => request.method === 'get' && String(request.url) === '/ledgers/ledger-1/invitations'));
 
     console.log('invitation api contract passed');
   } finally {

@@ -22,6 +22,14 @@ export class InvitationController {
     return this.invitationService.create(user.id, ledgerId, input);
   }
 
+  @Get('ledgers/:ledgerId/invitations')
+  listForLedger(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+  ) {
+    return this.invitationService.listForLedger(user.id, ledgerId);
+  }
+
   @Get('invitations')
   list(@CurrentUser() user: AuthUser) {
     return this.invitationService.listForUser(user.id);

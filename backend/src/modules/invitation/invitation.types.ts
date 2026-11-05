@@ -11,6 +11,7 @@ export interface InvitationSummary {
   targetEmail: string;
   role: LedgerMemberRole;
   status: InvitationStatus;
+  createdAt: Date;
   expiresAt: Date;
   inviteToken?: string;
   ledger?: {

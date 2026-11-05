@@ -25,4 +25,13 @@ describe('InvitationController', () => {
 
     expect(service.accept).toHaveBeenCalledWith('user-invited', 'invite-token');
   });
+
+  it('给定账本邀请列表请求，当 Owner 查询，则传递当前用户和账本', async () => {
+    const service = { listForLedger: jest.fn().mockResolvedValue([]) };
+    const controller = new InvitationController(service as unknown as InvitationService);
+
+    await controller.listForLedger({ id: 'user-owner' }, 'ledger-1');
+
+    expect(service.listForLedger).toHaveBeenCalledWith('user-owner', 'ledger-1');
+  });
 });

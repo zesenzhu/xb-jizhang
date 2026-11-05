@@ -22,6 +22,7 @@ const invitationSelect = {
   targetEmail: true,
   role: true,
   status: true,
+  createdAt: true,
   expiresAt: true,
 } as const;
 const ledgerSelect = {
@@ -38,6 +39,15 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
+}
+
 @Injectable()
 export class InvitationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -47,7 +57,8 @@ export class InvitationService {
     ledgerId: string,
     input: CreateInvitationInput,
   ): Promise<InvitationSummary> {
-    await this.requireOwner(userId, ledgerId);
+    const owner = await this.requireOwner(userId, ledgerId);
+    this.requireSharedLedger(owner.ledger?.type);
     const targetEmail = normalizeEmail(input.targetEmail);
     if (!targetEmail) throw this.badRequestException('邀请邮箱不能为空');
 
@@ -79,19 +90,44 @@ export class InvitationService {
     }
 
     const inviteToken = randomBytes(32).toString('base64url');
-    const invitation = await this.prisma.ledgerInvitation.create({
-      data: {
-        ledgerId,
-        inviterId: userId,
-        targetEmail,
-        role: input.role,
-        status: 'PENDING',
-        tokenHash: hashToken(inviteToken),
-        expiresAt: new Date(now.getTime() + INVITATION_TTL_SECONDS * 1000),
-      },
+    try {
+      const invitation = await this.prisma.ledgerInvitation.create({
+        data: {
+          ledgerId,
+          inviterId: userId,
+          targetEmail,
+          role: input.role,
+          status: 'PENDING',
+          tokenHash: hashToken(inviteToken),
+          expiresAt: new Date(now.getTime() + INVITATION_TTL_SECONDS * 1000),
+        },
+        select: invitationSelect,
+      });
+      return { ...invitation, inviteToken };
+    } catch (error) {
+      // 部分唯一索引是最终并发保护；两个 Owner 同时邀请时统一返回业务冲突。
+      if (isUniqueConstraintError(error)) {
+        throw this.duplicateException('该邮箱已有待处理邀请');
+      }
+      throw error;
+    }
+  }
+
+  async listForLedger(userId: string, ledgerId: string): Promise<InvitationSummary[]> {
+    const owner = await this.requireOwner(userId, ledgerId);
+    this.requireSharedLedger(owner.ledger?.type);
+
+    const now = new Date();
+    await this.prisma.ledgerInvitation.updateMany({
+      where: { ledgerId, status: 'PENDING', expiresAt: { lte: now } },
+      data: { status: 'EXPIRED' },
+    });
+
+    return this.prisma.ledgerInvitation.findMany({
+      where: { ledgerId, status: 'PENDING' },
+      orderBy: [{ expiresAt: 'asc' }, { createdAt: 'asc' }],
       select: invitationSelect,
     });
-    return { ...invitation, inviteToken };
   }
 
   async listForUser(userId: string): Promise<InvitationSummary[]> {
@@ -207,7 +243,8 @@ export class InvitationService {
   }
 
   async revoke(userId: string, ledgerId: string, invitationId: string): Promise<null> {
-    await this.requireOwner(userId, ledgerId);
+    const owner = await this.requireOwner(userId, ledgerId);
+    this.requireSharedLedger(owner.ledger?.type);
     const invitation = await this.prisma.ledgerInvitation.findUnique({
       where: { id: invitationId },
       select: { id: true, ledgerId: true, status: true },
@@ -222,13 +259,24 @@ export class InvitationService {
     return null;
   }
 
-  private async requireOwner(userId: string, ledgerId: string): Promise<void> {
+  private async requireOwner(userId: string, ledgerId: string) {
     const member = await this.prisma.ledgerMember.findUnique({
       where: { ledgerId_userId: { ledgerId, userId } },
-      select: { role: true, status: true },
+      select: { role: true, status: true, ledger: { select: { type: true } } },
     });
     if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
     if (member.role !== 'OWNER') throw this.forbiddenException();
+    return member;
+  }
+
+  private requireSharedLedger(type: string | undefined): void {
+    if (type === 'PERSONAL') {
+      throw new ConflictException({
+        code: 40903,
+        message: '个人账本不能邀请成员',
+        data: null,
+      });
+    }
   }
 
   private async requireUserEmail(userId: string): Promise<string> {

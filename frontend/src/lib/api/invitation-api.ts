@@ -7,15 +7,8 @@ import type {
 } from './invitation-types';
 
 /**
- * 邀请相关接口。
- *
- * **缺口（P5）**：服务端只实现 `GET /invitations`（当前用户可处理的邀请），
- * 没有 `GET /ledgers/:ledgerId/invitations`（账本内全部待处理邀请）。
- * 因此「成员与邀请」页无法列出别人发起的待处理邀请，只能展示本次会话内新建、
- * 且仍持有一次性 Token 的邀请用于撤销。**不要在这里加一个不存在的接口调用。**
- *
- * 同理，`GET /invitations` 不返回 Token，所以「我的邀请」页不能凭空提供接受按钮，
- * 必须由用户带着完整邀请链接（含 `token`）进入。
+ * 邀请 Token 只在创建响应中出现一次；列表接口只返回可撤销的业务摘要。
+ * 「我的邀请」页仍需要用户从完整链接带 Token 进入接受或拒绝流程。
  */
 function unwrap<T>(response: { data: ApiSuccessResponse<T> }): T {
   return response.data.data;
@@ -42,6 +35,15 @@ export async function revokeInvitation(
   return unwrap(
     await userClient.delete<ApiSuccessResponse<null>>(
       `/ledgers/${encodeURIComponent(ledgerId)}/invitations/${encodeURIComponent(invitationId)}`,
+    ),
+  );
+}
+
+/** 当前账本 Owner 的待处理邀请；服务端会在读取时把已过期记录标记为 EXPIRED。 */
+export async function getLedgerInvitations(ledgerId: string): Promise<InvitationSummary[]> {
+  return unwrap(
+    await userClient.get<ApiSuccessResponse<InvitationSummary[]>>(
+      `/ledgers/${encodeURIComponent(ledgerId)}/invitations`,
     ),
   );
 }

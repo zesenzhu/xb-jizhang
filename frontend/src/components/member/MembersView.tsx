@@ -21,7 +21,7 @@ export interface MembersViewProps {
   onOpenMemberActions: (m: LedgerMemberSummary) => void;
   canInvite: boolean;
   onInvite: () => void;
-  invitationState: 'unavailable' | 'loading' | 'error' | 'empty' | 'ready';
+  invitationState: 'loading' | 'error' | 'empty' | 'ready';
   invitations: readonly PendingInvitation[];
   pendingInvitationId?: string | null;
   onRevokeInvitation?: (i: PendingInvitation) => void;

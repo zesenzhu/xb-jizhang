@@ -82,6 +82,57 @@ describe('InvitationService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('给定个人账本 Owner，当创建邀请，则拒绝并返回个人账本业务冲突', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+      ledger: { type: 'PERSONAL' },
+    });
+
+    await expect(
+      dependencies.service.create(ownerId, ledgerId, {
+        targetEmail: 'member@example.com',
+        role: 'EDITOR',
+      }),
+    ).rejects.toMatchObject({ response: { code: 40903 } });
+    expect(dependencies.prisma.ledgerInvitation.create).not.toHaveBeenCalled();
+  });
+
+  it('给定共享账本存在过期和待处理邀请，当 Owner 查询，则先标记过期再返回待处理列表', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+      ledger: { type: 'SHARED' },
+    });
+    dependencies.prisma.ledgerInvitation.findMany.mockResolvedValue([
+      {
+        id: invitationId,
+        ledgerId,
+        targetEmail: 'member@example.com',
+        role: 'EDITOR',
+        status: 'PENDING',
+        createdAt: new Date('2026-11-01T08:00:00.000Z'),
+        expiresAt,
+      },
+    ]);
+
+    const result = await dependencies.service.listForLedger(ownerId, ledgerId);
+
+    expect(dependencies.prisma.ledgerInvitation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ ledgerId, status: 'PENDING', expiresAt: { lte: expect.any(Date) } }),
+        data: { status: 'EXPIRED' },
+      }),
+    );
+    expect(dependencies.prisma.ledgerInvitation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { ledgerId, status: 'PENDING' } }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.inviteToken).toBeUndefined();
+  });
+
   it('给定邀请邮箱与当前用户邮箱不一致，当用户接受邀请，则拒绝并不消费邀请', async () => {
     const dependencies = createService();
     dependencies.prisma.user.findUnique.mockResolvedValue({ email: 'other@example.com' });

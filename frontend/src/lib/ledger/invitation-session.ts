@@ -3,9 +3,9 @@ import { create } from 'zustand';
 /**
  * 本次会话内新建的邀请。
  *
- * 存在的唯一理由：账本邀请列表接口缺失（P5），但创建邀请的响应里带一次性 Token，
- * 撤销接口也需要 `invitationId`。把它留在内存里，Owner 才能在离开页面之前撤销刚发出的邀请。
- * 不持久化——刷新后 Token 与 id 已不可恢复，硬留着只会给出一个点了会 404 的按钮。
+ * 服务端列表只返回邀请摘要，不返回 Token。创建邀请的响应带一次性 Token，
+ * 这里仅在内存中保存生成的链接，让 Owner 在当前会话内继续分享或撤销刚发出的邀请。
+ * 不持久化——刷新后 Token 不可恢复，不能伪造邀请链接。
  */
 export interface SessionInvitation {
   id: string;
