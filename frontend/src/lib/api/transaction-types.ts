@@ -58,6 +58,8 @@ export interface TransactionListQuery {
   categoryId?: string;
   /** 一级分类过滤：匹配该一级分类本身及其全部二级分类 */
   categoryRootId?: string;
+  /** 只匹配没有分类的账单；与 categoryId/categoryRootId 互斥 */
+  uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
   from?: string;

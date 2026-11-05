@@ -35,7 +35,7 @@ updatedAt: 2026-11-04
 | 分类管理 | 记账面板内 | [分类管理.md](./分类管理.md) | 已交付 |
 | 我的账本 | `/user/ledgers` | [我的账本.md](./我的账本.md) | 二期已交付 |
 | 账本设置 | `/user/ledgers/:id/settings` | [账本设置.md](./账本设置.md) | 二期已交付 |
-| 成员与邀请 | `/user/ledgers/:id/members` | [成员与邀请.md](./成员与邀请.md) | 二期已交付（待处理邀请区因 P5 降级） |
+| 成员与邀请 | `/user/ledgers/:id/members` | [成员与邀请.md](./成员与邀请.md) | 二期已交付 |
 | 统计页 | `/user/statistics` | [统计页.md](./统计页.md) | 二期已交付 |
 | 我的页面 | `/user/profile` | [我的页面.md](./我的页面.md) | 二期已交付 |
 | 我的邀请 | `/user/invitations` | 见本文「邀请处理」 | 二期已交付（Token 链接入口） |
@@ -69,7 +69,7 @@ updatedAt: 2026-11-04
 | 能力 | 接口 | 证据 |
 | --- | --- | --- |
 | 账单创建/编辑/软删除/详情 | `POST/PATCH/DELETE/GET /ledgers/:id/transactions[/:tid]` | 一期已交付 |
-| 账单列表与筛选 | `GET /ledgers/:id/transactions` | 支持 `type/categoryId/accountId/payerId/from/to/keyword` |
+| 账单列表与筛选 | `GET /ledgers/:id/transactions` | 支持 `type/categoryId/categoryRootId/uncategorized/accountId/payerId/from/to/keyword` |
 | 收支概览（一期口径） | `GET /ledgers/:id/statistics/overview` | 返回 `totalIncomeCents/totalExpenseCents/netCents/transactionCount` |
 | 账户与分类 CRUD | `/ledgers/:id/accounts`、`/categories` | 一期已交付 |
 | 成员列表与角色 | `GET /ledgers/:id/members`、`PATCH .../role` | 一期已交付 |
@@ -77,13 +77,13 @@ updatedAt: 2026-11-04
 | 成员移除/退出/转移 | `DELETE .../members/:mid`、`POST .../leave`、`POST .../ownership-transfer` | 一期已交付 |
 | 账本 CRUD | `GET/POST/PATCH /ledgers` | 一期已交付 |
 
-### 二战缺口（截至当前 HEAD 的复核结果）
+### 二期缺口（截至当前 HEAD 的复核结果）
 
-P1–P4、P6–P9 已全部由后端实现（`Ledger.timezone`、`UserLedgerPreference` 与偏好接口、`POST /ledgers/:id/copy`、`DELETE /ledgers/:id`、统计三接口与二期 overview、账单列表 `categoryRootId`、`LedgerSummary.memberCount`），前端已直接消费。**仅剩一项真实缺口：**
+P1–P9 已全部由后端实现（`Ledger.timezone`、`UserLedgerPreference` 与偏好接口、`POST /ledgers/:id/copy`、`DELETE /ledgers/:id`、统计四接口、账单列表分类根节点和未分类筛选、`LedgerSummary.memberCount`、账本内待处理邀请查询），前端已直接消费。账本内待处理邀请仅允许共享账本 Owner 查询，服务端读取时会把过期邀请标记为 `EXPIRED`。
 
 | # | 缺口 | 证据（当前 HEAD） | 前端处理 |
 | --- | --- | --- | --- |
-| P5 | `GET /ledgers/:id/invitations`（账本内待处理邀请） | 路由不存在，请求返回 `40401 Cannot GET`；只有 `GET /invitations`（当前用户可处理的邀请） | 成员与邀请页的「待处理邀请」区显示**不可用说明**，只列出本次会话内新建、仍持有一次性 Token 的邀请并允许撤销；不伪造数据 |
+| P5 | `GET /ledgers/:id/invitations`（账本内待处理邀请） | 已实现；仅共享账本 Owner 可查询，读取时标记过期邀请 | 成员与邀请页展示服务端完整待处理列表；本次会话内新建的邀请仍可使用一次性链接 |
 
 ### 一期遗留缺口
 
@@ -100,7 +100,7 @@ P1–P4、P6–P9 已全部由后端实现（`Ledger.timezone`、`UserLedgerPref
 | --- | --- | --- |
 | 1 | 底部导航改三项、`routes.ts` 同步、移除 quickAdd | 已交付 |
 | 2 | 账本页顶部切换按钮、筛选面板与下钻、二期概览；我的账本页 | 已交付 |
-| 3 | 账本设置页、成员与邀请页、我的页面、我的邀请 | 已交付（P5 降级） |
+| 3 | 账本设置页、成员与邀请页、我的页面、我的邀请 | 已交付 |
 | 4 | 统计页 | 已交付 |
 
 **不要在接口就绪前用前端聚合顶替**——统计口径必须服务端唯一，否则会与账单页数字不一致。
@@ -197,13 +197,13 @@ toast.action('已删除', { label: '撤销', onClick })
 - `from`/`to` 是 **UTC 半开区间**，与统计接口的 `startAt`/`endAt` 同口径；面板里编辑的是账本时区的本地日期，由 `withBillFilterDates`/`billFilterDates` 双向换算。
 - 列表与概览共用同一份筛选：`toBillFilterQuery`（列表，含 `from`/`to`）与 `toStatisticsFilterQuery`（概览，剔除 `from`/`to`，因为统计的时间边界只能由 `period` 表达）。
 - 自定义时间范围优先于月份导航：范围生效时两个月份箭头禁用，概览卡显示区间与「清除时间范围」。
-- 统计下钻参数（`startAt`/`endAt`/`type`/`categoryRootId`/`categoryId`/`accountId`/`payerId`/`keyword`）由 `lib/bill/bill-drilldown.ts` 解析；参数非法时整体退化为默认当月，不报错。
+- 统计下钻参数（`startAt`/`endAt`/`type`/`categoryRootId`/`categoryId`/`uncategorized`/`accountId`/`payerId`/`keyword`）由 `lib/bill/bill-drilldown.ts` 解析；参数非法时整体退化为默认当月，不报错。
 
-## 邀请处理（P5 降级）
+## 邀请处理
 
 - 邀请链接形如 `/user/invitations?token=...`；页面据 `token` 展示接受入口，`?action=decline` 切换为拒绝。
 - `GET /invitations` 只返回当前用户可处理的邀请，**不返回 Token**，所以列表条目只读展示，不提供「凭空接受」按钮。
-- 账本内待处理邀请无法查询（P5），成员与邀请页显示不可用说明；本次会话内新建的邀请可在离开页面前撤销。
+- 成员页通过 `GET /ledgers/:id/invitations` 读取服务端完整的待处理邀请列表；创建响应中的一次性 Token 仍只在本次会话内保留，用于生成邀请链接。
 
 ## 迭代顺序
 
@@ -215,7 +215,7 @@ toast.action('已删除', { label: '撤销', onClick })
 | 一期四 | 分类管理 ✅ | 无 |
 | 二期一 | 底部导航三项、账本页切换入口 | 无 |
 | 二期二 | 我的账本、账本设置 | P2（偏好）可降级 |
-| 二期三 | 成员与邀请、我的邀请 | P5 |
+| 二期三 | 成员与邀请、我的邀请 | 已实现 |
 | 二期四 | 统计页 | P1/P6/P7/P8 全部 |
 
 每迭代结束执行 `pnpm typecheck`、`pnpm test`、`pnpm lint`，并在浏览器验收该页面文档的「验收清单」。

@@ -14,13 +14,18 @@ interface NormalizedStatisticsFilters {
   type?: StatisticsQuery['type'];
   categoryId?: string;
   categoryRootId?: string;
+  uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
   keyword?: string;
 }
 
 function normalizeFilters(query: StatisticsQuery): NormalizedStatisticsFilters {
-  if (query.categoryId !== undefined && query.categoryRootId !== undefined) {
+  if (
+    (query.categoryId !== undefined && query.categoryRootId !== undefined) ||
+    (query.uncategorized === true &&
+      (query.categoryId !== undefined || query.categoryRootId !== undefined))
+  ) {
     throw new BadRequestException({
       code: 40021,
       message: '统计参数不合法',
@@ -34,6 +39,7 @@ function normalizeFilters(query: StatisticsQuery): NormalizedStatisticsFilters {
     ...(query.categoryRootId === undefined
       ? {}
       : { categoryRootId: query.categoryRootId }),
+    ...(query.uncategorized === undefined ? {} : { uncategorized: query.uncategorized }),
     ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
     ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
     ...(keyword ? { keyword } : {}),
@@ -90,10 +96,12 @@ export function buildStatisticsWhere(
     ledgerId,
     deletedAt: null,
     type: filters.type ?? { in: ['EXPENSE', 'INCOME'] },
-    ...(filters.categoryId === undefined
-      ? {}
-      : { categoryId: filters.categoryId, category: { ledgerId } }),
-    ...(filters.categoryRootId === undefined
+    ...(filters.uncategorized === true
+      ? { categoryId: null }
+      : filters.categoryId === undefined
+        ? {}
+        : { categoryId: filters.categoryId, category: { ledgerId } }),
+    ...(filters.uncategorized === true || filters.categoryRootId === undefined
       ? {}
       : {
           OR: [
@@ -147,6 +155,9 @@ function buildStatisticsSqlConditions(
     conditions.push(
       Prisma.sql`c."id" = ${filters.categoryId} AND c."ledger_id" = ${ledgerId}`,
     );
+  }
+  if (filters.uncategorized === true) {
+    conditions.push(Prisma.sql`t."category_id" IS NULL`);
   }
   if (filters.categoryRootId !== undefined) {
     conditions.push(Prisma.sql`(

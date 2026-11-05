@@ -14,11 +14,11 @@ function unwrap<T>(response: { data: ApiSuccessResponse<T> }): T {
 }
 
 /** 去掉值为 undefined 的查询参数，避免 `?type=undefined` 被服务端当成筛选条件。 */
-function toParams(query: object): Record<string, string | number> {
-  const params: Record<string, string | number> = {};
+function toParams(query: object): Record<string, string | number | boolean> {
+  const params: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== '') {
-      params[key] = value as string | number;
+      params[key] = value as string | number | boolean;
     }
   }
   return params;

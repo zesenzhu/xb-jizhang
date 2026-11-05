@@ -1,4 +1,5 @@
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryTransactionsDto {
@@ -26,6 +27,13 @@ export class QueryTransactionsDto {
   @IsOptional()
   @IsUUID()
   categoryRootId?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  uncategorized?: boolean;
 
   @IsOptional()
   @IsUUID()

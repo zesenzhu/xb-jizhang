@@ -20,6 +20,7 @@ export interface BillFilter {
   type: BillFilterType;
   categoryRootId: string;
   categoryId: string;
+  uncategorized?: boolean;
   accountId: string;
   /** UTC ISO，左闭 */
   from: string;
@@ -65,6 +66,7 @@ export interface StatisticsFilterQuery {
   accountId?: string;
   categoryId?: string;
   categoryRootId?: string;
+  uncategorized?: boolean;
 }
 
 export interface BillFilterMonth {
@@ -112,7 +114,15 @@ export function clearBillFilter(_filter: BillFilter): BillFilter {
  * 所以移除时要成对清空；只清一半会让列表继续被旧条件过滤。
  */
 export function removeBillFilter(filter: BillFilter, key: BillFilterChipKey): BillFilter {
-  if (key === 'category') return { ...filter, categoryRootId: '', categoryId: '' };
+  if (key === 'category') {
+    const next = {
+      ...filter,
+      categoryRootId: '',
+      categoryId: '',
+    };
+    delete next.uncategorized;
+    return next;
+  }
   if (key === 'range') return { ...filter, from: '', to: '' };
   return { ...filter, [key]: '' };
 }
@@ -124,6 +134,7 @@ export function isBillFilterActive(filter: BillFilter): boolean {
       filter.type ||
       filter.categoryRootId ||
       filter.categoryId ||
+      filter.uncategorized ||
       filter.accountId ||
       filter.from ||
       filter.to,
@@ -149,6 +160,7 @@ export function toBillFilterQuery(
   | 'type'
   | 'categoryId'
   | 'categoryRootId'
+  | 'uncategorized'
   | 'accountId'
   | 'from'
   | 'to'
@@ -157,11 +169,13 @@ export function toBillFilterQuery(
     ...(filter.keyword ? { keyword: filter.keyword } : {}),
     ...(filter.payerId ? { payerId: filter.payerId } : {}),
     ...(filter.type ? { type: filter.type } : {}),
-    ...(filter.categoryId
-      ? { categoryId: filter.categoryId }
-      : filter.categoryRootId
-        ? { categoryRootId: filter.categoryRootId }
-        : {}),
+    ...(filter.uncategorized && !filter.categoryId && !filter.categoryRootId
+      ? { uncategorized: true }
+      : filter.categoryId
+        ? { categoryId: filter.categoryId }
+        : filter.categoryRootId
+          ? { categoryRootId: filter.categoryRootId }
+          : {}),
     ...(filter.accountId ? { accountId: filter.accountId } : {}),
     ...(filter.from ? { from: filter.from } : {}),
     ...(filter.to ? { to: filter.to } : {}),
@@ -180,11 +194,13 @@ export function toStatisticsFilterQuery(filter: BillFilter): StatisticsFilterQue
     ...(filter.payerId ? { payerId: filter.payerId } : {}),
     ...(filter.type ? { type: filter.type } : {}),
     ...(filter.accountId ? { accountId: filter.accountId } : {}),
-    ...(filter.categoryId
-      ? { categoryId: filter.categoryId }
-      : filter.categoryRootId
-        ? { categoryRootId: filter.categoryRootId }
-        : {}),
+    ...(filter.uncategorized && !filter.categoryId && !filter.categoryRootId
+      ? { uncategorized: true }
+      : filter.categoryId
+        ? { categoryId: filter.categoryId }
+        : filter.categoryRootId
+          ? { categoryRootId: filter.categoryRootId }
+          : {}),
   };
 }
 
@@ -244,7 +260,7 @@ export function getBillFilterChips(
     chips.push({ key: 'type', label: filter.type === 'EXPENSE' ? '类型：支出' : '类型：收入' });
   }
 
-  if (filter.categoryId || filter.categoryRootId) {
+  if (filter.categoryId || filter.categoryRootId || filter.uncategorized) {
     chips.push({ key: 'category', label: `分类：${categoryLabel(filter, labels.categories)}` });
   }
 
@@ -270,6 +286,7 @@ function categoryLabel(
   filter: BillFilter,
   categories: readonly BillFilterCategory[] | undefined,
 ): string {
+  if (filter.uncategorized && !filter.categoryId && !filter.categoryRootId) return '未分类';
   const exact = filter.categoryId
     ? categories?.find((item) => item.id === filter.categoryId)
     : undefined;

@@ -254,7 +254,9 @@ export function StatisticsPage(): React.JSX.Element {
                     ? item.parentId || item.bucketType === 'ROOT_DIRECT'
                       ? { categoryId: item.categoryId }
                       : { categoryRootId: item.categoryId }
-                    : {}),
+                    : item.bucketType === 'UNCATEGORIZED'
+                      ? { uncategorized: true }
+                      : {}),
                 }),
               );
             }}

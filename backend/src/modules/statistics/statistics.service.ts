@@ -201,9 +201,11 @@ export class StatisticsService {
             }
           : null,
         drilldown: {
-          ...(rootView && category
-            ? { categoryRootId: category.id }
-            : { categoryId: id }),
+          ...(category === null
+            ? { uncategorized: true }
+            : rootView
+              ? { categoryRootId: category.id }
+              : { categoryId: id }),
           from: range.startAt,
           to: range.endAt,
           type,

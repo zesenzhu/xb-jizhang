@@ -16,6 +16,13 @@ describe('TransactionController', () => {
     expect(validateSync(dto).some(({ property }) => property === 'categoryRootId')).toBe(true);
   });
 
+  it('给定未分类参数，当校验账单列表参数，则转换布尔字符串并允许合法值', () => {
+    const dto = plainToInstance(QueryTransactionsDto, { uncategorized: 'true' });
+
+    expect(validateSync(dto)).toHaveLength(0);
+    expect(dto.uncategorized).toBe(true);
+  });
+
   it('给定创建账单请求，当 Controller 接收参数，则只传递认证用户和允许字段', async () => {
     const service = { create: jest.fn().mockResolvedValue({ id: 'transaction-1' }) };
     const controller = new TransactionController(service as unknown as TransactionService);

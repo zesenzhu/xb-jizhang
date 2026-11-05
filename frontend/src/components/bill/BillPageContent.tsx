@@ -56,7 +56,7 @@ function monthShift(year: number, month: number, delta: number): { year: number;
 function countSheetFilters(filter: BillFilter): number {
   return [
     filter.type,
-    filter.categoryRootId || filter.categoryId,
+    filter.categoryRootId || filter.categoryId || filter.uncategorized,
     filter.accountId,
     hasRangeFilter(filter) ? 'range' : '',
   ].filter(Boolean).length;

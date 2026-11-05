@@ -112,6 +112,23 @@ describe('statistics query builder', () => {
     );
   });
 
+  it('给定未分类筛选，当构建 where，则只匹配 categoryId 为空的账单', () => {
+    expect(
+      buildStatisticsWhere(userId, ledgerId, {
+        uncategorized: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        categoryId: null,
+        ledgerId,
+        deletedAt: null,
+      }),
+    );
+    expect(buildStatisticsWhere(userId, ledgerId, { uncategorized: true })).not.toHaveProperty(
+      'category',
+    );
+  });
+
   it('给定同时传入精确分类和一级分类，当构建 where，则返回参数错误', () => {
     try {
       buildStatisticsWhere(userId, ledgerId, {
@@ -125,6 +142,15 @@ describe('statistics query builder', () => {
         code: 40021,
       });
     }
+  });
+
+  it('给定未分类和具体分类同时传入，当构建 where，则返回参数错误', () => {
+    expect(() =>
+      buildStatisticsWhere(userId, ledgerId, {
+        uncategorized: true,
+        categoryId: 'category-1',
+      }),
+    ).toThrow(BadRequestException);
   });
 
   it('给定本地时区和统计过滤，当构建有效日查询，则使用参数化 SQL 并保留相同数据范围', () => {

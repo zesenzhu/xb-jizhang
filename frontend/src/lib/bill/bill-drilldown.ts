@@ -15,6 +15,7 @@ export interface BillDrilldown {
   type?: TransactionType;
   categoryRootId?: string;
   categoryId?: string;
+  uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
   keyword?: string;
@@ -27,6 +28,7 @@ export interface BillDrilldownInput {
   type?: string | null;
   categoryRootId?: string | null;
   categoryId?: string | null;
+  uncategorized?: boolean | null;
   accountId?: string | null;
   payerId?: string | null;
   keyword?: string | null;
@@ -69,9 +71,14 @@ export function parseBillDrilldown(params: {
   if (!startAt || !endAt || !isIsoTimestamp(startAt) || !isIsoTimestamp(endAt)) return null;
   if (new Date(startAt).getTime() >= new Date(endAt).getTime()) return null;
 
-  // categoryId 与 categoryRootId 在服务端互斥；精确分类信息更细，优先保留它。
-  const categoryId = readUuid(params.get('categoryId'));
-  const categoryRootId = categoryId ? undefined : readUuid(params.get('categoryRootId'));
+  // categoryId、categoryRootId 和 uncategorized 在服务端互斥；未分类下钻优先级最高。
+  const uncategorized = params.get('uncategorized') === 'true';
+  const categoryId = uncategorized ? undefined : readUuid(params.get('categoryId'));
+  const categoryRootId = uncategorized
+    ? undefined
+    : categoryId
+      ? undefined
+      : readUuid(params.get('categoryRootId'));
   const type = readType(params.get('type'));
   const accountId = readUuid(params.get('accountId'));
   const payerId = readUuid(params.get('payerId'));
@@ -83,6 +90,7 @@ export function parseBillDrilldown(params: {
     ...(type ? { type } : {}),
     ...(categoryRootId ? { categoryRootId } : {}),
     ...(categoryId ? { categoryId } : {}),
+    ...(uncategorized ? { uncategorized: true } : {}),
     ...(accountId ? { accountId } : {}),
     ...(payerId ? { payerId } : {}),
     ...(keyword ? { keyword } : {}),
@@ -101,6 +109,7 @@ export function toBillFilterFromDrilldown(drilldown: BillDrilldown): BillFilter 
     categoryRootId: drilldown.categoryRootId ?? '',
     categoryId: drilldown.categoryId ?? '',
     accountId: drilldown.accountId ?? '',
+    ...(drilldown.uncategorized ? { uncategorized: true } : {}),
   };
 }
 
@@ -111,6 +120,7 @@ const DRILLDOWN_KEYS = [
   'type',
   'categoryRootId',
   'categoryId',
+  'uncategorized',
   'accountId',
   'payerId',
   'keyword',
@@ -128,7 +138,9 @@ export function buildBillDrilldownUrl(input: BillDrilldownInput): string {
   const search = new URLSearchParams();
   for (const key of DRILLDOWN_KEYS) {
     const value = input[key];
-    if (value !== undefined && value !== null && value !== '') search.set(key, value);
+    if (value !== undefined && value !== null && value !== '') {
+      search.set(key, typeof value === 'boolean' ? String(value) : value);
+    }
   }
   const query = search.toString();
   return query ? `/user?${query}` : '/user';

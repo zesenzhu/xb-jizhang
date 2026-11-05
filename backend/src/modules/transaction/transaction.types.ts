@@ -30,6 +30,7 @@ export interface TransactionQuery {
   type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
   categoryId?: string;
   categoryRootId?: string;
+  uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
   from?: string;

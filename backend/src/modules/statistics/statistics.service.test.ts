@@ -711,7 +711,7 @@ describe('StatisticsService categories', () => {
             transactionCount: 1,
             comparison: null,
             drilldown: {
-              categoryId: null,
+              uncategorized: true,
               from: '2026-09-30T16:00:00.000Z',
               to: '2026-10-31T16:00:00.000Z',
               type: 'EXPENSE',

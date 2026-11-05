@@ -41,6 +41,8 @@ export interface StatisticsQuery {
   accountId?: string;
   payerId?: string;
   keyword?: string;
+  /** 只匹配没有分类的账单；与 categoryId/categoryRootId 互斥。 */
+  uncategorized?: boolean;
 }
 
 /** 一期口径（`from`/`to`），仅在不传 `period` 时返回，二期前端不使用。 */
@@ -122,6 +124,7 @@ export interface CategoryItem {
   drilldown: {
     categoryRootId?: string;
     categoryId?: string | null;
+    uncategorized?: boolean;
     from: string;
     to: string;
     type: 'EXPENSE' | 'INCOME';

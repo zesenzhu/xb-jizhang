@@ -301,11 +301,15 @@ export class TransactionService {
   async list(userId: string, ledgerId: string, query: TransactionQuery) {
     const member = await this.getMembership(userId, ledgerId);
     if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
-    if (query.categoryId !== undefined && query.categoryRootId !== undefined) {
+    if (
+      (query.categoryId !== undefined && query.categoryRootId !== undefined) ||
+      (query.uncategorized === true &&
+        (query.categoryId !== undefined || query.categoryRootId !== undefined))
+    ) {
       throw this.invalidCategoryFilterException();
     }
 
-    if (query.categoryRootId !== undefined) {
+    if (query.categoryRootId !== undefined && query.uncategorized !== true) {
       const categoryRoot = await this.prisma.category.findFirst({
         where: { id: query.categoryRootId, ledgerId },
         select: { id: true, parentId: true },
@@ -330,8 +334,12 @@ export class TransactionService {
       ledgerId,
       deletedAt: null,
       ...(query.type === undefined ? {} : { type: query.type }),
-      ...(query.categoryId === undefined ? {} : { categoryId: query.categoryId }),
-      ...(query.categoryRootId === undefined ? {} : {
+      ...(query.uncategorized === true
+        ? { categoryId: null }
+        : query.categoryId === undefined
+          ? {}
+          : { categoryId: query.categoryId }),
+      ...(query.uncategorized === true || query.categoryRootId === undefined ? {} : {
         OR: [
           { categoryId: query.categoryRootId },
           { category: { parentId: query.categoryRootId } },

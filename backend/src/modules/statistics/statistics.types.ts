@@ -25,6 +25,7 @@ export interface StatisticsQuery extends StatisticsDateRangeQuery {
   type?: Extract<TransactionType, 'EXPENSE' | 'INCOME'>;
   categoryId?: string;
   categoryRootId?: string;
+  uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
   keyword?: string;
@@ -138,6 +139,7 @@ export interface StatisticsCategoryItem {
   drilldown: {
     categoryId?: string | null;
     categoryRootId?: string;
+    uncategorized?: boolean;
     from: string;
     to: string;
     type: 'EXPENSE' | 'INCOME';

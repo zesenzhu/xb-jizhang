@@ -73,6 +73,23 @@ assert.deepEqual(
   { from: START, to: END, categoryId: CHILD },
 );
 
+assert.deepEqual(
+  parseBillDrilldown(params({ startAt: START, endAt: END, uncategorized: 'true' })),
+  { from: START, to: END, uncategorized: true },
+);
+assert.deepEqual(
+  parseBillDrilldown(
+    params({
+      startAt: START,
+      endAt: END,
+      uncategorized: 'true',
+      categoryId: CHILD,
+      categoryRootId: ROOT,
+    }),
+  ),
+  { from: START, to: END, uncategorized: true },
+);
+
 // 下钻条件灌进筛选模型；其余条件保持默认空值。
 assert.deepEqual(
   toBillFilterFromDrilldown({ from: START, to: END, type: 'INCOME', categoryRootId: ROOT }),
@@ -82,6 +99,20 @@ assert.deepEqual(
     type: 'INCOME',
     categoryRootId: ROOT,
     categoryId: '',
+    accountId: '',
+    from: START,
+    to: END,
+  },
+);
+assert.deepEqual(
+  toBillFilterFromDrilldown({ from: START, to: END, uncategorized: true }),
+  {
+    keyword: '',
+    payerId: '',
+    type: '',
+    categoryRootId: '',
+    categoryId: '',
+    uncategorized: true,
     accountId: '',
     from: START,
     to: END,
@@ -131,6 +162,16 @@ assert.deepEqual(parsedRoundTrip, {
   type: 'INCOME',
   categoryId: CHILD,
 });
+
+const uncategorizedUrl = buildBillDrilldownUrl({
+  startAt: START,
+  endAt: END,
+  uncategorized: true,
+});
+assert.deepEqual(
+  parseBillDrilldown(new URL(`http://localhost:8090${uncategorizedUrl}`).searchParams),
+  { from: START, to: END, uncategorized: true },
+);
 
 // 线上 URLSearchParams 也能被解析（页面里拿到的不是 Map）。
 assert.deepEqual(

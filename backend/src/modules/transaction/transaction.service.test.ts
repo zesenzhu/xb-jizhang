@@ -390,6 +390,47 @@ describe('TransactionService', () => {
     expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
   });
 
+  it('给定未分类筛选，当查询账单列表，则只传入空分类条件且不查询分类根节点', async () => {
+    const dependencies = createService();
+    const uncategorizedTransaction = {
+      ...transaction,
+      categoryId: null,
+      category: null,
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findMany.mockResolvedValue([uncategorizedTransaction]);
+    dependencies.prisma.transaction.count.mockResolvedValue(1);
+
+    const result = await dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+      uncategorized: true,
+    });
+
+    expect(dependencies.prisma.category.findFirst).not.toHaveBeenCalled();
+    expect(dependencies.prisma.transaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ categoryId: null }),
+      }),
+    );
+    expect(result.items).toEqual([uncategorizedTransaction]);
+  });
+
+  it('给定未分类与具体分类同时传入，当查询账单列表，则返回筛选参数冲突', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+
+    await expect(
+      dependencies.service.list(userId, ledgerId, {
+        page: 1,
+        pageSize: 20,
+        categoryId,
+        uncategorized: true,
+      }),
+    ).rejects.toMatchObject({ response: { code: 40023 } });
+    expect(dependencies.prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
   it('给定活跃成员查询账单，当包含筛选条件，则按账本、可见账户和时间倒序分页返回', async () => {
     const dependencies = createService();
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });

@@ -91,6 +91,24 @@ describe('StatisticsController', () => {
     );
   });
 
+  it('给定未分类参数，当校验 DTO，则转换布尔字符串并允许合法值', () => {
+    const dto = plainToInstance(QueryStatisticsDto, { uncategorized: 'true' });
+
+    expect(validateSync(dto)).toHaveLength(0);
+    expect(dto.uncategorized).toBe(true);
+  });
+
+  it('给定未分类和分类参数同时填写，当校验 DTO，则拒绝互斥分类', () => {
+    const dto = plainToInstance(QueryStatisticsDto, {
+      categoryId: 'c870a1fa-2600-4c29-b482-7c8132123456',
+      uncategorized: 'true',
+    });
+
+    expect(validateSync(dto).map(({ property }) => property)).toContain(
+      'uncategorized',
+    );
+  });
+
   it('给定趋势与周期汇总请求，当 Controller 接收筛选条件，则传递认证用户、账本和完整查询参数', async () => {
     const service = {
       trend: jest.fn().mockResolvedValue({ hasData: false, items: [] }),

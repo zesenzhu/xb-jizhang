@@ -41,6 +41,7 @@ assert.deepEqual(submitBillKeyword({ ...initial, payerId: 'user-2' }, '  '), {
 const withCategory = { ...initial, categoryRootId: 'root-1', categoryId: 'child-1' };
 assert.deepEqual(removeBillFilter(withCategory, 'category'), initial);
 assert.deepEqual(removeBillFilter(createInitialBillFilter(), 'category'), initial);
+assert.deepEqual(removeBillFilter({ ...initial, uncategorized: true }, 'category'), initial);
 
 // 时间范围同理：from/to 必须一起清。
 const ranged = { ...initial, from: '2026-10-31T16:00:00.000Z', to: '2026-11-30T16:00:00.000Z' };
@@ -105,6 +106,9 @@ assert.deepEqual(getBillFilterChips({ ...initial, accountId: 'missing' }), [
 assert.deepEqual(getBillFilterChips({ ...initial, keyword: '早餐' }), [
   { key: 'keyword', label: '关键词：早餐' },
 ]);
+assert.deepEqual(getBillFilterChips({ ...initial, uncategorized: true }), [
+  { key: 'category', label: '分类：未分类' },
+]);
 
 // 查询参数：空值全部剔除；分类两字段互斥，精确分类优先。
 assert.deepEqual(toBillFilterQuery(initial), {});
@@ -119,6 +123,13 @@ assert.deepEqual(
   toBillFilterQuery({ ...initial, categoryRootId: 'root-1', categoryId: 'child-1' }),
   { categoryId: 'child-1' },
 );
+assert.deepEqual(toBillFilterQuery({ ...initial, uncategorized: true }), {
+  uncategorized: true,
+});
+assert.deepEqual(
+  toBillFilterQuery({ ...initial, uncategorized: true, categoryRootId: 'root-1' }),
+  { categoryRootId: 'root-1' },
+);
 
 // 统计接口不接受 from/to：多传会被 DTO 判成非法组合。
 assert.deepEqual(
@@ -132,6 +143,9 @@ assert.deepEqual(
   }),
   { keyword: '早餐', type: 'EXPENSE', categoryRootId: 'root-1' },
 );
+assert.deepEqual(toStatisticsFilterQuery({ ...initial, uncategorized: true }), {
+  uncategorized: true,
+});
 
 // 月份口径：按账本时区（Asia/Shanghai）算出 UTC 半开区间。
 const monthScope = resolveBillScope(initial, { year: 2026, month: 11 }, 'Asia/Shanghai');

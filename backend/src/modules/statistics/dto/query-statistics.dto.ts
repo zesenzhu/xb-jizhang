@@ -74,8 +74,18 @@ function isCategoryFilterExclusive(
 ): boolean {
   return (
     !hasValue(value) ||
-    !hasValue((args.object as { categoryId?: string }).categoryId)
+    (!hasValue((args.object as { categoryId?: string }).categoryId) &&
+      (args.object as { uncategorized?: boolean }).uncategorized !== true)
   );
+}
+
+function isUncategorizedFilterExclusive(
+  value: unknown,
+  args: ValidationArguments,
+): boolean {
+  if (value !== true) return true;
+  const query = args.object as { categoryId?: string; categoryRootId?: string };
+  return !hasValue(query.categoryId) && !hasValue(query.categoryRootId);
 }
 
 export class QueryStatisticsDto {
@@ -142,6 +152,17 @@ export class QueryStatisticsDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  @ValidateBy({
+    name: 'uncategorizedFilterExclusive',
+    validator: { validate: isUncategorizedFilterExclusive },
+  })
+  uncategorized?: boolean;
 
   @IsOptional()
   @IsUUID()
