@@ -1,5 +1,15 @@
 import type { LedgerListQuery } from '@/lib/api/ledger-types';
 import type { StatisticsOverviewQuery, TransactionListQuery } from '@/lib/api/transaction-types';
+import type {
+  CategoryQuery,
+  StatisticsQuery,
+  TrendQuery,
+} from '@/lib/api/statistics-types';
+
+/** 公共时间范围 + 公共筛选，四个统计模块共享。 */
+export type StatisticsScope = StatisticsQuery;
+export type StatisticsScopeTrend = TrendQuery;
+export type StatisticsScopeCategories = CategoryQuery;
 
 export const queryStaleTime = {
   currentUser: 5 * 60 * 1000,
@@ -41,7 +51,21 @@ export const queryKeys = {
       ['ledger', ledgerId, 'transactions', 'list', normalizeFilter(filter)] as const,
   },
   statistics: {
+    /** 二期统计页的公共时间范围与筛选上下文；四个模块共用同一份，保证口径一致。 */
+    scope: (ledgerId: string, scope: StatisticsScope) =>
+      ['ledger', ledgerId, 'statistics', 'scope', normalizeFilter(scope)] as const,
     overview: (ledgerId: string, filter: StatisticsOverviewQuery = {}) =>
       ['ledger', ledgerId, 'statistics', 'overview', normalizeFilter(filter)] as const,
+    /**
+     * 趋势/分类/汇总各自的键必须独立：
+     * 趋势切 metric、分类切 type/level 都只影响自己那一块，
+     * 混用同一个键会让另外两块跟着重新请求。
+     */
+    trend: (ledgerId: string, query: StatisticsScopeTrend) =>
+      ['ledger', ledgerId, 'statistics', 'trend', normalizeFilter(query)] as const,
+    categories: (ledgerId: string, query: StatisticsScopeCategories) =>
+      ['ledger', ledgerId, 'statistics', 'categories', normalizeFilter(query)] as const,
+    periods: (ledgerId: string, query: StatisticsScope) =>
+      ['ledger', ledgerId, 'statistics', 'periods', normalizeFilter(query)] as const,
   },
 } as const;
