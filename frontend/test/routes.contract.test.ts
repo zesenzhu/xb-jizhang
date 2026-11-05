@@ -59,6 +59,9 @@ assert.equal(isUserPrimaryTabRoute('/user/ledger/new'), false);
 assert.equal(isUserPrimaryTabRoute('/user/ledger/abc-123'), false);
 assert.equal(isUserPrimaryTabRoute('/user/ledgers'), false);
 assert.equal(isUserPrimaryTabRoute('/user/ledgers/abc/settings'), false);
+// 二期新增的二级页同样不能判定为一级 Tab（否则会错误挂上底部导航）。
+assert.equal(isUserPrimaryTabRoute('/user/ledgers/abc/members'), false);
+assert.equal(isUserPrimaryTabRoute('/user/invitations'), false);
 assert.equal(isUserPrimaryTabRoute('/user/login'), false);
 assert.equal(isUserPrimaryTabRoute('/user/register'), false);
 assert.equal(getUserPrimaryTab('/user/ledger/new'), null);

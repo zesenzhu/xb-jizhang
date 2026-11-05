@@ -2,8 +2,6 @@ import { userClient } from './user-client';
 import type { ApiSuccessResponse } from './auth-types';
 import type {
   CreateTransactionInput,
-  StatisticsOverview,
-  StatisticsOverviewQuery,
   TransactionListApiResponse,
   TransactionListQuery,
   TransactionListResponse,
@@ -84,18 +82,6 @@ export async function deleteTransaction(
     await userClient.delete<ApiSuccessResponse<TransactionSummary>>(
       `/ledgers/${encodeURIComponent(ledgerId)}/transactions/${encodeURIComponent(transactionId)}`,
       { data: { version } },
-    ),
-  );
-}
-
-export async function getStatisticsOverview(
-  ledgerId: string,
-  query: StatisticsOverviewQuery = {},
-): Promise<StatisticsOverview> {
-  return unwrap(
-    await userClient.get<ApiSuccessResponse<StatisticsOverview>>(
-      `/ledgers/${encodeURIComponent(ledgerId)}/statistics/overview`,
-      { params: toParams(query) },
     ),
   );
 }

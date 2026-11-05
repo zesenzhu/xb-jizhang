@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { AxiosAdapter } from 'axios';
-import { getStatisticsOverview, getTransactions } from '../src/lib/api/transaction-api';
+import { getTransactions } from '../src/lib/api/transaction-api';
 import { userClient } from '../src/lib/api/user-client';
 
 interface CapturedRequest {
@@ -54,30 +54,30 @@ void (async () => {
     await getTransactions('ledger/with slash', {});
     assert.equal(captured.at(-1)?.url, '/ledgers/ledger%2Fwith%20slash/transactions');
 
-    userClient.defaults.adapter = async (config) => {
-      captured.push({ method: config.method, url: config.url, params: config.params });
-      return okResponse(config, {
-        from: null,
-        to: null,
-        totalIncomeCents: 0,
-        totalExpenseCents: 0,
-        netCents: 0,
-        transactionCount: 0,
-      });
-    };
+    // 一级分类下钻：categoryRootId 直接透传给列表接口。
+    await getTransactions('ledger-1', { page: 1, categoryRootId: 'root-1' });
+    assert.deepEqual(captured.at(-1)?.params, { page: 1, categoryRootId: 'root-1' });
 
-    await getStatisticsOverview('ledger-1', {
+    // 组合筛选：时间区间、类型、账户、付款人、关键词同时透传，键名与后端 DTO 一致。
+    await getTransactions('ledger-1', {
+      page: 1,
+      pageSize: 30,
       from: '2026-10-31T16:00:00.000Z',
-      to: '2026-11-30T16:00:00.000Z',
-      keyword: ' 早餐 ',
+      to: '2026-11-07T16:00:00.000Z',
+      type: 'EXPENSE',
+      accountId: 'account-1',
       payerId: 'user-2',
+      keyword: '早餐',
     });
-    assert.equal(captured.at(-1)?.url, '/ledgers/ledger-1/statistics/overview');
     assert.deepEqual(captured.at(-1)?.params, {
+      page: 1,
+      pageSize: 30,
       from: '2026-10-31T16:00:00.000Z',
-      to: '2026-11-30T16:00:00.000Z',
-      keyword: ' 早餐 ',
+      to: '2026-11-07T16:00:00.000Z',
+      type: 'EXPENSE',
+      accountId: 'account-1',
       payerId: 'user-2',
+      keyword: '早餐',
     });
 
     console.log('transaction api contract passed');

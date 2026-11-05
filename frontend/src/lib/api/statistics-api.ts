@@ -10,7 +10,6 @@ import type {
   OverviewResponse,
   PeriodApiResponse,
   PeriodData,
-  StatisticsQuery,
   TrendApiResponse,
   TrendData,
   TrendQuery,
@@ -38,7 +37,7 @@ function basePath(ledgerId: string, section: string): string {
 
 export async function getStatisticsOverview(
   ledgerId: string,
-  query: StatisticsQuery,
+  query: FilteredStatisticsQuery,
 ): Promise<OverviewData> {
   const data: OverviewResponse = unwrap(
     await userClient.get<OverviewApiResponse>(basePath(ledgerId, 'overview'), {

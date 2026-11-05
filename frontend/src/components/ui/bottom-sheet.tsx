@@ -25,6 +25,28 @@ export interface BottomSheetProps {
 /** 退场动画时长；与 globals.css 的 sheet-fall / overlay-fade-out 保持一致。 */
 const SHEET_EXIT_MS = 220;
 
+/**
+ * 抽屉正文的必备结构。
+ *
+ * 面板本身是 `overflow-hidden` + `max-h-[88vh]`：正文若不让出滚动权，
+ * 内容一旦超过 88vh 就会被直接裁切，底部按钮永远不可见，且横向内边距与
+ * Home Indicator 留白都会丢失。所有抽屉都必须按有无固定页脚二选一：
+ *
+ * - 正文 + 固定页脚：正文 `SHEET_BODY_SCROLL`，页脚 `SHEET_FOOTER`
+ * - 只有正文（按钮在正文内）：`SHEET_BODY_SCROLL_ALONE`，由正文自带安全区
+ *
+ * 全站不再各写一份，避免再次漏掉 `min-h-0`、`overflow-y-auto` 或安全区。
+ */
+export const SHEET_BODY_SCROLL =
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-3';
+
+/** 无固定页脚时使用：正文自己承担底部安全区，否则按钮会贴住 Home Indicator。 */
+export const SHEET_BODY_SCROLL_ALONE =
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]';
+
+export const SHEET_FOOTER =
+  'shrink-0 border-t border-app-divider px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3';
+
 const LAYER_CLASS = {
   base: 'z-50',
   nested: 'z-[60]',

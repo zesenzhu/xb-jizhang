@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { ChevronRight } from 'lucide-react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
 import type { PeriodItem, PeriodSummary } from '@/lib/api/statistics-types';
 import { formatPeriodLabel } from '@/lib/statistics/chart';
@@ -10,9 +11,9 @@ export interface PeriodTableProps {
   items: readonly PeriodItem[];
   granularity: 'DAY' | 'MONTH' | 'YEAR';
   onSelectPeriod?: (item: PeriodItem) => void;
+  onSelectSummary?: () => void;
   className?: string;
 }
-
 /**
  * 账单汇总表。
  *
@@ -25,8 +26,11 @@ export function PeriodTable({
   items,
   granularity,
   onSelectPeriod,
+  onSelectSummary,
   className,
 }: PeriodTableProps): React.JSX.Element {
+  const isSummaryClickable = Boolean(onSelectSummary);
+
   return (
     <div className={cn('overflow-hidden rounded-2xl border border-app-border', className)}>
       <table className="w-full border-collapse text-xs">
@@ -39,8 +43,25 @@ export function PeriodTable({
           </tr>
         </thead>
         <tbody>
-          <tr className="border-t border-app-divider bg-app-card">
-            <td className="px-3 py-2 font-semibold text-text-main">总计</td>
+          <tr
+            className={cn(
+              'border-t border-app-divider bg-app-card',
+              isSummaryClickable && 'cursor-pointer transition-colors hover:bg-app-card-subtle/60',
+            )}
+            onClick={onSelectSummary}
+            role={isSummaryClickable ? 'button' : undefined}
+            tabIndex={isSummaryClickable ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (isSummaryClickable && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onSelectSummary?.();
+              }
+            }}
+          >
+            <td className="px-3 py-2 font-semibold text-text-main flex items-center gap-1">
+              总计
+              {isSummaryClickable && <ChevronRight size={14} className="text-text-tertiary" />}
+            </td>
             <td className="px-2 py-2 text-right tabular-nums text-rose-500">
               ¥{formatCentsToYuan(summary.totalExpenseCents)}
             </td>
@@ -56,7 +77,6 @@ export function PeriodTable({
               ¥{formatCentsToYuan(summary.netCents)}
             </td>
           </tr>
-
           <tr className="border-t border-app-divider bg-app-card text-text-muted">
             <td className="px-3 py-2">日均</td>
             <td className="px-2 py-2 text-right tabular-nums">

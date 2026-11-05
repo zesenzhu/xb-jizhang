@@ -4,48 +4,74 @@ import * as React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * 账本管理页面专属骨架屏
- * 1:1 还原“我的账本”标题、新建按钮及多条账本卡片列表
+ * 账本管理页面分组骨架屏
+ * 分为「个人账本」与「共享账本」两组，每组 2 张卡片，1:1 还原 LedgerCard 高度感
  */
 export function LedgerListSkeleton(): React.JSX.Element {
   return (
-    <div className="select-none">
-      <main className="mx-auto max-w-md space-y-4 px-4 py-4">
-        {/* 一级页面顶部大标题与新建按钮骨架 */}
-        <header className="flex items-center justify-between pt-2 pb-1">
-          <div className="space-y-1.5">
-            <Skeleton className="h-7 w-28 rounded-lg" />
-            <Skeleton className="h-3.5 w-44 rounded-md" />
-          </div>
-          <Skeleton className="h-9 w-24 rounded-2xl bg-primary/20" />
-        </header>
-
-        {/* 账本条目卡片骨架列表 */}
-        <div className="grid gap-3 pt-1">
-          {Array.from({ length: 3 }).map((_, idx) => (
+    <div className="select-none space-y-6">
+      {/* 个人账本组 */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <Skeleton className="h-4 w-16 rounded-md" />
+          <Skeleton className="h-3.5 w-8 rounded-md" />
+        </div>
+        <div className="grid gap-3">
+          {Array.from({ length: 2 }).map((_, idx) => (
             <div
-              key={idx}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-app-border bg-app-card p-4 shadow-xs"
+              key={`personal-${idx}`}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-app-border bg-app-card p-4 shadow-xs"
             >
-              <div className="space-y-2.5 flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-5 w-28 rounded-md" />
-                  {idx === 0 && (
-                    <Skeleton className="h-4 w-14 rounded-full bg-primary/20" />
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-14 rounded-full bg-app-card-subtle" />
-                  <Skeleton className="h-4 w-12 rounded-full bg-app-card-subtle" />
-                  <Skeleton className="h-3.5 w-8 rounded-md" />
+              <div className="flex flex-1 items-center gap-3.5 min-w-0">
+                <Skeleton className="size-11 rounded-2xl shrink-0" />
+                <div className="flex-1 space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-28 rounded-md" />
+                    {idx === 0 && (
+                      <Skeleton className="h-4 w-12 rounded-full bg-primary/20" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-16 rounded-full" />
+                  </div>
                 </div>
               </div>
-              <Skeleton className="size-4 rounded-full shrink-0" />
+              <Skeleton className="size-8 rounded-xl shrink-0" />
             </div>
           ))}
         </div>
-      </main>
+      </section>
+
+      {/* 共享账本组 */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <Skeleton className="h-4 w-16 rounded-md" />
+          <Skeleton className="h-3.5 w-8 rounded-md" />
+        </div>
+        <div className="grid gap-3">
+          {Array.from({ length: 2 }).map((_, idx) => (
+            <div
+              key={`shared-${idx}`}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-app-border bg-app-card p-4 shadow-xs"
+            >
+              <div className="flex flex-1 items-center gap-3.5 min-w-0">
+                <Skeleton className="size-11 rounded-2xl shrink-0" />
+                <div className="flex-1 space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-32 rounded-md" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-16 rounded-full" />
+                    <Skeleton className="h-4 w-14 rounded-full" />
+                    <Skeleton className="h-3.5 w-12 rounded-md" />
+                  </div>
+                </div>
+              </div>
+              <Skeleton className="size-8 rounded-xl shrink-0" />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
-

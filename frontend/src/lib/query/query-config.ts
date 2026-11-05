@@ -1,7 +1,8 @@
 import type { LedgerListQuery } from '@/lib/api/ledger-types';
-import type { StatisticsOverviewQuery, TransactionListQuery } from '@/lib/api/transaction-types';
+import type { TransactionListQuery } from '@/lib/api/transaction-types';
 import type {
   CategoryQuery,
+  FilteredStatisticsQuery,
   StatisticsQuery,
   TrendQuery,
 } from '@/lib/api/statistics-types';
@@ -18,6 +19,8 @@ export const queryStaleTime = {
   categories: 5 * 60 * 1000,
   members: 5 * 60 * 1000,
   transactions: 30 * 1000,
+  /** 待处理邀请变化快（发起/撤销/接受），与账单同档 */
+  invitations: 30 * 1000,
 } as const;
 
 /**
@@ -42,6 +45,10 @@ export const queryKeys = {
     list: (query: LedgerListQuery = {}) => ['ledgers', 'list', query] as const,
     detail: (ledgerId: string) => ['ledgers', 'detail', ledgerId] as const,
   },
+  /** 当前/默认账本偏好；首段与账本列表同为 `ledgers`，退出登录时一并清理。 */
+  ledgerPreferences: ['ledgers', 'preferences'] as const,
+  /** 当前用户可处理的邀请；首段 `user`，与用户信息同批清理。 */
+  invitations: ['user', 'invitations'] as const,
   accounts: (ledgerId: string) => ['ledger', ledgerId, 'accounts'] as const,
   categories: (ledgerId: string) => ['ledger', ledgerId, 'categories'] as const,
   members: (ledgerId: string) => ['ledger', ledgerId, 'members'] as const,
@@ -54,7 +61,7 @@ export const queryKeys = {
     /** 二期统计页的公共时间范围与筛选上下文；四个模块共用同一份，保证口径一致。 */
     scope: (ledgerId: string, scope: StatisticsScope) =>
       ['ledger', ledgerId, 'statistics', 'scope', normalizeFilter(scope)] as const,
-    overview: (ledgerId: string, filter: StatisticsOverviewQuery = {}) =>
+    overview: (ledgerId: string, filter: FilteredStatisticsQuery) =>
       ['ledger', ledgerId, 'statistics', 'overview', normalizeFilter(filter)] as const,
     /**
      * 趋势/分类/汇总各自的键必须独立：

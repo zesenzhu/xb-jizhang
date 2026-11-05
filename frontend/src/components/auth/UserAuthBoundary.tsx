@@ -11,6 +11,7 @@ import { BillListSkeleton } from '@/components/skeleton/BillListSkeleton';
 import { LedgerListSkeleton } from '@/components/skeleton/LedgerListSkeleton';
 import { UserProfileSkeleton } from '@/components/skeleton/UserProfileSkeleton';
 import { SecondaryPageSkeleton } from '@/components/skeleton/SecondaryPageSkeleton';
+import { MemberListSkeleton } from '@/components/skeleton/MemberListSkeleton';
 
 export interface UserAuthBoundaryProps {
   children: React.ReactNode;
@@ -28,18 +29,20 @@ function resolveRouteSkeleton(pathname: string | null): React.ReactNode {
     return <UserProfileSkeleton />;
   }
 
-  if (path === '/user/ledger') {
+  if (path === '/user/ledgers') {
     return <LedgerListSkeleton />;
   }
 
-  if (path.startsWith('/user/ledger/')) {
-    const isNew = path === '/user/ledger/new';
-    return (
-      <SecondaryPageSkeleton
-        title={isNew ? '新建账本' : '账本设置'}
-        subtitle="账本空间"
-      />
-    );
+  if (path.startsWith('/user/ledgers/') && path.endsWith('/members')) {
+    return <MemberListSkeleton />;
+  }
+
+  if (path.startsWith('/user/ledgers/')) {
+    return <SecondaryPageSkeleton title="账本设置" subtitle="账本空间" />;
+  }
+
+  if (path === '/user/invitations') {
+    return <SecondaryPageSkeleton title="我的邀请" subtitle="用户工作区" />;
   }
 
   // 一级 Tab 与未知路径统一使用账单页骨架，与 /user 的真实结构对齐

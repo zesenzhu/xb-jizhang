@@ -1,10 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { BillFilter, BillFilterChip, BillFilterMember } from '@/lib/bill/bill-filters';
+import type {
+  BillFilterChip,
+  BillFilterChipKey,
+  BillFilterMember,
+} from '@/lib/bill/bill-filters';
 
 export interface BillSearchBarProps {
   keyword: string;
@@ -12,11 +16,13 @@ export interface BillSearchBarProps {
   members: readonly BillFilterMember[];
   chips: readonly BillFilterChip[];
   isFiltered: boolean;
+  activeFilterCount: number;
   onKeywordChange: (keyword: string) => void;
   onSubmitKeyword: () => void;
   onPayerChange: (payerId: string) => void;
+  onOpenFilter: () => void;
   onClear: () => void;
-  onRemove: (key: keyof BillFilter) => void;
+  onRemove: (key: BillFilterChipKey) => void;
 }
 
 export function BillSearchBar({
@@ -25,9 +31,11 @@ export function BillSearchBar({
   members,
   chips,
   isFiltered,
+  activeFilterCount,
   onKeywordChange,
   onSubmitKeyword,
   onPayerChange,
+  onOpenFilter,
   onClear,
   onRemove,
 }: BillSearchBarProps): React.JSX.Element {
@@ -70,8 +78,27 @@ export function BillSearchBar({
             </option>
           ))}
         </select>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onOpenFilter}
+          aria-label="打开筛选面板"
+          className="gap-1.5 rounded-xl border-app-border px-3 text-xs text-text-main"
+        >
+          <SlidersHorizontal size={14} className="text-text-muted" />
+          {activeFilterCount > 0 ? `筛选·${activeFilterCount}` : '筛选'}
+        </Button>
+
         {isFiltered && (
-          <Button type="button" size="sm" variant="ghost" className="ml-auto gap-1" onClick={onClear}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="ml-auto gap-1 text-xs text-text-muted hover:text-text-main"
+            onClick={onClear}
+          >
             <X size={14} />
             清除全部
           </Button>
@@ -85,7 +112,7 @@ export function BillSearchBar({
               key={chip.key}
               type="button"
               onClick={() => onRemove(chip.key)}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] text-primary transition-colors hover:bg-primary/15"
               aria-label={`移除${chip.label}`}
             >
               {chip.label}

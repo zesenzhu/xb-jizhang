@@ -24,3 +24,9 @@ export interface LedgerMemberListResponse {
 }
 
 export type LedgerMemberListApiResponse = ApiSuccessResponse<LedgerMemberListResponse>;
+
+/** Owner 转移结果：服务端同时回传新旧成员，前端据此刷新两行的角色徽标。 */
+export interface OwnershipTransferResult {
+  previousOwner: LedgerMemberSummary;
+  newOwner: LedgerMemberSummary;
+}

@@ -1,27 +1,28 @@
 import * as React from 'react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
-import type { StatisticsOverview } from '@/lib/api/transaction-types';
+import type { OverviewData } from '@/lib/api/statistics-types';
 
 export interface MonthSummaryCardProps {
-  /** 服务端聚合结果；未加载时为 undefined，渲染骨架数值 */
-  overview: StatisticsOverview | undefined;
-  /** 当前是否处于筛选状态，用于展示「筛选结果」标记 */
+  overview: OverviewData | undefined;
   isFiltered: boolean;
-  /** 关键词/付款人条件下服务端聚合未纳入对应筛选 */
-  isPartiallyFiltered: boolean;
+  isCustomRange: boolean;
+  rangeLabel: string | null;
   className?: string;
 }
 
 export function MonthSummaryCard({
   overview,
   isFiltered,
-  isPartiallyFiltered,
+  isCustomRange,
+  rangeLabel,
   className,
 }: MonthSummaryCardProps): React.JSX.Element {
   const expenseText = formatCentsToYuan(overview?.totalExpenseCents ?? 0);
   const incomeText = formatCentsToYuan(overview?.totalIncomeCents ?? 0);
   const netCents = overview?.netCents ?? 0;
   const netText = `${netCents < 0 ? '-' : ''}¥${formatCentsToYuan(Math.abs(netCents))}`;
+  const avgExpenseText = formatCentsToYuan(overview?.averageDailyExpenseCents ?? 0);
+  const effectiveDayCount = overview?.effectiveDayCount ?? 0;
 
   return (
     <section
@@ -30,13 +31,22 @@ export function MonthSummaryCard({
         className,
       )}
     >
-      {isFiltered && (
-        <span className="absolute right-4 top-4 rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/90">
-          筛选结果
-        </span>
-      )}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-white/60">总支出</p>
+        <div className="flex items-center gap-1.5">
+          {isCustomRange && rangeLabel && (
+            <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] text-white/70">
+              {rangeLabel}
+            </span>
+          )}
+          {isFiltered && (
+            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/90">
+              筛选结果
+            </span>
+          )}
+        </div>
+      </div>
 
-      <p className="text-xs font-medium text-white/60">总支出</p>
       {overview ? (
         <p className="mt-1 font-mono text-3xl font-bold tracking-tight">¥{expenseText}</p>
       ) : (
@@ -51,18 +61,18 @@ export function MonthSummaryCard({
           </p>
         </div>
         <div>
-          <p className="text-xs text-white/60">月结余</p>
+          <p className="text-xs text-white/60">结余</p>
           <p className={cn('mt-1 font-mono text-base font-semibold', netCents < 0 ? 'text-rose-400' : 'text-white')}>
             {overview ? netText : '—'}
           </p>
         </div>
       </div>
 
-      {isPartiallyFiltered && (
-        <p className="mt-3 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/50">
-          概览未包含关键词或付款人条件，数值可能与列表不一致。
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <p className="text-xs text-white/70">
+          日均支出 ¥{overview ? avgExpenseText : '—'} · 有效 {effectiveDayCount} 天
         </p>
-      )}
+      </div>
     </section>
   );
 }

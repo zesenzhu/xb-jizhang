@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { ChevronRight } from 'lucide-react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
 import type { CategoryItem } from '@/lib/api/statistics-types';
 import { formatPercentage, toDonutSegments } from '@/lib/statistics/chart';
@@ -109,62 +110,85 @@ export interface CategoryRowProps {
   item: CategoryItem;
   isExpense: boolean;
   onClick?: () => void;
+  onOpenBills?: () => void;
+  drillable?: boolean;
 }
-
 /** 分类列表行：图标 + 名称 + 占比条 + 金额 + 笔数。 */
-export function CategoryRow({ item, isExpense, onClick }: CategoryRowProps): React.JSX.Element {
+export function CategoryRow({
+  item,
+  isExpense,
+  onClick,
+  onOpenBills,
+  drillable: _drillable,
+}: CategoryRowProps): React.JSX.Element {
   const accent = colorFor(item, 0, isExpense);
   const delta = item.comparison?.amountDeltaCents ?? 0;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors active:bg-app-card-subtle/60"
-    >
-      <span
-        aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-        style={{ backgroundColor: accent }}
+    <div className="flex items-center px-3 py-2.5 transition-colors hover:bg-app-card-subtle/60 active:bg-app-card-subtle/80">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        {item.name.trim().slice(0, 1) || '账'}
-      </span>
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+          style={{ backgroundColor: accent }}
+        >
+          {item.name.trim().slice(0, 1) || '账'}
+        </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-xs font-medium text-text-main">{item.name}</span>
-          <span className="shrink-0 font-mono text-xs font-semibold text-text-main">
-            ¥{formatCentsToYuan(item.amountCents)}
-          </span>
-        </div>
-
-        <div className="mt-1 flex items-center gap-2">
-          <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-app-card-subtle">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${Math.min(100, item.percentage)}%`, backgroundColor: accent }}
-            />
-          </div>
-          <span className="shrink-0 text-[10px] tabular-nums text-text-tertiary">
-            {formatPercentage(item.percentage)}
-          </span>
-        </div>
-
-        <div className="mt-0.5 flex items-center justify-between text-[10px] text-text-tertiary">
-          <span>{item.transactionCount} 笔</span>
-          {item.comparison && (
-            <span
-              className={cn(
-                'tabular-nums',
-                delta > 0 ? 'text-rose-500' : delta < 0 ? 'text-emerald-600' : 'text-text-tertiary',
-              )}
-            >
-              环比 {delta >= 0 ? '+' : ''}
-              {formatCentsToYuan(delta)}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-xs font-medium text-text-main">{item.name}</span>
+            <span className="shrink-0 font-mono text-xs font-semibold text-text-main">
+              ¥{formatCentsToYuan(item.amountCents)}
             </span>
-          )}
+          </div>
+
+          <div className="mt-1 flex items-center gap-2">
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-app-card-subtle">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.min(100, item.percentage)}%`, backgroundColor: accent }}
+              />
+            </div>
+            <span className="shrink-0 text-[10px] tabular-nums text-text-tertiary">
+              {formatPercentage(item.percentage)}
+            </span>
+          </div>
+
+          <div className="mt-0.5 flex items-center justify-between text-[10px] text-text-tertiary">
+            <span>{item.transactionCount} 笔</span>
+            {item.comparison && (
+              <span
+                className={cn(
+                  'tabular-nums',
+                  delta > 0 ? 'text-rose-500' : delta < 0 ? 'text-emerald-600' : 'text-text-tertiary',
+                )}
+              >
+                环比 {delta >= 0 ? '+' : ''}
+                {formatCentsToYuan(delta)}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {onOpenBills && (
+        <button
+          type="button"
+          aria-label="查看该分类账单"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenBills();
+          }}
+          className="ml-2 flex size-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-app-card-subtle hover:text-text-main active:scale-95"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+    </div>
   );
 }

@@ -3,16 +3,15 @@ import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface LedgerTopBarProps {
-  /** 账本名称；未加载时传 null，渲染占位骨架 */
   ledgerName: string | null;
-  /** 当前统计月份，1-12 */
   month: number;
   year: number;
+  /** 是否允许后退到上一月；自定义时间范围生效时由调用方置为 false */
+  canGoPrev?: boolean;
   /** 是否允许前进到下一月；当前月及以后为 false */
   canGoNext: boolean;
   onPrevMonth: () => void;
   onNextMonth: () => void;
-  /** 账本切换入口；一期未实现切换面板时省略，标题渲染为纯文本 */
   onOpenLedgerPicker?: () => void;
 }
 
@@ -22,6 +21,7 @@ export function LedgerTopBar({
   ledgerName,
   month,
   year,
+  canGoPrev = true,
   canGoNext,
   onPrevMonth,
   onNextMonth,
@@ -33,12 +33,13 @@ export function LedgerTopBar({
         <button
           type="button"
           onClick={onOpenLedgerPicker}
-          className="flex w-full items-center gap-2 text-left"
+          className="flex w-full items-center gap-2 text-left rounded-xl transition-colors hover:bg-app-card-subtle px-1 -ml-1"
           aria-label="切换账本"
         >
           <h1 className="truncate text-2xl font-bold tracking-tight text-text-main">
             {ledgerName ?? <span className="inline-block h-7 w-32 animate-pulse rounded-md bg-app-card-subtle" />}
           </h1>
+          <span className="text-sm font-medium text-text-muted">切换</span>
           <ChevronRight size={18} className="shrink-0 text-text-muted" />
         </button>
       ) : (
@@ -55,8 +56,12 @@ export function LedgerTopBar({
           <button
             type="button"
             onClick={onPrevMonth}
+            disabled={!canGoPrev}
             aria-label="上一月"
-            className="flex size-7 items-center justify-center rounded-full bg-app-card-subtle text-text-muted transition-colors active:scale-95 hover:text-text-main"
+            className={cn(
+              'flex size-7 items-center justify-center rounded-full bg-app-card-subtle text-text-muted transition-colors active:scale-95',
+              canGoPrev ? 'hover:text-text-main' : 'opacity-40',
+            )}
           >
             <ChevronLeft size={16} />
           </button>

@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { buildBillDrilldownUrl } from '@/lib/bill/bill-drilldown';
 import { ApiRequestError } from '@/lib/api/errors';
 import {
   getStatisticsCategories,
@@ -42,6 +44,7 @@ import { TrendChart, TrendMetricTabs } from '@/components/statistics/TrendChart'
  * 需求 9.2：切维度或范围时四块同时刷新且不保留旧数据 —— 靠共用 scope 实现。
  */
 export function StatisticsPage(): React.JSX.Element {
+  const router = useRouter();
   const ledgerId = useWorkspaceStore((state) => state.currentLedgerId);
   const today = React.useMemo(() => todayInZone(), []);
 
@@ -68,6 +71,13 @@ export function StatisticsPage(): React.JSX.Element {
     return { period, anchorDate };
   }, [ledgerId, period, anchorDate, rangeStart, rangeEnd]);
 
+  /**
+   * 查询用的范围：账本尚未确定时用一个占位值，让四个 hook 无条件调用。
+   * `enabled` 会在没有账本时关闭，占位范围不会真的发请求。
+   * 直接传 `scope!` 会在首帧把 null 塞进缓存键的归一化逻辑里并抛错。
+   */
+  const queryScope: StatisticsQuery = scope ?? { period: 'MONTH', anchorDate: today };
+
   const handlePeriodChange = (next: StatisticsPeriod): void => {
     setPeriod(next);
     // 换维度时把导航拉回当前周期，避免在「年」视图里保留一个「月」锚点。
@@ -75,30 +85,30 @@ export function StatisticsPage(): React.JSX.Element {
   };
 
   const overviewQuery = useQuery({
-    queryKey: queryKeys.statistics.overview(ledgerId ?? '', scope!),
-    queryFn: () => getStatisticsOverview(ledgerId ?? '', scope!),
+    queryKey: queryKeys.statistics.overview(ledgerId ?? '', queryScope),
+    queryFn: () => getStatisticsOverview(ledgerId ?? '', queryScope),
     staleTime: queryStaleTime.transactions,
     enabled: Boolean(ledgerId && scope),
   });
 
   const trendQuery = useQuery({
     // metric 变化只改 valueCents，响应已含三个金额，所以键里不带 metric。
-    queryKey: queryKeys.statistics.trend(ledgerId ?? '', scope!),
-    queryFn: () => getStatisticsTrend(ledgerId ?? '', { ...scope!, metric }),
+    queryKey: queryKeys.statistics.trend(ledgerId ?? '', queryScope),
+    queryFn: () => getStatisticsTrend(ledgerId ?? '', { ...queryScope, metric }),
     staleTime: queryStaleTime.transactions,
     enabled: Boolean(ledgerId && scope),
   });
 
   const categoryQuery = useQuery({
     queryKey: queryKeys.statistics.categories(ledgerId ?? '', {
-      ...(scope as StatisticsQuery),
+      ...queryScope,
       type: categoryType,
       categoryLevel,
       ...(categoryRootId ? { categoryRootId } : {}),
     }),
     queryFn: () =>
       getStatisticsCategories(ledgerId ?? '', {
-        ...scope!,
+        ...queryScope,
         type: categoryType,
         categoryLevel,
         ...(categoryRootId ? { categoryRootId } : {}),
@@ -108,8 +118,8 @@ export function StatisticsPage(): React.JSX.Element {
   });
 
   const periodQuery = useQuery({
-    queryKey: queryKeys.statistics.periods(ledgerId ?? '', scope!),
-    queryFn: () => getStatisticsPeriods(ledgerId ?? '', scope!),
+    queryKey: queryKeys.statistics.periods(ledgerId ?? '', queryScope),
+    queryFn: () => getStatisticsPeriods(ledgerId ?? '', queryScope),
     staleTime: queryStaleTime.transactions,
     enabled: Boolean(ledgerId && scope),
   });
@@ -230,6 +240,24 @@ export function StatisticsPage(): React.JSX.Element {
               setCategoryLevel('ROOT');
               setCategoryRootId(null);
             }}
+            onOpenBills={(item) => {
+              const range = categoryQuery.data.range;
+              if (!range.startAt || !range.endAt) return;
+              router.push(
+                buildBillDrilldownUrl({
+                  startAt: range.startAt,
+                  endAt: range.endAt,
+                  type: categoryQuery.data.type,
+                  // 一级分类用 categoryRootId（含其全部二级分类）；
+                  // 二级/ROOT_DIRECT 行用精确 categoryId；未分类行不带分类参数。
+                  ...(item.categoryId
+                    ? item.parentId || item.bucketType === 'ROOT_DIRECT'
+                      ? { categoryId: item.categoryId }
+                      : { categoryRootId: item.categoryId }
+                    : {}),
+                }),
+              );
+            }}
           />
         )}
       </Section>
@@ -245,6 +273,19 @@ export function StatisticsPage(): React.JSX.Element {
             summary={periodQuery.data.summary}
             items={periodQuery.data.items}
             granularity={periodQuery.data.range.granularity}
+            onSelectSummary={() => {
+              // 总计行使用服务端返回的完整 UTC 半开区间，前端不按浏览器时区重算日期。
+              const range = periodQuery.data.range;
+              if (!range.startAt || !range.endAt) return;
+              router.push(
+                buildBillDrilldownUrl({ startAt: range.startAt, endAt: range.endAt }),
+              );
+            }}
+            onSelectPeriod={(item) => {
+              router.push(
+                buildBillDrilldownUrl({ startAt: item.drilldown.from, endAt: item.drilldown.to }),
+              );
+            }}
           />
         )}
       </Section>
@@ -258,11 +299,14 @@ function CategorySection({
   level,
   onDrillDown,
   onBackToRoot,
+  onOpenBills,
 }: {
   data: CategoryData;
   level: CategoryLevel;
   onDrillDown: (option: { id: string; name: string }) => void;
   onBackToRoot: () => void;
+  /** 下钻到账本页查看该分类的账单；由页面层负责拼 URL 与路由跳转 */
+  onOpenBills: (item: CategoryItem) => void;
 }): React.JSX.Element {
   const isExpense = data.type === 'EXPENSE';
 
@@ -287,7 +331,6 @@ function CategorySection({
             item={item}
             isExpense={isExpense}
             onClick={() => {
-              // 一级分类（非 ROOT_DIRECT、非未分类）可继续下钻到二级。
               if (
                 level === 'ROOT' &&
                 item.bucketType === 'CATEGORY' &&
@@ -297,6 +340,7 @@ function CategorySection({
                 onDrillDown({ id: item.categoryId, name: item.name });
               }
             }}
+            onOpenBills={() => onOpenBills(item)}
           />
         ))}
         {data.items.length === 0 && (

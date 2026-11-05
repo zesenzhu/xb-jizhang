@@ -56,6 +56,8 @@ export interface TransactionListQuery {
   pageSize?: number;
   type?: TransactionType;
   categoryId?: string;
+  /** 一级分类过滤：匹配该一级分类本身及其全部二级分类 */
+  categoryRootId?: string;
   accountId?: string;
   payerId?: string;
   from?: string;
@@ -95,23 +97,4 @@ export interface UpdateTransactionInput {
   payerId?: string | null;
   title?: string | null;
   note?: string | null;
-}
-
-export interface StatisticsOverview {
-  from: string | null;
-  to: string | null;
-  totalIncomeCents: number;
-  totalExpenseCents: number;
-  netCents: number;
-  transactionCount: number;
-}
-
-export interface StatisticsOverviewQuery {
-  from?: string;
-  to?: string;
-  type?: TransactionType;
-  categoryId?: string;
-  accountId?: string;
-  payerId?: string;
-  keyword?: string;
 }

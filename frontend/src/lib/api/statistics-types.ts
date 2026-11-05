@@ -36,6 +36,8 @@ export interface StatisticsQuery {
   fromDate?: string;
   toDate?: string;
   granularity?: StatisticsGranularity;
+  /** 账单类型过滤；categories 默认 EXPENSE，其余接口不传时统计两类 */
+  type?: 'EXPENSE' | 'INCOME';
   accountId?: string;
   payerId?: string;
   keyword?: string;
