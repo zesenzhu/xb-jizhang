@@ -1,13 +1,13 @@
 ---
-title: 一期前端设计索引
+title: 前端设计索引
 type: index
 status: draft
-version: 0.2
+version: 0.3
 owner: 小宝
 updatedAt: 2026-11-04
 ---
 
-# 一期前端设计索引
+# 前端设计索引
 
 ## 组织原则
 
@@ -28,60 +28,90 @@ updatedAt: 2026-11-04
 
 | 页面 | 路由 | 文档 | 状态 |
 | --- | --- | --- | --- |
-| 账单页 | `/user` | [账单页.md](./账单页.md) | 迭代一已交付 |
-| 记账抽屉 | `/user` 浮层 | [记账抽屉.md](./记账抽屉.md) | 迭代二已交付 |
-| 分类选择 | 记账抽屉中部内联 | [分类选择.md](./分类选择.md) | 已并入记账抽屉 |
-| 账单详情 | `/user` 浮层 | [账单详情.md](./账单详情.md) | 迭代三已交付 |
+| 账本页 | `/user` | [账本页.md](./账本页.md) | 一期已交付，二期改顶部切换入口 |
+| 记账抽屉 | `/user` 浮层 | [记账抽屉.md](./记账抽屉.md) | 已交付 |
+| 分类选择 | 记账抽屉中部内联 | [分类选择.md](./分类选择.md) | 已交付 |
+| 账单详情 | `/user` 浮层 | [账单详情.md](./账单详情.md) | 已交付 |
+| 分类管理 | 记账面板内 | [分类管理.md](./分类管理.md) | 已交付 |
+| 我的账本 | `/user/ledgers` | [我的账本.md](./我的账本.md) | 二期 draft |
+| 账本设置 | `/user/ledgers/:id/settings` | [账本设置.md](./账本设置.md) | 二期 draft |
+| 成员与邀请 | `/user/ledgers/:id/members` | [成员与邀请.md](./成员与邀请.md) | 二期 draft |
+| 统计页 | `/user/statistics` | [统计页.md](./统计页.md) | 二期 draft |
+| 我的页面 | `/user/profile` | [我的页面.md](./我的页面.md) | 二期 draft |
 
-尚未设计（后续迭代按需新增文件）：账本切换面板、筛选面板、个人中心改版。
+尚未设计：筛选面板（分类/账户/时间范围）、我的邀请落地页。
 
-## 后端能力现状
+## 二期导航变化
 
-对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对结论。**后端正在按 API 文档补实现，本表需在每次后端提交后复核；缺口修复后同步删除对应页面文档里的降级说明。**
+底部主导航从「明细 / 账本 / 记账 / 统计 / 我的」改为**「账本 / 统计 / 我的」三项**（需求 5.1）：
+
+| 项 | 路由 | 说明 |
+| --- | --- | --- |
+| 账本 | `/user` | 当前账本流水与概览 |
+| 统计 | `/user/statistics` | 新建页面 |
+| 我的 | `/user/profile` | 已有页面 |
+
+变更要点：
+
+- 移除独立的「明细」入口（账本页即明细）和底栏中央「记账」入口；记账只保留账本页右下角 FAB。
+- **移除「资产」入口**。二期没有资产功能，不提供资产页或资产趋势（需求 4.2）。
+- 二级页面（我的账本、账本设置、成员管理）隐藏底栏，靠页面内返回。
+- `routes.ts` 的 `UserPrimaryTab` 与 `USER_PRIMARY_TAB_ROUTES` 需要同步改；`MobileBottomNav` 的 `quickAdd` 逻辑移除。
+
+**参考截图里统计页底栏显示「账本 / 资产 / 统计」，与需求冲突，以需求为准。**
+
+## 后端能力现状（二期）
+
+对 `backend/src`、`prisma/schema.prisma` 与 `docs/api/` 的逐项比对。**接口文档已进入 `review`，后端正在补实现；本表在每次后端提交后复核。**
 
 ### 已具备（前端可直接用）
 
 | 能力 | 接口 | 证据 |
 | --- | --- | --- |
-| 账单创建（账户可选、幂等、事务） | `POST /ledgers/:id/transactions` | `create-transaction.dto.ts` 的 `accountId` 为 `@IsOptional` |
-| 账单编辑 + 版本冲突 | `PATCH /ledgers/:id/transactions/:tid` | `transaction.service.ts` 的 `update`，`40922` |
-| 账单软删除 + 角色边界 | `DELETE /ledgers/:id/transactions/:tid` | `OWNER` 全部、`EDITOR` 仅自己创建 |
-| 无账户账单参与列表与统计 | 列表 `where` 与统计 `where` 均含 `accountId: null` | `transaction.service.ts`、`statistics.service.ts` |
-| **收支概览聚合** | `GET /ledgers/:id/statistics/overview` | 已实现，返回 `totalIncomeCents` / `totalExpenseCents` / `netCents` / `transactionCount`，支持 `keyword` / `payerId` |
+| 账单创建/编辑/软删除/详情 | `POST/PATCH/DELETE/GET /ledgers/:id/transactions[/:tid]` | 一期已交付 |
+| 账单列表与筛选 | `GET /ledgers/:id/transactions` | 支持 `type/categoryId/accountId/payerId/from/to/keyword` |
+| 收支概览（一期口径） | `GET /ledgers/:id/statistics/overview` | 返回 `totalIncomeCents/totalExpenseCents/netCents/transactionCount` |
+| 账户与分类 CRUD | `/ledgers/:id/accounts`、`/categories` | 一期已交付 |
+| 成员列表与角色 | `GET /ledgers/:id/members`、`PATCH .../role` | 一期已交付 |
+| 邀请（发起/接受/拒绝/撤销） | `POST /ledgers/:id/invitations` 等 | 一期已交付 |
+| 成员移除/退出/转移 | `DELETE .../members/:mid`、`POST .../leave`、`POST .../ownership-transfer` | 一期已交付 |
+| 账本 CRUD | `GET/POST/PATCH /ledgers` | 一期已交付 |
 
-概览接口改变了前端的统计实现：不再需要前端累加分页，直接按同一组筛选条件请求聚合结果即可。`docs/api/统计接口.md` 明确「服务端聚合结果为唯一口径，前端不重复计算」。
-
-### 仍缺（阻塞对应页面）
+### 二期待实现（阻塞对应页面）
 
 | # | 缺口 | 证据（当前 HEAD） | 阻塞页面 |
 | --- | --- | --- | --- |
-| B1 | 分类无层级字段 | 已修复：`Category.parentId` 支持最多两级 | 已解除 |
-| B2 | 默认分类目录不足 | 已修复：新建账本初始化 16 个一级 + 49 个二级 | 已解除 |
-| B3 | 账本时区尚未落库 | 二期接口设计已要求 `Ledger.timezone`；当前 Prisma `Ledger` 模型及运行中的账本接口尚未实现 | 账单页（日期分组）、统计页 |
-| B4 | 无撤销删除接口 | 有 `DELETE`，controller 无 `restore` 路由 | 降级：删除后不提供撤销 |
-| B5 | 无记账人筛选 | `QueryTransactionsDto` 无 `createdById` | 账单页（筛选） |
-| B6 | 关键词不匹配分类名 | `keywordCondition` 只覆盖 `title` / `note` | 账单页（搜索） |
+| P1 | `Ledger.timezone` 字段 | `schema.prisma` 的 `Ledger` 无 `timezone` | 账本设置、全部统计 |
+| P2 | `UserLedgerPreference` 模型与偏好接口 | 无模型；无 `/me/ledger-preferences` 路由 | 我的账本（切换） |
+| P3 | `POST /ledgers/:id/copy` | `ledger.controller.ts` 无 copy 路由 | 账本设置（复制） |
+| P4 | `DELETE /ledgers/:id` | 无删除路由 | 账本设置（删除） |
+| P5 | `GET /ledgers/:id/invitations` | 只有 `GET /invitations` | 成员与邀请 |
+| P6 | `statistics/trend`、`categories`、`periods` | `statistics.controller.ts` 只有 `overview` | 统计页主体 |
+| P7 | `overview` 新契约（`averageDailyExpenseCents`/`effectiveDayCount`/`range`） | 现返回一期字段 | 统计页概览 |
+| P8 | 账单列表 `categoryRootId` 过滤 | `QueryTransactionsDto` 只有 `categoryId` | 统计分类下钻 |
+| P9 | `LedgerSummary.memberCount` | 摘要无该字段 | 我的账本、账本设置 |
 
-### 已知偏差（可降级）
+### 一期遗留缺口
 
-| # | 问题 | 证据 | 前端处理 |
+| # | 缺口 | 影响 | 处理 |
 | --- | --- | --- | --- |
-| D2 | `note` 上限 2000 | `create` / `update` DTO 均为 `@Length(1,2000)` | 需求要求 200，前端自行限制 |
-| D3 | 详情无分类图标、无成员昵称 | `transactionSelect` 只取 `category{id,type,name}`，`createdById` 为裸 ID | 名称首字 + 成员表映射 |
-| D4 | 统计筛选少于列表筛选 | 已修复：统计与列表均支持 `keyword`、`payerId` | 已解除 |
+| B3 | 账本时区 | 前端硬编码 `Asia/Shanghai` | 由 P1 解决 |
+| B4 | 无 `restore` 接口 | 删除后不能撤销 | 二期不做撤销 |
+| B5 | 无 `createdById` 筛选 | 不能按记账人筛 | 延后 |
+| B6 | 关键词不匹配分类名 | 搜「餐饮」搜不到 | 延后 |
 
-### 概览与列表筛选一致性
+## 二期前端实施顺序
 
-需求 6.1 要求「概览金额、每日合计和账单列表必须使用同一组已生效筛选条件」。后端统计接口已补齐关键词和实际付款人筛选，前端账单页将同一组查询参数传给两个接口：
+后端接口未就绪前，前端只能做「不依赖新接口」的部分。建议分四批：
 
-| 参数 | 列表 | 统计 |
+| 批次 | 内容 | 前置 |
 | --- | --- | --- |
-| `from` / `to` / `type` / `categoryId` / `accountId` | ✅ | ✅ |
-| `keyword` | ✅ | ✅ |
-| `payerId` | ✅ | ✅ |
-| `createdById` | ❌ | ❌ |
+| 1 | 底部导航改三项、`routes.ts` 同步、移除 quickAdd | 无 |
+| 2 | 账本页顶部切换按钮 + 我的账本页（先用 `GET /ledgers` 的现有字段） | P9 可降级 |
+| 3 | 账本设置页、成员与邀请页、我的页面 | P3/P4/P5 可隐藏入口 |
+| 4 | 统计页 | P1/P6/P7/P8 全部 |
 
-账单页的 `BillSearchBar` 已交付：关键词需提交后生效，付款人选择立即生效，条件胶囊支持单独移除和清除全部；统计卡使用同一组已生效筛选条件，并在筛选状态显示「筛选结果」。
+第 4 批是硬依赖：没有 `timezone` 就无法正确划分自然周/月/年边界，没有三个新接口就没有趋势、分类与汇总数据。**不要在接口就绪前用前端聚合顶替**——统计口径必须服务端唯一，否则会与账单页数字不一致。
 
 ## 全局样式约束
 
@@ -154,17 +184,23 @@ toast.action('已删除', { label: '撤销', onClick })
 
 ## 页面归属决策
 
-`/user` 由当前演示页改造为**账单页**，不新建 `/user/ledger/[id]/transactions`。理由：需求 5.1 规定账单页是进入应用后的主页面；单页账本视图（账本名 + 月份 + 分组）符合参考设计；多一层路径会让「打开即记账」变慢，且同一份账单会有两个 URL 入口。
-
-现有 `AmountKeypad` 从首页卡片移入记账抽屉，成为唯一记账入口。`/user/ledger`、`/user/ledger/new`、`/user/profile` 保持不变。
+- **账本页**：`/user` 承载当前账本流水，不新建 `/user/ledger/[id]/transactions`。单页账本视图（账本名 + 月份 + 分组）符合参考设计；多一层路径会让「打开即记账」变慢，且同一份账单会有两个 URL 入口。
+- **我的账本**：独立二级页 `/user/ledgers`，不在首页展开账本列表（需求 6.1）。
+- **账本设置 / 成员与邀请**：独立二级页，从「我的账本」卡片菜单进入。
+- **统计页**：独立一级页 `/user/statistics`，与账本页共用 `currentLedgerId`，但各自维护时间范围。
+- **旧的 `/user/ledger`（账本列表）**：二期由 `/user/ledgers` 取代。现状是 `/user/ledger` 为一级 Tab 且底栏有「账本」项；改造时把它降级为二级页并改名，或直接复用路由。**建议保留 `/user/ledger` 路径、只改页面内容与层级**，避免已有链接失效。
 
 ## 迭代顺序
 
 | 迭代 | 页面 | 后端前置 |
 | --- | --- | --- |
-| 一 | 账单页（只读）✅ 已交付 | 无；概览已可用 `statistics/overview` |
-| 二 | 记账抽屉 + 分类选择 ✅ 已交付 | 无；分类接口已支持两级和内置默认目录 |
-| 三 | 账单详情 ✅ 已交付 | 无；B4 按降级方案不做撤销 |
-| 四 | 时区统一、暗色补齐、死代码清理 | B3 |
+| 一期一 | 账单页（只读）✅ | 无 |
+| 一期二 | 记账抽屉 + 分类选择 ✅ | 无 |
+| 一期三 | 账单详情 ✅ | 无；B4 降级不做撤销 |
+| 一期四 | 分类管理 ✅ | 无 |
+| 二期一 | 底部导航三项、账本页切换入口 | 无 |
+| 二期二 | 我的账本、账本设置 | P2（偏好）可降级 |
+| 二期三 | 成员与邀请、我的邀请 | P5 |
+| 二期四 | 统计页 | P1/P6/P7/P8 全部 |
 
 每迭代结束执行 `pnpm typecheck`、`pnpm test`、`pnpm lint`，并在浏览器验收该页面文档的「验收清单」。
