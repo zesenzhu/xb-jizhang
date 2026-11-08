@@ -48,6 +48,7 @@ describe('TransactionService', () => {
     source: 'MANUAL' as const,
     clientRequestId: '9d0e8400-e29b-41d4-a716-446655440000',
     createdById: userId,
+    createdBy: { id: userId, username: 'xiaobao', nickname: '小宝', avatar: null },
     updatedById: userId,
     payerId,
     version: 1,
@@ -246,7 +247,14 @@ describe('TransactionService', () => {
     expect(dependencies.prisma.transaction.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: transactionId, ledgerId, deletedAt: null } }),
     );
-    expect(result).toEqual(expect.objectContaining({ id: transactionId, category, account }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: transactionId,
+        category,
+        account,
+        createdBy: expect.objectContaining({ id: userId, username: 'xiaobao', nickname: '小宝' }),
+      }),
+    );
   });
 
   it('给定账单不存在或不属于当前账本，当查询详情，则返回资源不存在', async () => {

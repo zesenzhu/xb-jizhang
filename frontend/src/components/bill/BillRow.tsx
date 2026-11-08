@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
 import type { TransactionSummary } from '@/lib/api/transaction-types';
 import { billSecondaryText, formatBillTime } from '@/lib/bill/bill-group';
+import { billCreatorName } from '@/lib/bill/bill-creator';
 import { CategoryIcon } from './CategoryIcon';
 
 export interface BillRowProps {
@@ -15,6 +16,7 @@ export function BillRow({ bill, onClick }: BillRowProps): React.JSX.Element {
   const time = formatBillTime(bill.occurredAt);
   const isExpense = bill.type === 'EXPENSE';
   const amountText = formatCentsToYuan(bill.amountCents);
+  const creatorName = billCreatorName(bill);
 
   return (
     <button
@@ -32,14 +34,21 @@ export function BillRow({ bill, onClick }: BillRowProps): React.JSX.Element {
         </p>
       </div>
 
-      <span
-        className={cn(
-          'shrink-0 font-mono text-sm font-semibold tabular-nums',
-          isExpense ? 'text-rose-500' : 'text-emerald-600',
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span
+          className={cn(
+            'font-mono text-sm font-semibold tabular-nums',
+            isExpense ? 'text-rose-500' : 'text-emerald-600',
+          )}
+        >
+          {isExpense ? '-' : '+'}¥{amountText}
+        </span>
+        {creatorName && (
+          <span className="max-w-20 truncate text-[10px] text-text-tertiary">
+            {creatorName}
+          </span>
         )}
-      >
-        {isExpense ? '-' : '+'}¥{amountText}
-      </span>
+      </div>
     </button>
   );
 }

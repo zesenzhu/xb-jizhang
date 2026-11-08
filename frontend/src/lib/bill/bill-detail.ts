@@ -1,6 +1,7 @@
 import { formatCentsToYuan } from '@/lib/utils';
 import type { TransactionSummary } from '@/lib/api/transaction-types';
 import type { LedgerMemberSummary } from '@/lib/api/member-types';
+import { billCreatorName } from './bill-creator';
 
 /**
  * 详情页的展示模型。
@@ -81,7 +82,11 @@ export function toBillDetailView(
   }
 
   const audit: BillDetailField[] = [
-    { key: 'createdBy', label: '记账人', value: memberName(directory, bill.createdById) },
+    {
+      key: 'createdBy',
+      label: '记账人',
+      value: billCreatorName(bill) || memberName(directory, bill.createdById),
+    },
     { key: 'updatedBy', label: '最后修改', value: memberName(directory, bill.updatedById) },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(bill.createdAt) },
     { key: 'updatedAt', label: '更新时间', value: formatDateTime(bill.updatedAt) },

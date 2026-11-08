@@ -34,6 +34,7 @@ const transactionSelect = {
   source: true,
   clientRequestId: true,
   createdById: true,
+  createdBy: { select: { id: true, username: true, nickname: true, avatar: true } },
   updatedById: true,
   payerId: true,
   version: true,

@@ -60,6 +60,7 @@ export interface TransactionSummary {
   source: string;
   clientRequestId: string;
   createdById: string;
+  createdBy: { id: string; username: string; nickname: string | null; avatar: string | null };
   updatedById: string;
   payerId: string | null;
   version: number;

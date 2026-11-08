@@ -40,6 +40,13 @@ export interface TransactionSummary {
   source: string;
   clientRequestId: string;
   createdById: string;
+  /** 创建人安全摘要；列表显示昵称，缺失时回退用户名 */
+  createdBy?: {
+    id: string;
+    username: string;
+    nickname: string | null;
+    avatar: string | null;
+  } | null;
   updatedById: string;
   payerId: string | null;
   version: number;
