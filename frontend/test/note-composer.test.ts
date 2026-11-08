@@ -64,12 +64,12 @@ assert.ok(
 
 // 3.1 备注必须是同一个 textarea：聚焦只改 rows，不能换控件。
 assert.ok(
-  /<textarea[\s\S]{0,600}?rows=\{noteExpanded \? 2 : 1\}/.test(meta),
-  '备注需要单一 textarea，用 rows 控制单行/两行',
+  /<input[\s\S]{0,500}?aria-label="备注"/.test(meta),
+  '备注必须是一个 input，不换控件也不展开成多行',
 );
 assert.ok(
-  !/noteExpanded \? \(\s*<textarea/.test(meta),
-  '不得按展开状态在两个控件之间切换，换控件会卸载节点导致键盘闪退',
+  !/<textarea/.test(meta),
+  '备注不得使用 textarea，也不得按状态在两种控件之间切换（换控件会丢焦点导致键盘闪退）',
 );
 assert.ok(
   /onEditingChange\?\.\(true\)/.test(meta) && /onEditingChange\?\.\(false\)/.test(meta),

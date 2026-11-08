@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { NoteSuggestion } from '@/lib/api/transaction-types';
 import { NoteSuggestionBar } from './NoteSuggestionBar';
@@ -46,7 +46,6 @@ export function SheetMetaFields({
   onSelectSuggestion,
   onEditingChange,
 }: SheetMetaFieldsProps): React.JSX.Element {
-  const [noteExpanded, setNoteExpanded] = React.useState(false);
   const [noteFocused, setNoteFocused] = React.useState(false);
   const [pickerOpen, setPickerOpen] = React.useState(false);
 
@@ -91,16 +90,6 @@ export function SheetMetaFields({
           aria-label="商家或对象"
           className="min-w-0 flex-1 bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
         />
-
-        <button
-          type="button"
-          onClick={() => setNoteExpanded((value) => !value)}
-          aria-label={noteExpanded ? '收起备注' : '展开备注'}
-          aria-expanded={noteExpanded}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-tertiary active:scale-95"
-        >
-          <ChevronDown size={15} className={cn('transition-transform', noteExpanded && 'rotate-180')} />
-        </button>
       </div>
 
       {/* 历史备注：浮在备注输入之上，点选只回填文本，不提交、不打断输入。 */}
@@ -117,15 +106,14 @@ export function SheetMetaFields({
       )}
 
       {/*
-        备注始终是同一个 textarea：聚焦只改 rows，不换控件。
-        换控件会卸载原节点导致焦点丢失，系统键盘随即收起——表现为「点了没反应」「键盘弹上弹下」。
+        备注始终是同一个 input：不按状态换控件、也不展开成多行。
+        换控件会卸载节点导致焦点丢失，系统键盘随即收起——表现为「点了没反应」「键盘弹上弹下」。
       */}
-      <textarea
+      <input
         value={note}
         onChange={(event) => onNoteChange(event.target.value)}
         onFocus={() => {
           setNoteFocused(true);
-          setNoteExpanded(true);
           onEditingChange?.(true);
         }}
         onBlur={() => {
@@ -134,12 +122,8 @@ export function SheetMetaFields({
         }}
         placeholder="点击填写备注"
         maxLength={noteMaxLength}
-        rows={noteExpanded ? 2 : 1}
         aria-label="备注"
-        className={cn(
-          'w-full resize-none bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none',
-          noteExpanded && 'rounded-xl bg-app-card-subtle/70 px-2.5 py-1.5',
-        )}
+        className="w-full bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
       />
 
       {pickerOpen && (
