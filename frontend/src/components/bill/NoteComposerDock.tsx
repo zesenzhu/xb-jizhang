@@ -41,14 +41,18 @@ export function NoteComposerDock({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
+  /**
+   * 焦点跟随当前字段：打开时聚焦，`title ⇄ note` 切换时重聚焦到新控件。
+   * 依赖里必须带 `field`，否则切换字段后输入框没有焦点，键盘会直接收起。
+   */
   React.useEffect(() => {
     if (!open) return;
     const timer = window.setTimeout(() => {
-      inputRef.current?.focus();
-      textareaRef.current?.focus();
+      if (field === 'title') inputRef.current?.focus();
+      else textareaRef.current?.focus();
     }, 30);
     return () => window.clearTimeout(timer);
-  }, [open]);
+  }, [open, field]);
 
   if (!open || typeof document === 'undefined') return null;
 
