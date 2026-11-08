@@ -101,6 +101,7 @@ export function BillFormBody({
    * 测量只发生在事件里，并在 600ms 内取最大值，避免首帧读到键盘尚未弹出的 0。
    */
   const [liftInset, setLiftInset] = React.useState(0);
+  const [textEditing, setTextEditing] = React.useState(false);
   const liftTimerRef = React.useRef<number | null>(null);
 
   const stopLift = React.useCallback((): void => {
@@ -109,9 +110,11 @@ export function BillFormBody({
       liftTimerRef.current = null;
     }
     setLiftInset(0);
+    setTextEditing(false);
   }, []);
 
   const handleEditingChange = React.useCallback((editing: boolean): void => {
+    setTextEditing(editing);
     if (!editing) {
       stopLift();
       return;
@@ -129,7 +132,7 @@ export function BillFormBody({
       const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
       if (inset > 120) peak = Math.max(peak, inset);
       const settled = inset > 120 && peak > 0 && inset <= peak;
-      if (watched >= 600 || (settled && watched >= 240)) {
+      if (settled || watched >= 300) {
         if (liftTimerRef.current !== null) {
           window.clearInterval(liftTimerRef.current);
           liftTimerRef.current = null;
@@ -264,36 +267,23 @@ export function BillFormBody({
         </div>
 
         {/*
-          键盘弹出时数字键盘已被系统键盘覆盖，不再占位；
-          但提交动作必须仍可触达，所以换成一条紧凑的保存条，贴在金额卡下方。
+          数字键盘常驻底座，当系统软键盘弹出时自然覆盖在数字键盘上方；
+          文本输入由系统键盘的 Enter / 完成事件直接接管，无需多余的紧凑悬浮按钮。
         */}
-        {shouldLiftForKeyboard ? (
-          <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1">
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={submitDisabled || state.submitting}
-              className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white active:scale-95 disabled:opacity-50"
-            >
-              {state.submitting ? '保存中…' : primaryText}
-            </button>
-          </div>
-        ) : (
-          <div className="px-3 pb-[calc(0.4rem+env(safe-area-inset-bottom))] pt-1.5">
-            <AmountKeypad
-              value={state.amountText}
-              onChange={(amountText) => dispatch({ kind: 'setAmount', amountText })}
-              onSubmit={onSubmit}
-              onSecondarySubmit={onSecondarySubmit}
-              submitText={primaryText}
-              secondarySubmitText={secondaryText}
-              isSubmitting={state.submitting}
-              submitDisabled={submitDisabled}
-              insetSafeArea={false}
-              compact
-            />
-          </div>
-        )}
+        <div className="px-3 pb-[calc(0.4rem+env(safe-area-inset-bottom))] pt-1.5">
+          <AmountKeypad
+            value={state.amountText}
+            onChange={(amountText) => dispatch({ kind: 'setAmount', amountText })}
+            onSubmit={onSubmit}
+            onSecondarySubmit={onSecondarySubmit}
+            submitText={primaryText}
+            secondarySubmitText={secondaryText}
+            isSubmitting={state.submitting}
+            submitDisabled={submitDisabled}
+            insetSafeArea={false}
+            compact
+          />
+        </div>
       </div>
 
       {categoryManage && (

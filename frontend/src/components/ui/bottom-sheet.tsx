@@ -136,6 +136,11 @@ export function BottomSheet({
     onOpenChange(false);
   }, [onBeforeClose, onOpenChange]);
 
+  const requestCloseRef = React.useRef(requestClose);
+  React.useEffect(() => {
+    requestCloseRef.current = requestClose;
+  });
+
   React.useEffect(() => {
     if (!open) return;
 
@@ -145,12 +150,14 @@ export function BottomSheet({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        requestClose();
+        requestCloseRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
 
     const focusTimer = window.setTimeout(() => {
+      // 若焦点已经在面板内（如用户已主动点击输入框），绝不强行抢焦点导致打字失焦。
+      if (panelRef.current?.contains(document.activeElement)) return;
       const firstFocusable = panelRef.current?.querySelector<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
@@ -163,7 +170,7 @@ export function BottomSheet({
       unlockBodyScroll();
       restoreFocusRef.current?.focus?.();
     };
-  }, [open, requestClose]);
+  }, [open]);
 
   if (!mounted || presence === 'closed') return null;
 

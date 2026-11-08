@@ -32,8 +32,8 @@ const sheet = read('components/ui/bottom-sheet.tsx');
 assert.ok(!meta.includes('NoteComposerDock'), '已删除的编辑条不得再被引用');
 assert.ok(meta.includes('NoteSuggestionBar'), '备注必须使用历史候选栏');
 assert.ok(
-  meta.indexOf('showSuggestions') < meta.indexOf('placeholder="点击填写备注"'),
-  '候选栏必须渲染在备注输入上方',
+  meta.indexOf('<NoteSuggestionBar') > meta.indexOf('placeholder="点击填写备注"'),
+  '候选栏必须渲染在备注输入下方，紧贴键盘上缘',
 );
 assert.ok(
   /const showSuggestions = noteFocused && suggestions\.length > 0;/.test(meta),
@@ -99,18 +99,10 @@ assert.ok(
   '底部区不得对 margin 做过渡动画，否则会与键盘动画叠加出抖动',
 );
 
-// 4. 提交必须始终可达：键盘态渲染紧凑保存条，非键盘态用数字键盘。
-assert.ok(
-  /shouldLiftForKeyboard \? \(/.test(body),
-  '键盘态必须切换到紧凑保存条',
-);
-assert.ok(
-  /保存中…/.test(body),
-  '紧凑保存条需要提交中的反馈文案',
-);
+// 4. 数字键盘常驻底部，由系统键盘确认/回车接管文本输入完成，无需冗余紧凑保存按钮。
 assert.ok(
   body.includes('AmountKeypad'),
-  '非键盘态必须保留数字键盘',
+  '必须保留数字键盘底座',
 );
 
 // 5. 时间仍走独立弹窗，且打开前先收起键盘。

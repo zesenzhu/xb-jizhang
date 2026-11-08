@@ -214,13 +214,13 @@ export function BillCreateSheet({
     }
   };
 
-  const requestClose = (): boolean => {
+  const requestClose = React.useCallback((): boolean => {
     if (state.isDirty && !state.submitting) {
       setConfirmDiscard(true);
       return false;
     }
     return true;
-  };
+  }, [state.isDirty, state.submitting]);
 
   return (
     <>

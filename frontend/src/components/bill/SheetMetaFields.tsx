@@ -85,35 +85,29 @@ export function SheetMetaFields({
           onChange={(event) => onTitleChange(event.target.value)}
           onFocus={() => onEditingChange?.(true)}
           onBlur={() => onEditingChange?.(false)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
           placeholder="商家 / 对象"
           maxLength={200}
+          tabIndex={noteFocused ? -1 : 0}
+          autoComplete="off"
+          autoCorrect="off"
+          enterKeyHint="done"
           aria-label="商家或对象"
           className="min-w-0 flex-1 bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
         />
       </div>
 
       {/*
-        历史备注：位置固定占位，只在有候选时填充内容。
-        之前是「有候选才插入一行」，聚焦瞬间把下方的备注输入顶下去，
-        iOS 会在键盘动画期间判定焦点元素被移走而收起键盘——表现为“一打字键盘就关”。
-      */}
-      <div className="min-h-[34px]" onMouseDown={keepFocus} onTouchStart={keepFocus}>
-        {showSuggestions && (
-          <NoteSuggestionBar
-            suggestions={suggestions}
-            onSelect={(text) => {
-              onNoteChange(text);
-              onSelectSuggestion?.(text);
-            }}
-          />
-        )}
-      </div>
-
-      {/*
         备注始终是同一个 input：不按状态换控件、也不展开成多行。
-        换控件会卸载节点导致焦点丢失，系统键盘随即收起——表现为「点了没反应」「键盘弹上弹下」。
+        换控件会卸载节点导致焦点丢失，系统键盘随即收起。
       */}
       <input
+        aria-label="备注"
         value={note}
         onChange={(event) => onNoteChange(event.target.value)}
         onFocus={() => {
@@ -124,11 +118,35 @@ export function SheetMetaFields({
           setNoteFocused(false);
           onEditingChange?.(false);
         }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
         placeholder="点击填写备注"
         maxLength={noteMaxLength}
-        aria-label="备注"
+        autoComplete="off"
+        autoCorrect="off"
+        enterKeyHint="done"
         className="w-full bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
       />
+
+      {/*
+        历史备注快捷候选：渲染在备注输入框正下方，紧贴键盘上缘。
+        点选即填入，系统键盘保持聚焦。
+      */}
+      {showSuggestions && (
+        <div onMouseDown={keepFocus} onTouchStart={keepFocus} className="pt-0.5">
+          <NoteSuggestionBar
+            suggestions={suggestions}
+            onSelect={(text) => {
+              onNoteChange(text);
+              onSelectSuggestion?.(text);
+            }}
+          />
+        </div>
+      )}
 
       {pickerOpen && (
         <DateTimePickerDialog
