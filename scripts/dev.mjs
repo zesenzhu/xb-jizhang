@@ -1,8 +1,32 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { createDevelopmentEnvironments } from './dev-config.mjs';
+import {
+  DEFAULT_PROD_API_ORIGIN,
+  createDevelopmentEnvironments,
+  createProductionProxyEnvironment,
+} from './dev-config.mjs';
 
 const rootDirectory = process.cwd();
+
+/**
+ * `--target=prod`：只起前端，把 `/api` 代理到生产接口。
+ * 不启动 Docker 与本地后端，避免误连本地库或占用 8091。
+ */
+function parseOptions(argv) {
+  const targetArg = argv.find((arg) => arg.startsWith('--target='));
+  const apiArg = argv.find((arg) => arg.startsWith('--api='));
+  const target = targetArg ? targetArg.split('=')[1] : 'local';
+  if (target !== 'local' && target !== 'prod') {
+    throw new Error(`未知的 --target=${target}，只支持 local 或 prod`);
+  }
+  return {
+    target,
+    apiOrigin: apiArg ? apiArg.slice('--api='.length) : process.env.PROD_API_ORIGIN ?? DEFAULT_PROD_API_ORIGIN,
+  };
+}
+
+const options = parseOptions(process.argv.slice(2));
+const isProductionTarget = options.target === 'prod';
 const developmentEnvironments = createDevelopmentEnvironments(rootDirectory);
 const children = new Set();
 let isShuttingDown = false;
@@ -66,7 +90,35 @@ function stopChildren(exitCode = 0) {
   }, 1500).unref();
 }
 
+async function startFrontendOnly() {
+  const frontendEnvironment = createProductionProxyEnvironment({
+    shellEnvironment: process.env,
+    apiOrigin: options.apiOrigin,
+  });
+
+  console.log(`前端：http://localhost:${frontendEnvironment.PORT}`);
+  console.log(`接口：${options.apiOrigin}（经 /api 同源代理）`);
+  console.log('注意：当前连接的是生产接口，记账、邀请和删除都会写入真实数据。');
+
+  const frontend = spawnProcess('pnpm', ['--dir', 'frontend', 'run', 'dev'], {
+    env: frontendEnvironment,
+    detached: process.platform !== 'win32',
+  });
+
+  frontend.once('exit', (code) => {
+    if (!isShuttingDown) {
+      console.error(`前端开发进程已退出，退出码：${code ?? '未知'}`);
+      stopChildren(code ?? 1);
+    }
+  });
+}
+
 async function main() {
+  if (isProductionTarget) {
+    await startFrontendOnly();
+    return;
+  }
+
   const infraCode = await runOnce('docker', [
     'compose',
     '-f',

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { ChevronDown, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { NoteSuggestion } from '@/lib/api/transaction-types';
-import { NoteComposerDock, type NoteComposerField } from './NoteComposerDock';
+import { NoteSuggestionBar } from './NoteSuggestionBar';
 import { DateTimePickerDialog } from './DateTimePickerDialog';
 
 export interface SheetMetaFieldsProps {
@@ -21,15 +21,14 @@ export interface SheetMetaFieldsProps {
   timeError: string | null;
   suggestions?: readonly NoteSuggestion[];
   onSelectSuggestion?: (text: string) => void;
-  onSave?: () => void;
-  saveDisabled?: boolean;
 }
 
 /**
  * 金额卡内的第二行：时间 + 商家/备注 + 展开。
  *
- * 输入不再直接聚焦原生控件：点击后打开键盘上方的编辑条，
- * 避免 iOS 聚焦小字号输入框自动放大，也避免系统键盘把面板顶起。
+ * 输入就在原位完成：点击后由系统键盘接管，面板本身不增高；
+ * 备注聚焦时在上方浮出历史候选，选完继续在原输入框里编辑，不需要额外确认。
+ * 字号保持设计值，iOS 的聚焦放大由 viewport 的 maximum-scale 抑制。
  */
 export function SheetMetaFields({
   occurredAtInput,
@@ -43,16 +42,17 @@ export function SheetMetaFields({
   timeError,
   suggestions = [],
   onSelectSuggestion,
-  onSave,
-  saveDisabled,
 }: SheetMetaFieldsProps): React.JSX.Element {
   const [noteExpanded, setNoteExpanded] = React.useState(false);
-  const [composerField, setComposerField] = React.useState<NoteComposerField | null>(null);
+  const [noteFocused, setNoteFocused] = React.useState(false);
   const [pickerOpen, setPickerOpen] = React.useState(false);
 
-  const openComposer = (field: NoteComposerField): void => {
-    setComposerField(field);
+  /** 候选被点按时保持输入焦点：阻止默认按下行为，避免先 blur 再点导致候选消失。 */
+  const keepFocus = (event: React.MouseEvent | React.TouchEvent): void => {
+    event.preventDefault();
   };
+
+  const showSuggestions = noteFocused && suggestions.length > 0;
 
   return (
     <div className="space-y-2">
@@ -60,7 +60,6 @@ export function SheetMetaFields({
         <button
           type="button"
           onClick={() => {
-            setComposerField(null);
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
             setPickerOpen(true);
           }}
@@ -79,16 +78,11 @@ export function SheetMetaFields({
 
         <input
           value={title}
-          readOnly
-          onClick={() => openComposer('title')}
-          onFocus={(event) => {
-            event.currentTarget.blur();
-            openComposer('title');
-          }}
+          onChange={(event) => onTitleChange(event.target.value)}
           placeholder="商家 / 对象"
           maxLength={200}
           aria-label="商家或对象"
-          className="min-w-0 flex-1 bg-transparent text-base text-text-main placeholder:text-text-tertiary focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
         />
 
         <button
@@ -102,51 +96,46 @@ export function SheetMetaFields({
         </button>
       </div>
 
-      {/* 备注：单行 ⇄ 多行，点击后统一进入键盘上方编辑条。 */}
+      {/* 历史备注：浮在备注输入之上，点选只回填文本，不提交、不打断输入。 */}
+      {showSuggestions && (
+        <div onMouseDown={keepFocus} onTouchStart={keepFocus}>
+          <NoteSuggestionBar
+            suggestions={suggestions}
+            onSelect={(text) => {
+              onNoteChange(text);
+              onSelectSuggestion?.(text);
+            }}
+          />
+        </div>
+      )}
+
       {noteExpanded ? (
         <textarea
           value={note}
-          readOnly
-          onClick={() => openComposer('note')}
-          onFocus={(event) => {
-            event.currentTarget.blur();
-            openComposer('note');
-          }}
+          onChange={(event) => onNoteChange(event.target.value)}
+          onFocus={() => setNoteFocused(true)}
+          onBlur={() => setNoteFocused(false)}
           placeholder="点击填写备注"
+          maxLength={noteMaxLength}
           rows={2}
           aria-label="备注"
-          className="w-full resize-none rounded-xl bg-app-card-subtle/70 px-2.5 py-1.5 text-base text-text-main placeholder:text-text-tertiary focus:outline-none"
+          className="w-full resize-none rounded-xl bg-app-card-subtle/70 px-2.5 py-1.5 text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
         />
       ) : (
         <input
           value={note}
-          readOnly
-          onClick={() => openComposer('note')}
-          onFocus={(event) => {
-            event.currentTarget.blur();
-            openComposer('note');
+          onChange={(event) => onNoteChange(event.target.value)}
+          onFocus={() => {
+            setNoteFocused(true);
+            setNoteExpanded(true);
           }}
+          onBlur={() => setNoteFocused(false)}
           placeholder="点击填写备注"
           maxLength={noteMaxLength}
           aria-label="备注"
-          className="w-full bg-transparent text-base text-text-main placeholder:text-text-tertiary focus:outline-none"
+          className="w-full bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
         />
       )}
-
-      <NoteComposerDock
-        open={composerField !== null}
-        field={composerField ?? 'note'}
-        value={composerField === 'title' ? title : note}
-        noteMaxLength={noteMaxLength}
-        suggestions={suggestions}
-        onChange={(value) => {
-          if (composerField === 'title') onTitleChange(value);
-          else onNoteChange(value);
-        }}
-        onClose={() => setComposerField(null)}
-        onSave={onSave}
-        saveDisabled={saveDisabled}
-      />
 
       {pickerOpen && (
         <DateTimePickerDialog

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createDevelopmentEnvironments } from './dev-config.mjs';
+import { createDevelopmentEnvironments, createProductionProxyEnvironment } from './dev-config.mjs';
 
 function createFixtureRoot() {
   const rootDirectory = mkdtempSync(join(tmpdir(), 'xiaobao-jizhang-dev-'));
@@ -58,4 +58,28 @@ test('给定本地环境文件，当创建开发环境时，则交给框架原�
   } finally {
     rmSync(rootDirectory, { recursive: true, force: true });
   }
+});
+
+test('给定生产接口模式，当创建环境时，则浏览器侧使用同源 /api 并配置代理目标', () => {
+  const environment = createProductionProxyEnvironment({
+    shellEnvironment: {},
+    apiOrigin: 'https://jizhang.xiaobao.work/',
+  });
+
+  // 浏览器必须走同源相对路径，否则生产 Cookie（SameSite=Lax）不会随跨站请求发送。
+  assert.equal(environment.NEXT_PUBLIC_API_URL, '/api');
+  assert.equal(environment.DEV_API_PROXY_TARGET, 'https://jizhang.xiaobao.work');
+  assert.equal(environment.PORT, '8090');
+});
+
+test('给定自定义生产接口，当创建环境时，则代理目标使用自定义地址并去掉末尾斜杠', () => {
+  const environment = createProductionProxyEnvironment({
+    shellEnvironment: {},
+    apiOrigin: 'https://staging.example.com/',
+    frontendPort: '8095',
+  });
+
+  assert.equal(environment.DEV_API_PROXY_TARGET, 'https://staging.example.com');
+  assert.equal(environment.NEXT_PUBLIC_API_URL, '/api');
+  assert.equal(environment.PORT, '8095');
 });

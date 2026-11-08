@@ -16,6 +16,7 @@ import { CategoryEditorSheet } from './CategoryEditorSheet';
 import { CategoryManageBody } from './CategoryManageSheet';
 import type { CategorySummary, CategoryType } from '@/lib/api/category-types';
 import { SheetMetaFields } from './SheetMetaFields';
+import { useVisualViewport } from '@/lib/viewport/use-visual-viewport';
 import { SheetQuickChips } from './SheetQuickChips';
 
 export interface BillFormBodyProps {
@@ -87,6 +88,11 @@ export function BillFormBody({
   categoryManage,
   noteSuggestions = [],
 }: BillFormBodyProps): React.JSX.Element {
+  /**
+   * 键盘覆盖模型：系统键盘不改变面板高度，只把底部固定区整体抬到键盘上缘。
+   * 抬起来的是「快捷条 + 金额卡」，数字键盘此时已被键盘覆盖，不再参与布局。
+   */
+  const { keyboardInset, isKeyboardOpen } = useVisualViewport();
   const [manageOpen, setManageOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CategorySummary | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -175,7 +181,10 @@ export function BillFormBody({
         底部固定区：快捷条 + 金额卡 + 键盘。
         快捷条与金额卡属于同一个视觉块，键盘永远贴底，中间分类区独立滚动。
       */}
-      <div className="shrink-0 border-t border-app-divider bg-app-card">
+      <div
+        className="shrink-0 border-t border-app-divider bg-app-card transition-[margin] duration-150"
+        style={isKeyboardOpen ? { marginBottom: keyboardInset } : undefined}
+      >
         <div className="mx-3 mt-2 rounded-2xl bg-app-card-subtle/70 px-3 pb-1.5 pt-2">
           <SheetQuickChips accountName={accountName} onOpenAccountPicker={onOpenAccountPicker} />
           <div className="flex items-baseline justify-end gap-2">
@@ -200,27 +209,41 @@ export function BillFormBody({
               onNoteChange={(note) => dispatch({ kind: 'setNote', note })}
               timeError={state.timeError}
               suggestions={noteSuggestions}
-              onSelectSuggestion={(text) => dispatch({ kind: 'setNote', note: text })}
-              onSave={onSubmit}
-              saveDisabled={submitDisabled}
             />
           </div>
         </div>
 
-        <div className="px-3 pb-[calc(0.4rem+env(safe-area-inset-bottom))] pt-1.5">
-          <AmountKeypad
-            value={state.amountText}
-            onChange={(amountText) => dispatch({ kind: 'setAmount', amountText })}
-            onSubmit={onSubmit}
-            onSecondarySubmit={onSecondarySubmit}
-            submitText={primaryText}
-            secondarySubmitText={secondaryText}
-            isSubmitting={state.submitting}
-            submitDisabled={submitDisabled}
-            insetSafeArea={false}
-            compact
-          />
-        </div>
+        {/*
+          键盘弹出时数字键盘已被系统键盘覆盖，不再占位；
+          但提交动作必须仍可触达，所以换成一条紧凑的保存条，贴在金额卡下方。
+        */}
+        {isKeyboardOpen ? (
+          <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1">
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={submitDisabled || state.submitting}
+              className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-white active:scale-95 disabled:opacity-50"
+            >
+              {state.submitting ? '保存中…' : primaryText}
+            </button>
+          </div>
+        ) : (
+          <div className="px-3 pb-[calc(0.4rem+env(safe-area-inset-bottom))] pt-1.5">
+            <AmountKeypad
+              value={state.amountText}
+              onChange={(amountText) => dispatch({ kind: 'setAmount', amountText })}
+              onSubmit={onSubmit}
+              onSecondarySubmit={onSecondarySubmit}
+              submitText={primaryText}
+              secondarySubmitText={secondaryText}
+              isSubmitting={state.submitting}
+              submitDisabled={submitDisabled}
+              insetSafeArea={false}
+              compact
+            />
+          </div>
+        )}
       </div>
 
       {categoryManage && (

@@ -55,6 +55,21 @@ pnpm dev
 pnpm docker:infra:down
 ```
 
+### 3. 本地前端连生产接口
+
+只想改前端、又不想起本地后端时，可以让开发服务器直接对生产接口：
+
+```bash
+pnpm fat      # 等价于 pnpm dev:prod、pnpm prod
+```
+
+该命令只启动 Next 开发服务器（默认 `http://localhost:8090`），并把 `/api/*` 通过 Next 的 rewrites 代理到 `https://jizhang.xiaobao.work`：
+
+- 浏览器访问的始终是同源 `/api`，所以生产 Cookie（`SameSite=Lax`）能正常带上；直接写死生产域名会被浏览器当成跨站请求，登录态失效。
+- 不启动 Docker 和本地后端，不需要本地数据库。
+- 连接的是**生产数据**，记账、邀请、删除都会真实落库，操作前确认账本。
+- 需要临时指向别的环境时加参数：`pnpm dev:prod --api=https://staging.example.com`。
+
 如果只需要启动基础设施：
 
 ```bash

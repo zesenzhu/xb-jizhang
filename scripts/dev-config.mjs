@@ -39,3 +39,33 @@ export function createDevelopmentEnvironments(rootDirectory, shellEnvironment = 
     frontend: frontendEnvironment,
   };
 }
+
+/** 生产接口默认地址；可用 `--api=` 或 `PROD_API_ORIGIN` 覆盖。 */
+export const DEFAULT_PROD_API_ORIGIN = 'https://jizhang.xiaobao.work';
+export const DEFAULT_FRONTEND_PORT = '8090';
+
+/**
+ * 本地前端连生产接口的环境。
+ *
+ * 关键点：`NEXT_PUBLIC_API_URL` 必须是同源相对路径 `/api`，
+ * 由 `next.config.ts` 的 rewrites 代理到生产域名；直接把绝对地址给浏览器会因为
+ * `SameSite=Lax` 丢掉生产 Cookie，表现为「登录成功但立刻又退回登录页」。
+ */
+export function createProductionProxyEnvironment(options = {}) {
+  const {
+    shellEnvironment = process.env,
+    apiOrigin = DEFAULT_PROD_API_ORIGIN,
+    frontendPort = DEFAULT_FRONTEND_PORT,
+  } = options;
+
+  const normalizedOrigin = apiOrigin.replace(/\/$/, '');
+
+  return {
+    ...shellEnvironment,
+    NODE_ENV: shellEnvironment.NODE_ENV ?? 'development',
+    PORT: shellEnvironment.FRONTEND_PORT ?? frontendPort,
+    HOSTNAME: shellEnvironment.HOSTNAME ?? '0.0.0.0',
+    NEXT_PUBLIC_API_URL: '/api',
+    DEV_API_PROXY_TARGET: normalizedOrigin,
+  };
+}

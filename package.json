@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:prod": "node scripts/dev.mjs --target=prod",
+    "fat": "node scripts/dev.mjs --target=prod",
+    "prod": "node scripts/dev.mjs --target=prod",
     "docker:infra:up": "docker compose -f docker-compose.infra.yml up -d",
     "docker:infra:down": "docker compose -f docker-compose.infra.yml down",
     "docker:full:up": "docker compose up -d --build",
