@@ -100,3 +100,12 @@ export interface UpdateTransactionInput {
   title?: string | null;
   note?: string | null;
 }
+
+export interface NoteSuggestion {
+  text: string;
+  lastUsedAt: string;
+}
+
+export interface NoteSuggestionsResponse {
+  items: NoteSuggestion[];
+}

@@ -1,4 +1,4 @@
-import { InvitationController } from './invitation.controller';
+import { InvitationController, InvitationPublicController } from './invitation.controller';
 import { InvitationService } from './invitation.service';
 
 describe('InvitationController', () => {
@@ -33,5 +33,34 @@ describe('InvitationController', () => {
     await controller.listForLedger({ id: 'user-owner' }, 'ledger-1');
 
     expect(service.listForLedger).toHaveBeenCalledWith('user-owner', 'ledger-1');
+  });
+});
+
+describe('InvitationController 三期扩展', () => {
+  it('给定邀请记录 ID，当 Controller 接受，则传递当前用户和记录 ID', async () => {
+    const service = { acceptById: jest.fn().mockResolvedValue({ id: 'invitation-1' }) };
+    const controller = new InvitationController(service as unknown as InvitationService);
+
+    await controller.acceptById({ id: 'user-1' }, 'invitation-1');
+
+    expect(service.acceptById).toHaveBeenCalledWith('user-1', 'invitation-1');
+  });
+
+  it('给定邀请 Token，当 Controller 查询详情，则传递当前用户和 Token', async () => {
+    const service = { getByToken: jest.fn().mockResolvedValue({ id: 'invitation-1' }) };
+    const controller = new InvitationController(service as unknown as InvitationService);
+
+    await controller.detail({ id: 'user-1' }, { token: 'invite-token' });
+
+    expect(service.getByToken).toHaveBeenCalledWith('user-1', 'invite-token');
+  });
+
+  it('给定公开预览 Token，当 Controller 查询，则不需要认证上下文', async () => {
+    const service = { previewByToken: jest.fn().mockResolvedValue({ ledgerName: '家庭账本' }) };
+    const controller = new InvitationPublicController(service as unknown as InvitationService);
+
+    await controller.preview({ token: 'invite-token' });
+
+    expect(service.previewByToken).toHaveBeenCalledWith('invite-token');
   });
 });

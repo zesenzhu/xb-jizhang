@@ -1,7 +1,7 @@
-import { UserAuthBoundary } from '@/components/auth/UserAuthBoundary';
+import { UserWorkspaceAuthShell } from '@/components/auth/UserWorkspaceAuthShell';
 
 export default function UserWorkspaceLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
-  return <UserAuthBoundary>{children}</UserAuthBoundary>;
+  return <UserWorkspaceAuthShell>{children}</UserWorkspaceAuthShell>;
 }

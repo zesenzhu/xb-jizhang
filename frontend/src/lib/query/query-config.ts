@@ -19,6 +19,7 @@ export const queryStaleTime = {
   categories: 5 * 60 * 1000,
   members: 5 * 60 * 1000,
   transactions: 30 * 1000,
+  noteSuggestions: 30 * 1000,
   /** 待处理邀请变化快（发起/撤销/接受），与账单同档 */
   invitations: 30 * 1000,
 } as const;
@@ -55,6 +56,7 @@ export const queryKeys = {
   ledgerInvitations: (ledgerId: string) => ['ledger', ledgerId, 'invitations'] as const,
   transactions: {
     all: (ledgerId: string) => ['ledger', ledgerId, 'transactions'] as const,
+    noteSuggestions: (ledgerId: string) => ['ledger', ledgerId, 'notes', 'suggestions'] as const,
     list: (ledgerId: string, filter: TransactionListQuery = {}) =>
       ['ledger', ledgerId, 'transactions', 'list', normalizeFilter(filter)] as const,
   },

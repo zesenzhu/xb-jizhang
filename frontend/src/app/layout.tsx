@@ -16,6 +16,8 @@ export const viewport: Viewport = {
   themeColor: '#059669',
   width: 'device-width',
   initialScale: 1,
+  // 键盘弹出时让 visualViewport 收缩，而不是把整个页面放大；不禁止用户缩放。
+  interactiveWidget: 'resizes-visual',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {

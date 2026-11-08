@@ -32,6 +32,6 @@ export class CreateTransactionDto {
 
   @IsOptional()
   @IsString()
-  @Length(1, 2000)
+  @Length(1, 200)
   note?: string | null;
 }

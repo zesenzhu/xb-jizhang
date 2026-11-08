@@ -5,6 +5,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { DeleteTransactionDto } from './dto/delete-transaction.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
+import { NoteSuggestionsQueryDto } from './dto/note-suggestions-query.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { TransactionService } from './transaction.service';
 import type { CreateTransactionInput, TransactionQuery, UpdateTransactionInput } from './transaction.types';
@@ -72,6 +73,15 @@ export class TransactionController {
     @Body() dto: DeleteTransactionDto,
   ) {
     return this.transactionService.remove(user.id, ledgerId, transactionId, dto.version);
+  }
+
+  @Get('note-suggestions')
+  noteSuggestions(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+    @Query() query: NoteSuggestionsQueryDto,
+  ) {
+    return this.transactionService.getNoteSuggestions(user.id, ledgerId, query.limit);
   }
 
   @Get(':transactionId')

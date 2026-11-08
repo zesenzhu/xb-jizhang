@@ -13,17 +13,16 @@ export interface DialogProps {
 
 export function Dialog({ open, onOpenChange, children, className }: DialogProps): React.JSX.Element | null {
   React.useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && open) {
-        onOpenChange(false);
-      }
+      if (event.key === 'Escape') onOpenChange(false);
     };
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = '';
+      // 弹窗可能叠加在 BottomSheet 上，恢复原值而不是清空，避免底层滚动被误解锁。
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [open, onOpenChange]);

@@ -186,3 +186,15 @@ button {
 .pt-safe {
   padding-top: env(safe-area-inset-top, 20px);
 }
+
+/*
+ * iOS Safari 会在聚焦字号小于 16px 的控件时自动放大页面。
+ * 移动端统一兜底到 16px，业务组件仍可用 text-base 显式声明。
+ */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

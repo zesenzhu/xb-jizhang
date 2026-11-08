@@ -67,3 +67,21 @@ assert.equal(isUserPrimaryTabRoute('/user/register'), false);
 assert.equal(getUserPrimaryTab('/user/ledger/new'), null);
 
 console.log('route contract passed');
+
+// 邀请回跳必须保留 token/action，其他查询参数和站外目标必须丢弃。
+assert.equal(
+  getSafeRedirectTarget('/user/invitations?token=abc%2B%2F%3D&action=decline', 'user'),
+  '/user/invitations?token=abc%2B%2F%3D&action=decline',
+);
+assert.equal(
+  getSafeRedirectTarget('/user/invitations?token=abc&next=https%3A%2F%2Fevil.example', 'user'),
+  '/user/invitations?token=abc',
+);
+assert.equal(
+  getSafeRedirectTarget('https://evil.example/user/invitations?token=abc', 'user'),
+  '/user',
+);
+assert.equal(
+  getLoginRedirectUrl('user', '/user/invitations', '?token=abc&action=accept'),
+  '/user/login?redirect=%2Fuser%2Finvitations%3Ftoken%3Dabc%26action%3Daccept',
+);

@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { InvitationController } from './invitation.controller';
+import { InvitationController, InvitationPublicController } from './invitation.controller';
 import { InvitationService } from './invitation.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [InvitationController],
+  controllers: [InvitationController, InvitationPublicController],
   providers: [InvitationService],
   exports: [InvitationService],
 })

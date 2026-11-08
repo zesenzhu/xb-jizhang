@@ -3,9 +3,11 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import type { AccountSummary } from '@/lib/api/account-types';
+import type { NoteSuggestion } from '@/lib/api/transaction-types';
 import { amountTextFromCents, parseAmountText } from '@/lib/bill/amount';
 import { categoryPathText, type CategoryNode } from '@/lib/bill/category-tree';
 import { formatBillTime } from '@/lib/bill/bill-group';
+import { zonedDateTimeInputToIso, zonedInputValue } from '@/lib/bill/timezone';
 import { NOTE_MAX_LENGTH, type BillFormAction, type BillFormState } from '@/lib/bill/bill-form';
 import { AmountKeypad } from '@/components/mobile/AmountKeypad';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
@@ -41,6 +43,7 @@ export interface BillFormBodyProps {
   submitDisabled: boolean;
   /** 分类管理（OWNER）：传 session 才渲染「＋」与「管理」 */
   categoryManage?: CategoryManageSession;
+  noteSuggestions?: readonly NoteSuggestion[];
 }
 
 export interface CategoryManageSession {
@@ -82,6 +85,7 @@ export function BillFormBody({
   onSecondarySubmit,
   submitDisabled,
   categoryManage,
+  noteSuggestions = [],
 }: BillFormBodyProps): React.JSX.Element {
   const [manageOpen, setManageOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CategorySummary | null>(null);
@@ -112,12 +116,12 @@ export function BillFormBody({
   const accountName = accounts.find((account) => account.id === state.accountId)?.name ?? null;
 
   const handleTimeChange = (value: string): void => {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return;
+    const occurredAt = zonedDateTimeInputToIso(value);
+    if (!occurredAt) return;
     dispatch({
       kind: 'setOccurredAt',
-      occurredAt: parsed.toISOString(),
-      timeError: parsed.getTime() > Date.now() ? '不能记未来的账' : null,
+      occurredAt,
+      timeError: new Date(occurredAt).getTime() > Date.now() ? '不能记未来的账' : null,
     });
   };
 
@@ -186,7 +190,7 @@ export function BillFormBody({
 
           <div className="mt-1 border-t border-app-divider pt-1.5">
             <SheetMetaFields
-              occurredAtInput={toLocalInputValue(state.occurredAt)}
+              occurredAtInput={zonedInputValue(state.occurredAt)}
               occurredAtLabel={formatBillTime(state.occurredAt)}
               title={state.title}
               note={state.note}
@@ -195,6 +199,10 @@ export function BillFormBody({
               onTitleChange={(title) => dispatch({ kind: 'setTitle', title })}
               onNoteChange={(note) => dispatch({ kind: 'setNote', note })}
               timeError={state.timeError}
+              suggestions={noteSuggestions}
+              onSelectSuggestion={(text) => dispatch({ kind: 'setNote', note: text })}
+              onSave={onSubmit}
+              saveDisabled={submitDisabled}
             />
           </div>
         </div>
@@ -261,12 +269,4 @@ export function BillFormBody({
       )}
     </>
   );
-}
-
-/** 把 ISO 字符串转换为 datetime-local 需要的 `YYYY-MM-DDTHH:mm`（设备本地时区）。 */
-export function toLocalInputValue(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

@@ -182,3 +182,49 @@ export function shiftDateString(date: string, days: number): string {
   const pad = (value: number): string => String(value).padStart(2, '0');
   return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
 }
+
+/** 把 ISO instant 转成账本时区下 datetime-local 需要的 `YYYY-MM-DDTHH:mm`。 */
+export function zonedInputValue(iso: string, timeZone: string = LEDGER_TIME_ZONE): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  const hour = get('hour') === '24' ? '00' : get('hour');
+  return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}`;
+}
+
+/**
+ * 把账本时区下的 `YYYY-MM-DDTHH:mm` 转成 UTC ISO。
+ * 与 `zonedDayBoundary` 一样迭代两次偏移，避免在夏令时切换日落到错误的小时。
+ */
+export function zonedDateTimeInputToIso(
+  value: string,
+  timeZone: string = LEDGER_TIME_ZONE,
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  if (
+    month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59
+  ) {
+    return '';
+  }
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  if (new Date(localAsUtc).getUTCDate() !== day) return '';
+  const firstGuess = localAsUtc - offsetMinutesAt(localAsUtc, timeZone) * 60 * 1000;
+  const utcMs = localAsUtc - offsetMinutesAt(firstGuess, timeZone) * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}

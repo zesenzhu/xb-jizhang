@@ -17,6 +17,8 @@ export interface UserAuthBoundaryProps {
   children: React.ReactNode;
   /** 自定义未决验证期间的骨架占位组件，未传时根据当前访问路由自动智能匹配 1:1 页面专属骨架 */
   fallback?: React.ReactNode;
+  /** 邀请页允许未登录查看公开预览；其他页面保持强制登录。 */
+  allowAnonymous?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ function resolveRouteSkeleton(pathname: string | null): React.ReactNode {
 export function UserAuthBoundary({
   children,
   fallback,
+  allowAnonymous = false,
 }: UserAuthBoundaryProps): React.JSX.Element {
   const router = useRouter();
   const pathname = usePathname();
@@ -86,12 +89,16 @@ export function UserAuthBoundary({
   }, [clear, router, setCurrentUser, setStatus, status]);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace(getLoginRedirectUrl('user', pathname));
+    if (status === 'unauthenticated' && !allowAnonymous) {
+      router.replace(getLoginRedirectUrl('user', pathname, window.location.search));
     }
-  }, [pathname, router, status]);
+  }, [allowAnonymous, pathname, router, status]);
 
-  if (status !== 'authenticated') {
+  if (status === 'unknown' || status === 'refreshing') {
+    return <>{fallback ?? resolveRouteSkeleton(pathname)}</>;
+  }
+
+  if (status === 'unauthenticated' && !allowAnonymous) {
     return <>{fallback ?? resolveRouteSkeleton(pathname)}</>;
   }
 

@@ -39,6 +39,7 @@ export function ProfilePage(): React.JSX.Element {
 
   const [panel, setPanel] = React.useState<Panel>(null);
   const [nickname, setNickname] = React.useState('');
+  const [email, setEmail] = React.useState('');
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -79,7 +80,11 @@ export function ProfilePage(): React.JSX.Element {
   };
 
   const profileMutation = useMutation({
-    mutationFn: () => updateCurrentUser({ nickname: nickname.trim() }),
+    mutationFn: () =>
+      updateCurrentUser({
+        nickname: nickname.trim(),
+        ...(email.trim() ? { email: email.trim() } : {}),
+      }),
     onSuccess: (updated) => {
       setCurrentUser(updated);
       queryClient.setQueryData(queryKeys.currentUser, updated);
@@ -118,6 +123,7 @@ export function ProfilePage(): React.JSX.Element {
       // 打开时把当前昵称灌进输入框：放在事件里而不是 effect，避免级联渲染。
       onClick: () => {
         setNickname(user?.nickname ?? '');
+        setEmail(user?.email ?? '');
         profileMutation.reset();
         setPanel('profile');
       },
@@ -178,6 +184,25 @@ export function ProfilePage(): React.JSX.Element {
               placeholder="给自己取个昵称"
             />
             <p className="text-[11px] text-text-tertiary">用户名 @{user?.username ?? '—'} 不可修改。</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="profile-email" className="block text-xs font-medium text-text-muted">
+              邮箱
+            </label>
+            <Input
+              id="profile-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              disabled={profileMutation.isPending}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="用于接收共享账本邀请"
+            />
+            <p className="text-[11px] text-text-tertiary">
+              邀请会发送到该邮箱；补全或更换后回到“我的邀请”即可继续处理。
+            </p>
           </div>
 
           {errorText(profileMutation.error) && (

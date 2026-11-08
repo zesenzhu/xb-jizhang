@@ -39,6 +39,7 @@ describe('TransactionService', () => {
     occurredAt,
     title: '早餐',
     note: null,
+    noteUpdatedAt: null,
     categoryId,
     accountId,
     fromAccountId: null,
@@ -75,6 +76,7 @@ describe('TransactionService', () => {
       ledgerMember: { findUnique: jest.fn() },
       account: { findFirst: jest.fn() },
       category: { findFirst: jest.fn() },
+      $queryRaw: jest.fn(),
       transaction: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -738,6 +740,123 @@ describe('TransactionService', () => {
     await expect(dependencies.service.remove(userId, ledgerId, transactionId, 2)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+    expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('给定备注非空，当创建账单，则写入 noteUpdatedAt；编辑备注变化时更新时间，未变化时保留', async () => {
+    const dependencies = createService();
+    const noted = {
+      ...transaction,
+      note: '午餐',
+      noteUpdatedAt: new Date('2026-11-08T08:00:00.000Z'),
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(null);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.transaction.create.mockResolvedValue(noted);
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-note' });
+    dependencies.prisma.transaction.findUnique.mockResolvedValue(noted);
+
+    await dependencies.service.create(userId, ledgerId, {
+      ...validInput,
+      accountId: undefined,
+      note: ' 午餐 ',
+    });
+
+    expect(dependencies.transactionClient.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          note: '午餐',
+          noteUpdatedAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it('给定备注未变化，当编辑金额，则保留原 noteUpdatedAt', async () => {
+    const dependencies = createService();
+    const noted = {
+      ...transaction,
+      note: '午餐',
+      noteUpdatedAt: new Date('2026-11-01T08:00:00.000Z'),
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(noted);
+    dependencies.prisma.account.findFirst.mockResolvedValue(account);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-note-2' });
+    dependencies.transactionClient.transaction.findUnique.mockResolvedValue({ ...noted, amountCents: 4000, version: 2 });
+
+    await dependencies.service.update(userId, ledgerId, transactionId, {
+      version: 1,
+      amountCents: 4000,
+    });
+
+    expect(dependencies.transactionClient.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          note: '午餐',
+          noteUpdatedAt: noted.noteUpdatedAt,
+        }),
+      }),
+    );
+  });
+
+  it('给定备注变更，当编辑账单，则更新 noteUpdatedAt', async () => {
+    const dependencies = createService();
+    const noted = {
+      ...transaction,
+      note: '午餐',
+      noteUpdatedAt: new Date('2026-11-01T08:00:00.000Z'),
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue(noted);
+    dependencies.prisma.account.findFirst.mockResolvedValue(account);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-note-3' });
+    dependencies.transactionClient.transaction.findUnique.mockResolvedValue({ ...noted, note: '晚餐', version: 2 });
+
+    await dependencies.service.update(userId, ledgerId, transactionId, {
+      version: 1,
+      note: '晚餐',
+    });
+
+    expect(dependencies.transactionClient.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          note: '晚餐',
+          noteUpdatedAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it('给定活跃成员查询备注候选，当账本内有历史备注，则返回去重后的服务端结果', async () => {
+    const dependencies = createService();
+    const rows = [{ text: '午餐', lastUsedAt: new Date('2026-11-08T08:00:00.000Z') }];
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.$queryRaw.mockResolvedValue(rows);
+
+    const result = await dependencies.service.getNoteSuggestions(userId, ledgerId, 10);
+
+    expect(result).toEqual({ items: rows });
+    expect(dependencies.prisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it('给定无时区偏移的时间，当创建账单，则返回参数错误且不写数据库', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+
+    await expect(
+      dependencies.service.create(userId, ledgerId, {
+        ...validInput,
+        occurredAt: '2026-11-08T20:30',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
 });

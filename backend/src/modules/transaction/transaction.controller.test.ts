@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
+import { NoteSuggestionsQueryDto } from './dto/note-suggestions-query.dto';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
 
@@ -106,5 +107,22 @@ describe('TransactionController', () => {
     await controller.remove({ id: 'user-1' }, 'ledger-1', 'transaction-1', { version: 1 });
 
     expect(service.remove).toHaveBeenCalledWith('user-1', 'ledger-1', 'transaction-1', 1);
+  });
+});
+
+describe('TransactionController 三期扩展', () => {
+  it('给定备注候选 limit，当 Controller 接收，则传递认证用户、账本和上限', async () => {
+    const service = { getNoteSuggestions: jest.fn().mockResolvedValue({ items: [] }) };
+    const controller = new TransactionController(service as unknown as TransactionService);
+
+    await controller.noteSuggestions({ id: 'user-1' }, 'ledger-1', { limit: 5 });
+
+    expect(service.getNoteSuggestions).toHaveBeenCalledWith('user-1', 'ledger-1', 5);
+  });
+
+  it('给定备注候选 limit 超过 10，当校验 DTO，则返回字段错误', async () => {
+    const dto = plainToInstance(NoteSuggestionsQueryDto, { limit: 11 });
+
+    expect(validateSync(dto).some(({ property }) => property === 'limit')).toBe(true);
   });
 });

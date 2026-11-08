@@ -8,6 +8,7 @@ import {
   getTransaction,
   updateTransaction,
 } from '@/lib/api/transaction-api';
+import { getNoteSuggestions } from '@/lib/api/note-api';
 import type { TransactionSummary } from '@/lib/api/transaction-types';
 import { getLedgerMembers } from '@/lib/api/member-api';
 import { getCategories } from '@/lib/api/category-api';
@@ -78,6 +79,12 @@ export function BillDetailContainer({
     }),
   );
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const noteSuggestionsQuery = useQuery({
+    queryKey: queryKeys.transactions.noteSuggestions(ledgerId),
+    queryFn: () => getNoteSuggestions(ledgerId, 10),
+    staleTime: queryStaleTime.noteSuggestions,
+    enabled: open && editing && Boolean(ledgerId),
+  });
   const [accountPickerOpen, setAccountPickerOpen] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [conflict, setConflict] = React.useState(false);
@@ -206,6 +213,7 @@ export function BillDetailContainer({
     try {
       await saveMutation.mutateAsync();
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
       await queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
       await detailQuery.refetch();
       setEditing(false);
@@ -230,6 +238,7 @@ export function BillDetailContainer({
     try {
       await removeMutation.mutateAsync();
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
       await queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
       setDeleteOpen(false);
       onOpenChange(false);
@@ -337,6 +346,7 @@ export function BillDetailContainer({
           scrollRef={scrollRef}
           primaryText="保存"
           onSubmit={() => void submitEdit()}
+          noteSuggestions={noteSuggestionsQuery.data?.items ?? []}
           submitDisabled={
             parseAmountText(form.amountText).cents === null || Boolean(form.timeError) || !isOnline
           }

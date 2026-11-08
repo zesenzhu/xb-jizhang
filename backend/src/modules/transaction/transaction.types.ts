@@ -24,6 +24,11 @@ export interface UpdateTransactionInput {
   note?: string | null;
 }
 
+export interface NoteSuggestion {
+  text: string;
+  lastUsedAt: Date;
+}
+
 export interface TransactionQuery {
   page: number;
   pageSize: number;
@@ -46,6 +51,7 @@ export interface TransactionSummary {
   occurredAt: Date;
   title: string | null;
   note: string | null;
+  noteUpdatedAt: Date | null;
   categoryId: string | null;
   accountId: string | null;
   fromAccountId: string | null;

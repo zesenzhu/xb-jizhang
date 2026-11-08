@@ -1,4 +1,5 @@
 import { userClient } from './user-client';
+export { getNoteSuggestions } from './note-api';
 import type { ApiSuccessResponse } from './auth-types';
 import type {
   CreateTransactionInput,

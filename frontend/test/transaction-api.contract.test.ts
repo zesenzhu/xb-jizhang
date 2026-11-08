@@ -28,6 +28,9 @@ void (async () => {
   try {
     userClient.defaults.adapter = async (config) => {
       captured.push({ method: config.method, url: config.url, params: config.params });
+      if (config.url === '/ledgers/ledger-1/note-suggestions') {
+        return okResponse(config, { items: [{ text: '午餐', lastUsedAt: '2026-11-08T08:00:00.000Z' }] });
+      }
       return okResponse(config, { items: [], total: 0, page: 1, pageSize: 30, hasNextPage: false });
     };
 
@@ -79,6 +82,13 @@ void (async () => {
       payerId: 'user-2',
       keyword: '早餐',
     });
+
+    const { getNoteSuggestions } = await import('../src/lib/api/transaction-api');
+    const noteResult = await getNoteSuggestions('ledger-1', 10);
+    assert.equal(noteResult.items[0]?.text, '午餐');
+    assert.equal(captured.at(-1)?.method, 'get');
+    assert.equal(captured.at(-1)?.url, '/ledgers/ledger-1/note-suggestions');
+    assert.deepEqual(captured.at(-1)?.params, { limit: 10 });
 
     console.log('transaction api contract passed');
   } finally {

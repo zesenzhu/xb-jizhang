@@ -145,7 +145,7 @@ describe('InvitationService', () => {
 
     await expect(
       dependencies.service.accept(invitedUserId, 'invalid-for-test-token'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(dependencies.prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -215,13 +215,16 @@ describe('InvitationService', () => {
       status: 'PENDING',
       expiresAt: new Date('2026-01-01T00:00:00.000Z'),
     });
-    dependencies.prisma.ledgerInvitation.update.mockResolvedValue({});
+    dependencies.prisma.ledgerInvitation.updateMany.mockResolvedValue({ count: 1 });
 
     await expect(dependencies.service.accept(invitedUserId, 'invite-token')).rejects.toBeInstanceOf(
       ConflictException,
     );
-    expect(dependencies.prisma.ledgerInvitation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'EXPIRED' } }),
+    expect(dependencies.prisma.ledgerInvitation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: invitationId, status: 'PENDING' }),
+        data: { status: 'EXPIRED' },
+      }),
     );
   });
 
@@ -232,5 +235,148 @@ describe('InvitationService', () => {
     await expect(
       dependencies.service.revoke('user-editor', ledgerId, invitationId),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('InvitationService 三期响应扩展', () => {
+  const ledgerId = 'ledger-1';
+  const invitationId = 'invitation-1';
+  const invitation = {
+    id: invitationId,
+    ledgerId,
+    targetEmail: 'member@example.com',
+    role: 'EDITOR' as const,
+    status: 'PENDING' as const,
+    createdAt: new Date('2026-11-08T08:00:00.000Z'),
+    expiresAt: new Date(Date.now() + 60_000),
+    ledger: {
+      id: ledgerId,
+      name: '家庭账本',
+      type: 'SHARED',
+      defaultCurrency: 'CNY',
+      timezone: 'Asia/Shanghai',
+      icon: null,
+      color: null,
+    },
+    inviter: {
+      id: 'user-owner',
+      username: 'owner',
+      nickname: '小宝',
+      avatar: null,
+    },
+  };
+
+  const createService = () => {
+    const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: ledgerId }]),
+      ledgerInvitation: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      ledgerMember: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = {
+      user: { findUnique: jest.fn() },
+      ledgerMember: { findUnique: jest.fn() },
+      ledgerInvitation: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn(
+        async (callback: (client: typeof transactionClient) => Promise<unknown>) =>
+          callback(transactionClient),
+      ),
+    };
+    return {
+      prisma,
+      transactionClient,
+      service: new InvitationService(prisma as unknown as PrismaService),
+    };
+  };
+
+  it('给定有效 Token，当未登录预览，则只返回邀请说明且不返回账本 ID', async () => {
+    const d = createService();
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue(invitation);
+
+    const result = await d.service.previewByToken('invite-token');
+
+    expect(result).toEqual(expect.objectContaining({
+      ledgerName: '家庭账本',
+      inviterName: '小宝',
+      role: 'EDITOR',
+      canRespondAfterLogin: true,
+    }));
+    expect(result).not.toHaveProperty('ledgerId');
+  });
+
+  it('给定当前账号未设置邮箱，当查看邀请详情，则返回补全邮箱提示', async () => {
+    const d = createService();
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue(invitation);
+    d.prisma.user.findUnique.mockResolvedValue({ email: null });
+    d.prisma.ledgerMember.findUnique.mockResolvedValue(null);
+
+    const result = await d.service.getByToken('user-invited', 'invite-token');
+
+    expect(result).toEqual(expect.objectContaining({
+      hasEmail: false,
+      emailMatched: false,
+      canAccept: false,
+      blockedReason: 'EMAIL_REQUIRED',
+      targetEmailMasked: 'm***@example.com',
+    }));
+  });
+
+  it('给定邀请邮箱与当前用户不一致，当查看详情，则返回邮箱不匹配且保留邀请', async () => {
+    const d = createService();
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue(invitation);
+    d.prisma.user.findUnique.mockResolvedValue({ email: 'other@example.com' });
+    d.prisma.ledgerMember.findUnique.mockResolvedValue(null);
+
+    const result = await d.service.getByToken('user-invited', 'invite-token');
+
+    expect(result).toEqual(expect.objectContaining({
+      emailMatched: false,
+      canAccept: false,
+      blockedReason: 'EMAIL_MISMATCH',
+    }));
+    expect(d.prisma.ledgerInvitation.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('给定用户已是活跃成员，当按邀请记录接受，则消费邀请但返回 alreadyMember', async () => {
+    const d = createService();
+    d.prisma.user.findUnique.mockResolvedValue({ email: 'member@example.com' });
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue(invitation);
+    d.prisma.ledgerMember.findUnique.mockResolvedValue(null);
+    d.transactionClient.ledgerMember.findUnique.mockResolvedValue({
+      id: 'member-1',
+      role: 'VIEWER',
+      status: 'ACTIVE',
+      joinedAt: new Date('2026-11-01T08:00:00.000Z'),
+    });
+
+    const result = await d.service.acceptById('user-invited', invitationId);
+
+    expect(result).toEqual(expect.objectContaining({
+      ledgerId,
+      memberRole: 'VIEWER',
+      alreadyMember: true,
+    }));
+    expect(d.transactionClient.ledgerMember.create).not.toHaveBeenCalled();
+    expect(d.transactionClient.ledgerInvitation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ACCEPTED' }) }),
+    );
+  });
+
+  it('给定用户未设置邮箱，当按邀请记录拒绝，则返回 40031 且不修改状态', async () => {
+    const d = createService();
+    d.prisma.user.findUnique.mockResolvedValue({ email: null });
+    d.prisma.ledgerInvitation.findUnique.mockResolvedValue(invitation);
+
+    await expect(d.service.declineById('user-invited', invitationId)).rejects.toMatchObject({
+      response: { code: 40031, data: { action: 'SET_EMAIL' } },
+    });
+    expect(d.prisma.ledgerInvitation.updateMany).not.toHaveBeenCalled();
   });
 });

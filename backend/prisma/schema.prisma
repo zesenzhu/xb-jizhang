@@ -205,6 +205,7 @@ model LedgerInvitation {
 
   @@index([ledgerId, status])
   @@index([ledgerId, targetEmail, status])
+  @@index([targetEmail, status, expiresAt])
   @@map("ledger_invitation")
 }
 
@@ -267,6 +268,7 @@ model Transaction {
   occurredAt      DateTime              @map("occurred_at")
   title           String?
   note            String?
+  noteUpdatedAt   DateTime?             @map("note_updated_at")
   categoryId      String?               @map("category_id")
   accountId       String?               @map("account_id")
   fromAccountId   String?               @map("from_account_id")
@@ -296,6 +298,7 @@ model Transaction {
   @@index([ledgerId, type, occurredAt])
   @@index([ledgerId, categoryId, occurredAt])
   @@index([ledgerId, payerId, occurredAt])
+  @@index([ledgerId, createdById, noteUpdatedAt])
   @@map("transaction")
 }
 
@@ -335,17 +338,17 @@ model Budget {
 }
 
 model AdminUser {
-  id                  String                @id @default(uuid())
-  username            String                @unique
-  passwordHash        String                @map("password_hash")
-  displayName         String                @map("display_name")
-  isActive            Boolean               @default(true) @map("is_active")
-  lastLoginAt         DateTime?             @map("last_login_at")
-  roles               AdminUserRole[]
-  refreshSessions     AdminRefreshSession[]
-  auditLogs           AdminAuditLog[]       @relation("AdminAuditOperator")
-  createdAt           DateTime              @default(now()) @map("created_at")
-  updatedAt           DateTime              @updatedAt @map("updated_at")
+  id              String                @id @default(uuid())
+  username        String                @unique
+  passwordHash    String                @map("password_hash")
+  displayName     String                @map("display_name")
+  isActive        Boolean               @default(true) @map("is_active")
+  lastLoginAt     DateTime?             @map("last_login_at")
+  roles           AdminUserRole[]
+  refreshSessions AdminRefreshSession[]
+  auditLogs       AdminAuditLog[]       @relation("AdminAuditOperator")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
 
   @@index([isActive, createdAt])
   @@map("admin_user")
@@ -420,21 +423,21 @@ model AdminRefreshSession {
 }
 
 model AdminAuditLog {
-  id          String          @id @default(uuid())
-  adminUserId String          @map("admin_user_id")
-  requestId   String          @map("request_id")
+  id          String           @id @default(uuid())
+  adminUserId String           @map("admin_user_id")
+  requestId   String           @map("request_id")
   action      String
-  targetType  String          @map("target_type")
-  targetId    String?         @map("target_id")
+  targetType  String           @map("target_type")
+  targetId    String?          @map("target_id")
   reason      String?
-  beforeData  Json?           @map("before_data")
-  afterData   Json?           @map("after_data")
+  beforeData  Json?            @map("before_data")
+  afterData   Json?            @map("after_data")
   result      AdminAuditResult
-  errorCode   String?         @map("error_code")
+  errorCode   String?          @map("error_code")
   ip          String?
-  userAgent   String?         @map("user_agent")
-  adminUser   AdminUser       @relation("AdminAuditOperator", fields: [adminUserId], references: [id], onDelete: Restrict)
-  createdAt   DateTime        @default(now()) @map("created_at")
+  userAgent   String?          @map("user_agent")
+  adminUser   AdminUser        @relation("AdminAuditOperator", fields: [adminUserId], references: [id], onDelete: Restrict)
+  createdAt   DateTime         @default(now()) @map("created_at")
 
   @@index([adminUserId, createdAt])
   @@index([targetType, targetId, createdAt])

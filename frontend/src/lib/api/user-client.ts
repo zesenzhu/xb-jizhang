@@ -9,9 +9,12 @@ function handleUserRefreshFailure(): void {
   if (
     typeof window !== 'undefined' &&
     window.location.pathname !== '/user/login' &&
-    window.location.pathname !== '/user/register'
+    window.location.pathname !== '/user/register' &&
+    window.location.pathname !== '/user/invitations'
   ) {
-    window.location.replace(getLoginRedirectUrl('user', window.location.pathname));
+    window.location.replace(
+      getLoginRedirectUrl('user', window.location.pathname, window.location.search),
+    );
   }
 }
 

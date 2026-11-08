@@ -2,17 +2,18 @@
 
 import * as React from 'react';
 import type { LedgerType } from '@/lib/api/ledger-types';
+import type { InvitationDetail, InvitationPreview } from '@/lib/api/invitation-types';
 import { SecondaryLayout } from '@/components/layout/SecondaryLayout';
 import { LedgerBadge } from '@/components/common/LedgerBadge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, MailCheck, ShieldAlert } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, MailCheck } from 'lucide-react';
 
 export interface MyInvitationItem {
   id: string;
   ledgerName: string;
   ledgerType: LedgerType;
+  inviterName: string;
   role: 'EDITOR' | 'VIEWER';
   expiresAt: string;
 }
@@ -22,15 +23,134 @@ export interface MyInvitationsViewProps {
   items: readonly MyInvitationItem[];
   errorMessage: string | null;
   onRetry: () => void;
-  tokenPrompt: {
-    token: string;
-    onSubmit: (token: string) => void;
-    isSubmitting: boolean;
-    error: string | null;
-    mode: 'accept' | 'decline';
-    /** 切到「拒绝」；为空时不渲染拒绝入口 */
-    onSwitchMode?: () => void;
-  } | null;
+  tokenState: 'idle' | 'loading' | 'error' | 'ready';
+  tokenDetail: InvitationDetail | null;
+  tokenError: string | null;
+  onTokenRetry: () => void;
+  onRespond: (invitationId: string, action: 'accept' | 'decline') => void;
+  pendingInvitationId: string | null;
+  onGoProfile: () => void;
+  onGoLedger: (ledgerId: string) => void;
+}
+
+function formatExpiry(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '有效期未知';
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 到期`;
+}
+
+function statusText(status: InvitationDetail['status']): string {
+  switch (status) {
+    case 'ACCEPTED':
+      return '邀请已接受';
+    case 'DECLINED':
+      return '邀请已拒绝';
+    case 'EXPIRED':
+      return '邀请已过期';
+    case 'REVOKED':
+      return '邀请已撤销';
+    default:
+      return '待处理';
+  }
+}
+
+function inviterName(invitation: InvitationDetail): string {
+  return invitation.inviter?.nickname?.trim() || invitation.inviter?.username || '账本成员';
+}
+
+export interface PublicInvitationPreviewProps {
+  state: 'loading' | 'error' | 'ready';
+  preview: InvitationPreview | null;
+  errorMessage: string | null;
+  onRetry: () => void;
+  onLogin: () => void;
+  onRegister: () => void;
+}
+
+/** 未登录时的邀请说明：只展示公开字段，不暴露账本内容。 */
+export function PublicInvitationPreview({
+  state,
+  preview,
+  errorMessage,
+  onRetry,
+  onLogin,
+  onRegister,
+}: PublicInvitationPreviewProps): React.JSX.Element {
+  return (
+    <SecondaryLayout title="我的邀请" fallbackBackUrl="/user">
+      <div className="mx-auto max-w-md space-y-4 px-4 py-6">
+        <section className="rounded-2xl border border-app-border bg-app-card p-5 shadow-xs">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <MailCheck className="size-5 text-primary" aria-hidden="true" />
+            <span>账本邀请</span>
+          </div>
+
+          {state === 'loading' && (
+            <div className="mt-4 space-y-2" aria-label="正在加载邀请">
+              <Skeleton className="h-5 w-40 rounded-md" />
+              <Skeleton className="h-3 w-52 rounded-md" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+          )}
+
+          {state === 'error' && (
+            <div className="mt-3 space-y-3">
+              <p className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700" role="alert">
+                {errorMessage ?? '邀请链接无效或不可用'}
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                重新加载
+              </Button>
+            </div>
+          )}
+
+          {state === 'ready' && !preview && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-text-muted">登录后查看别人发给你的账本邀请。</p>
+              <Button type="button" className="w-full" onClick={onLogin}>
+                去登录
+              </Button>
+              <Button type="button" variant="outline" className="w-full" onClick={onRegister}>
+                注册新账号
+              </Button>
+            </div>
+          )}
+
+          {state === 'ready' && preview && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="text-base font-semibold text-text-main">{preview.ledgerName}</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {preview.inviterName} 邀请你以{' '}
+                  {preview.role === 'EDITOR' ? '记账协作' : '只读观察'} 身份加入。
+                </p>
+                <p className="mt-1 text-xs text-text-tertiary">{formatExpiry(preview.expiresAt)}</p>
+              </div>
+
+              {preview.canRespondAfterLogin ? (
+                <div className="space-y-2">
+                  <Button type="button" className="w-full" onClick={onLogin}>
+                    登录后处理邀请
+                  </Button>
+                  <Button type="button" variant="outline" className="w-full" onClick={onRegister}>
+                    注册新账号
+                  </Button>
+                </div>
+              ) : (
+                <p className="rounded-xl bg-slate-50 p-3 text-xs text-text-muted">
+                  {statusText(preview.status)}，该邀请已不能继续处理。
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <p className="px-2 text-center text-[11px] text-text-tertiary">
+          登录后会回到本页继续处理邀请，不会丢失邀请链接。
+        </p>
+      </div>
+    </SecondaryLayout>
+  );
 }
 
 export function MyInvitationsView({
@@ -38,105 +158,152 @@ export function MyInvitationsView({
   items,
   errorMessage,
   onRetry,
-  tokenPrompt,
+  tokenState,
+  tokenDetail,
+  tokenError,
+  onTokenRetry,
+  onRespond,
+  pendingInvitationId,
+  onGoProfile,
+  onGoLedger,
 }: MyInvitationsViewProps): React.JSX.Element {
-  const [tokenInput, setTokenInput] = React.useState(tokenPrompt?.token ?? '');
-  const [appliedToken, setAppliedToken] = React.useState(tokenPrompt?.token ?? '');
-
-  // URL 上的 token 变化时同步到输入框；渲染期比较避免 effect 里同步 setState。
-  const nextToken = tokenPrompt?.token ?? '';
-  if (appliedToken !== nextToken) {
-    setAppliedToken(nextToken);
-    if (nextToken) setTokenInput(nextToken);
-  }
+  const submitting = pendingInvitationId !== null;
 
   return (
     <SecondaryLayout title="我的邀请" fallbackBackUrl="/user/profile">
-      <div className="max-w-md mx-auto px-4 py-4 space-y-6">
-        {/* Token 处理卡片（当 URL 或 props 传入 tokenPrompt 时渲染） */}
-        {tokenPrompt ? (
-          <div className="rounded-2xl border border-app-border bg-app-card p-5 space-y-4 shadow-xs">
+      <div className="mx-auto max-w-md space-y-6 px-4 py-4">
+        {tokenState !== 'idle' && (
+          <section className="rounded-2xl border border-app-border bg-app-card p-4 shadow-xs">
             <div className="flex items-center gap-2 text-sm font-semibold text-text-main">
               <MailCheck className="size-5 text-primary" aria-hidden="true" />
-              <span>处理邀请链接</span>
+              <span>邀请链接</span>
             </div>
 
-            <p className="text-xs text-text-muted leading-relaxed">
-              检测到邀请凭证，请点击确认以{tokenPrompt.mode === 'accept' ? '加入账本' : '拒绝邀请'}。
-            </p>
-
-            {tokenPrompt.error && (
-              <div
-                className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2"
-                role="alert"
-              >
-                <AlertCircle className="size-4 shrink-0" />
-                <span>{tokenPrompt.error}</span>
+            {tokenState === 'loading' && (
+              <div className="mt-4 space-y-2" aria-label="正在加载邀请">
+                <Skeleton className="h-4 w-36 rounded-md" />
+                <Skeleton className="h-3 w-48 rounded-md" />
+                <Skeleton className="h-9 w-full rounded-xl" />
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-tertiary">
-                邀请凭证 Token
-              </label>
-              <Input
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                placeholder="请输入或粘贴 token"
-                disabled={tokenPrompt.isSubmitting}
-              />
-            </div>
+            {tokenState === 'error' && (
+              <div className="mt-3 space-y-3">
+                <p className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700" role="alert">
+                  {tokenError ?? '邀请链接无效或不可用'}
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={onTokenRetry}>
+                  重新加载
+                </Button>
+              </div>
+            )}
 
-            <div className="pt-1">
-              <Button
-                type="button"
-                className="w-full"
-                variant={tokenPrompt.mode === 'decline' ? 'destructive' : 'default'}
-                isLoading={tokenPrompt.isSubmitting}
-                disabled={!tokenInput.trim() || tokenPrompt.isSubmitting}
-                onClick={() => tokenPrompt.onSubmit(tokenInput.trim())}
-              >
-                {tokenPrompt.mode === 'accept' ? '接受邀请并加入' : '拒绝此邀请'}
-              </Button>
+            {tokenState === 'ready' && tokenDetail && (
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-text-main">
+                    {tokenDetail.ledger?.name ?? tokenDetail.ledgerId}
+                  </span>
+                  {tokenDetail.ledger?.type && <LedgerBadge type={tokenDetail.ledger.type} />}
+                  <LedgerBadge role={tokenDetail.role} />
+                </div>
+                <p className="text-xs text-text-muted">
+                  {inviterName(tokenDetail)} 邀请你以 {tokenDetail.role === 'EDITOR' ? '记账协作' : '只读观察'} 身份加入，{formatExpiry(tokenDetail.expiresAt)}。
+                </p>
 
-              {tokenPrompt.onSwitchMode && !tokenPrompt.isSubmitting && (
-                <button
-                  type="button"
-                  onClick={tokenPrompt.onSwitchMode}
-                  className="mt-2 w-full text-center text-xs text-text-tertiary underline underline-offset-2"
-                >
-                  不想加入？改为拒绝此邀请
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* 说明卡：未提供 tokenPrompt 时展示 */
-          <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-text-main">
-              <Info className="size-4 text-text-tertiary" aria-hidden="true" />
-              <span>邀请处理说明</span>
-            </div>
-            <p className="text-xs text-text-muted leading-relaxed">
-              列表仅展示邀请信息；接受或拒绝需要使用完整的邀请链接（含验证 token）。若你收到了邀请链接，请直接点击该链接或在浏览器中打开。
-            </p>
-          </div>
+                {tokenDetail.blockedReason === 'EMAIL_REQUIRED' && (
+                  <div className="space-y-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                    <p>当前账号还没有填写邮箱。补全邮箱后即可响应这条邀请。</p>
+                    <Button type="button" size="sm" onClick={onGoProfile}>
+                      去补全邮箱
+                    </Button>
+                  </div>
+                )}
+
+                {tokenDetail.blockedReason === 'EMAIL_MISMATCH' && (
+                  <div className="space-y-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                    <p>
+                      邀请发送至 {tokenDetail.targetEmailMasked}，当前账号邮箱不匹配。更换为匹配邮箱后可继续。
+                    </p>
+                    <Button type="button" size="sm" onClick={onGoProfile}>
+                      去修改邮箱
+                    </Button>
+                  </div>
+                )}
+
+                {tokenDetail.blockedReason === 'ALREADY_MEMBER' && (
+                  <div className="space-y-2 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">
+                    <p className="flex items-center gap-1.5">
+                      <CheckCircle2 className="size-4" aria-hidden="true" />
+                      你已经是该账本的成员。
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => onGoLedger(tokenDetail.ledgerId)}
+                    >
+                      进入账本
+                    </Button>
+                  </div>
+                )}
+
+                {tokenDetail.blockedReason &&
+                  !['EMAIL_REQUIRED', 'EMAIL_MISMATCH', 'ALREADY_MEMBER'].includes(
+                    tokenDetail.blockedReason,
+                  ) && (
+                    <p className="rounded-xl bg-slate-50 p-3 text-xs text-text-muted">
+                      {statusText(tokenDetail.status)}，不能继续加入。
+                    </p>
+                  )}
+
+                {tokenDetail.canAccept && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={submitting}
+                      isLoading={pendingInvitationId === tokenDetail.id}
+                      onClick={() => onRespond(tokenDetail.id, 'accept')}
+                    >
+                      接受邀请
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={submitting}
+                      onClick={() => onRespond(tokenDetail.id, 'decline')}
+                    >
+                      拒绝
+                    </Button>
+                  </div>
+                )}
+
+                {!tokenDetail.canAccept && tokenDetail.canDecline && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={submitting}
+                    onClick={() => onRespond(tokenDetail.id, 'decline')}
+                  >
+                    拒绝此邀请
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
         )}
 
-        {/* 状态展示 */}
-        <div className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary px-1">
+        <section className="space-y-3">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
             待处理的账本邀请 ({items.length})
           </h2>
 
           {state === 'loading' && (
-            <div className="divide-y divide-app-divider rounded-2xl border border-app-border bg-app-card overflow-hidden">
-              {Array.from({ length: 3 }).map((_, idx) => (
-                <div key={idx} className="p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-32 rounded-md" />
-                    <Skeleton className="h-4 w-16 rounded-full" />
-                  </div>
+            <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="space-y-2 p-4">
+                  <Skeleton className="h-4 w-32 rounded-md" />
                   <Skeleton className="h-3 w-40 rounded-md" />
                 </div>
               ))}
@@ -144,8 +311,8 @@ export function MyInvitationsView({
           )}
 
           {state === 'error' && (
-            <div className="rounded-2xl border border-app-border bg-app-card p-6 text-center space-y-3">
-              <div className="flex items-center justify-center gap-2 text-sm text-rose-600 font-medium">
+            <div className="space-y-3 rounded-2xl border border-app-border bg-app-card p-6 text-center">
+              <div className="flex items-center justify-center gap-2 text-sm font-medium text-rose-600">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                 <span>{errorMessage ?? '加载邀请列表失败'}</span>
               </div>
@@ -156,41 +323,57 @@ export function MyInvitationsView({
           )}
 
           {state === 'empty' && (
-            <div className="rounded-2xl border border-app-border bg-app-card p-8 text-center text-text-muted text-sm">
+            <div className="rounded-2xl border border-app-border bg-app-card p-8 text-center text-sm text-text-muted">
               暂无待处理邀请
             </div>
           )}
 
           {state === 'ready' && (
-            <div className="divide-y divide-app-divider rounded-2xl border border-app-border bg-app-card overflow-hidden">
-              {items.map((item) => {
-                const expiryDate = item.expiresAt ? new Date(item.expiresAt) : null;
-                const expiryText =
-                  expiryDate && !isNaN(expiryDate.getTime())
-                    ? `${expiryDate.getFullYear()}年${expiryDate.getMonth() + 1}月${expiryDate.getDate()}日 到期`
-                    : '长期有效';
-
-                return (
-                  <div key={item.id} className="p-4 space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-text-main">
-                          {item.ledgerName}
-                        </span>
-                        <LedgerBadge type={item.ledgerType} />
-                      </div>
-                      <LedgerBadge role={item.role} />
+            <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card">
+              {items.map((item) => (
+                <div key={item.id} className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text-main">{item.ledgerName}</span>
+                      <LedgerBadge type={item.ledgerType} />
                     </div>
-
-                    <div className="text-xs text-text-tertiary">
-                      {expiryText}
-                    </div>
+                    <LedgerBadge role={item.role} />
                   </div>
-                );
-              })}
+                  <p className="text-xs text-text-tertiary">
+                    {item.inviterName} 邀请 · {formatExpiry(item.expiresAt)}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={submitting}
+                      isLoading={pendingInvitationId === item.id}
+                      onClick={() => onRespond(item.id, 'accept')}
+                    >
+                      接受
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={submitting}
+                      onClick={() => onRespond(item.id, 'decline')}
+                    >
+                      拒绝
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-        </div>
+        </section>
+
+        {!tokenState && (
+          <div className="flex items-start gap-2 rounded-2xl border border-app-border bg-app-card p-4 text-xs text-text-muted">
+            <Info className="mt-0.5 size-4 shrink-0 text-text-tertiary" aria-hidden="true" />
+            <span>收到邀请链接时，登录后会自动回到这里处理；也可以在上方列表中直接接受或拒绝。</span>
+          </div>
+        )}
       </div>
     </SecondaryLayout>
   );

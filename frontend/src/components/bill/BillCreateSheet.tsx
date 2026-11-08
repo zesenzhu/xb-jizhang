@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, X } from 'lucide-react';
 import { createTransaction } from '@/lib/api/transaction-api';
+import { getNoteSuggestions } from '@/lib/api/note-api';
 import { cn } from '@/lib/utils';
 import { getCategories } from '@/lib/api/category-api';
 import { getAccounts } from '@/lib/api/account-api';
@@ -87,6 +88,13 @@ export function BillCreateSheet({
     queryFn: () => getCategories(ledgerId, { pageSize: 100, includeInactive: true }),
     staleTime: queryStaleTime.categories,
     enabled: open && canManageCategories && showInactive,
+  });
+
+  const noteSuggestionsQuery = useQuery({
+    queryKey: queryKeys.transactions.noteSuggestions(ledgerId),
+    queryFn: () => getNoteSuggestions(ledgerId, 10),
+    staleTime: queryStaleTime.noteSuggestions,
+    enabled: open && Boolean(ledgerId),
   });
 
   const accountsQuery = useQuery({
@@ -174,6 +182,7 @@ export function BillCreateSheet({
       await createMutation.mutateAsync();
       // 失效当前账本下全部账单与概览缓存，避免列表与概览口径不一致。
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
       await queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
 
       dispatch({
@@ -283,6 +292,7 @@ export function BillCreateSheet({
           onSubmit={() => void submit(false)}
           onSecondarySubmit={() => void submit(true)}
           submitDisabled={submitBlocked}
+          noteSuggestions={noteSuggestionsQuery.data?.items ?? []}
           categoryManage={
             canManageCategories
               ? {

@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Temporal } from '@js-temporal/polyfill';
 import type { TransactionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateTransactionInput,
+  NoteSuggestion,
   TransactionQuery,
   TransactionSummary,
   UpdateTransactionInput,
@@ -23,6 +25,7 @@ const transactionSelect = {
   occurredAt: true,
   title: true,
   note: true,
+  noteUpdatedAt: true,
   categoryId: true,
   accountId: true,
   fromAccountId: true,
@@ -68,8 +71,8 @@ export class TransactionService {
       throw this.invalidInputException();
     }
 
-    const occurredAt = new Date(input.occurredAt);
-    if (Number.isNaN(occurredAt.getTime())) throw this.invalidInputException();
+    const occurredAt = this.parseOccurredAt(input.occurredAt);
+    const normalizedNote = this.normalizeOptionalText(input.note);
 
     const existing = await this.findByClientRequestId(ledgerId, input.clientRequestId);
     if (existing) return this.toSummary(existing);
@@ -99,7 +102,8 @@ export class TransactionService {
             amountCents: input.amountCents,
             occurredAt,
             title: this.normalizeOptionalText(input.title),
-            note: this.normalizeOptionalText(input.note),
+            note: normalizedNote,
+            noteUpdatedAt: normalizedNote ? new Date() : null,
             categoryId: input.categoryId,
             accountId: input.accountId ?? null,
             source: 'MANUAL',
@@ -177,11 +181,12 @@ export class TransactionService {
     const nextType: Extract<TransactionType, 'EXPENSE' | 'INCOME'> =
       input.type ?? (current.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
     const nextAmount = input.amountCents ?? current.amountCents;
-    const nextOccurredAt = input.occurredAt === undefined ? current.occurredAt : new Date(input.occurredAt);
+    const nextOccurredAt =
+      input.occurredAt === undefined ? current.occurredAt : this.parseOccurredAt(input.occurredAt);
     if (!['EXPENSE', 'INCOME'].includes(nextType) || !Number.isInteger(nextAmount) || nextAmount <= 0) {
       throw this.invalidInputException();
     }
-    if (Number.isNaN(nextOccurredAt.getTime())) throw this.invalidInputException();
+    const nextNote = input.note === undefined ? current.note : this.normalizeOptionalText(input.note);
 
     const nextAccountId = input.accountId === undefined ? current.accountId : input.accountId;
     const nextCategoryId = input.categoryId ?? current.categoryId;
@@ -219,7 +224,13 @@ export class TransactionService {
           accountId: nextAccountId,
           payerId: nextPayerId,
           title: input.title === undefined ? current.title : this.normalizeOptionalText(input.title),
-          note: input.note === undefined ? current.note : this.normalizeOptionalText(input.note),
+          note: nextNote,
+          noteUpdatedAt:
+            nextNote === null
+              ? null
+              : nextNote !== current.note
+                ? new Date()
+                : current.noteUpdatedAt,
           updatedById: userId,
           version: { increment: 1 },
         },
@@ -242,7 +253,13 @@ export class TransactionService {
             accountId: nextAccountId,
             payerId: nextPayerId,
             title: input.title === undefined ? current.title : this.normalizeOptionalText(input.title),
-            note: input.note === undefined ? current.note : this.normalizeOptionalText(input.note),
+            note: nextNote,
+            noteUpdatedAt:
+              nextNote === null
+                ? null
+                : nextNote !== current.note
+                  ? new Date()
+                  : current.noteUpdatedAt,
             version: current.version + 1,
           },
         },
@@ -296,6 +313,40 @@ export class TransactionService {
     });
     if (!deleted) throw this.notFoundException();
     return this.toSummary(deleted);
+  }
+
+  /**
+   * 备注候选只取当前用户在当前账本创建的备注，按 noteUpdatedAt 倒序去重。
+   * 不按 Transaction.updatedAt 排序，避免修改金额等无关字段把旧备注顶到最前。
+   */
+  async getNoteSuggestions(
+    userId: string,
+    ledgerId: string,
+    limit = 10,
+  ): Promise<{ items: NoteSuggestion[] }> {
+    const member = await this.getMembership(userId, ledgerId);
+    if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
+
+    const rows = await this.prisma.$queryRaw<NoteSuggestion[]>(Prisma.sql`
+      SELECT text, last_used_at AS "lastUsedAt"
+      FROM (
+        SELECT DISTINCT ON (btrim(note))
+          btrim(note) AS text,
+          note_updated_at AS last_used_at
+        FROM "transaction"
+        WHERE ledger_id = ${ledgerId}
+          AND created_by_id = ${userId}
+          AND deleted_at IS NULL
+          AND note IS NOT NULL
+          AND note_updated_at IS NOT NULL
+          AND btrim(note) <> ''
+          AND char_length(btrim(note)) <= 200
+        ORDER BY btrim(note), note_updated_at DESC, created_at DESC
+      ) AS suggestions
+      ORDER BY last_used_at DESC
+      LIMIT ${limit}
+    `);
+    return { items: rows };
   }
 
   async list(userId: string, ledgerId: string, query: TransactionQuery) {
@@ -439,6 +490,18 @@ export class TransactionService {
     if (result.count !== 1) throw this.notFoundException();
   }
 
+  /**
+   * 严格解析带时区的 ISO instant：日期-only、无偏移本地时间和非法日历日期都拒绝，
+   * 避免 `new Date('2026-11-08T20:30')` 按服务进程时区解释。
+   */
+  private parseOccurredAt(value: string): Date {
+    try {
+      return new Date(Number(Temporal.Instant.from(value).epochMilliseconds));
+    } catch {
+      throw this.invalidInputException();
+    }
+  }
+
   private buildDateRange(from?: string, to?: string): Prisma.DateTimeFilter | undefined {
     if (from === undefined && to === undefined) return undefined;
     const range: Prisma.DateTimeFilter = {};
@@ -476,6 +539,7 @@ export class TransactionService {
       payerId: record.payerId,
       title: record.title,
       note: record.note,
+      noteUpdatedAt: record.noteUpdatedAt?.toISOString() ?? null,
       version: record.version,
     };
   }
