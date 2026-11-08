@@ -12,8 +12,17 @@ export interface VisualViewportMetrics {
   isKeyboardOpen: boolean;
 }
 
-/** 键盘开合判定阈值：过滤地址栏收起等小幅变化，避免编辑条来回跳。 */
+/** 键盘开合判定阈值：过滤地址栏收起等小幅变化。 */
 export const KEYBOARD_OPEN_THRESHOLD = 120;
+
+/**
+ * 高度变化的最小采纳步长。
+ *
+ * iOS 键盘弹出过程中 visualViewport 会连续上报十几个中间值，逐帧 setState 会让
+ * 依赖它的布局（底部区抬升）反复重排，实测表现为键盘「弹上弹下」。
+ * 只有变化超过该步长、或开合状态翻转时才采纳新值。
+ */
+export const VIEWPORT_STABLE_DELTA = 24;
 
 export const FALLBACK_VIEWPORT_METRICS: VisualViewportMetrics = {
   height: 0,
@@ -51,6 +60,18 @@ export function computeViewportMetrics(snapshot: ViewportSnapshot): VisualViewpo
 }
 
 /**
+ * 判断新采样是否值得写入状态：开合翻转必采纳，其余按步长量化，避免中间帧抖动。
+ */
+export function shouldApplyViewportUpdate(
+  previous: VisualViewportMetrics,
+  next: VisualViewportMetrics,
+): boolean {
+  if (previous.isKeyboardOpen !== next.isKeyboardOpen) return true;
+  if (previous.height === 0) return true;
+  return Math.abs(previous.keyboardInset - next.keyboardInset) >= VIEWPORT_STABLE_DELTA;
+}
+
+/**
  * 移动端系统键盘不会改变 `100dvh`，只会改变 visualViewport。
  * 统一在这里读取高度和键盘占位，避免各组件自行监听导致抖动或重复计算。
  */
@@ -59,24 +80,37 @@ export function useVisualViewport(): VisualViewportMetrics {
 
   React.useEffect(() => {
     const viewport = window.visualViewport;
-    const read = (): void => {
-      setMetrics(
-        computeViewportMetrics({
-          viewportHeight: viewport?.height ?? window.innerHeight,
-          viewportOffsetTop: viewport?.offsetTop ?? 0,
-          layoutHeight: window.innerHeight,
-        }),
+    let frame = 0;
+
+    const measure = (): void => {
+      const next = computeViewportMetrics({
+        viewportHeight: viewport?.height ?? window.innerHeight,
+        viewportOffsetTop: viewport?.offsetTop ?? 0,
+        layoutHeight: window.innerHeight,
+      });
+      setMetrics((previous) =>
+        shouldApplyViewportUpdate(previous, next) ? next : previous,
       );
     };
 
-    read();
-    viewport?.addEventListener('resize', read);
-    viewport?.addEventListener('scroll', read);
-    window.addEventListener('resize', read);
+    // 同一帧内的多次 resize/scroll 只算一次，避免键盘动画期间连续重排。
+    const schedule = (): void => {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    };
+
+    measure();
+    viewport?.addEventListener('resize', schedule);
+    viewport?.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
     return () => {
-      viewport?.removeEventListener('resize', read);
-      viewport?.removeEventListener('scroll', read);
-      window.removeEventListener('resize', read);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+      viewport?.removeEventListener('resize', schedule);
+      viewport?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
     };
   }, []);
 

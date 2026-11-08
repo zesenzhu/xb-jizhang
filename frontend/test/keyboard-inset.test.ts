@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import {
   FALLBACK_VIEWPORT_METRICS,
   KEYBOARD_OPEN_THRESHOLD,
+  VIEWPORT_STABLE_DELTA,
   computeViewportMetrics,
+  shouldApplyViewportUpdate,
 } from '../src/lib/viewport/use-visual-viewport';
 
 /**
@@ -61,5 +63,48 @@ assert.deepEqual(FALLBACK_VIEWPORT_METRICS, {
   keyboardInset: 0,
   isKeyboardOpen: false,
 });
+
+// 键盘动画期间会连续上报中间值；小于步长的抖动不得写入状态，否则底部区会来回重排。
+const closed = computeViewportMetrics({ viewportHeight: 844, viewportOffsetTop: 0, layoutHeight: 844 });
+const almostOpen = computeViewportMetrics({
+  viewportHeight: 844 - KEYBOARD_OPEN_THRESHOLD - 1,
+  viewportOffsetTop: 0,
+  layoutHeight: 844,
+});
+assert.equal(
+  shouldApplyViewportUpdate(closed, almostOpen),
+  true,
+  '开合状态翻转必须采纳',
+);
+
+const opened = computeViewportMetrics({ viewportHeight: 508, viewportOffsetTop: 0, layoutHeight: 844 });
+const jittered = computeViewportMetrics({
+  viewportHeight: 508 + VIEWPORT_STABLE_DELTA - 1,
+  viewportOffsetTop: 0,
+  layoutHeight: 844,
+});
+assert.equal(
+  shouldApplyViewportUpdate(opened, jittered),
+  false,
+  '同一开合状态内小于步长的高度抖动必须忽略',
+);
+
+const settled = computeViewportMetrics({
+  viewportHeight: 508 + VIEWPORT_STABLE_DELTA,
+  viewportOffsetTop: 0,
+  layoutHeight: 844,
+});
+assert.equal(
+  shouldApplyViewportUpdate(opened, settled),
+  true,
+  '超过步长的变化必须采纳',
+);
+
+// 首帧（初始 height 为 0）无条件采纳，保证首屏就能拿到真实视口。
+assert.equal(
+  shouldApplyViewportUpdate(FALLBACK_VIEWPORT_METRICS, closed),
+  true,
+  '初始状态必须采纳第一次采样',
+);
 
 console.log('keyboard inset contract passed');

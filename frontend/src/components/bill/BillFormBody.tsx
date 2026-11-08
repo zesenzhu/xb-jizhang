@@ -93,6 +93,12 @@ export function BillFormBody({
    * 抬起来的是「快捷条 + 金额卡」，数字键盘此时已被键盘覆盖，不再参与布局。
    */
   const { keyboardInset, isKeyboardOpen } = useVisualViewport();
+  /**
+   * 只有真正在编辑文本时才抬升底部区。
+   * 单看 keyboardInset 会把「地址栏收起」「页面回弹」也当成键盘，导致输入金额时面板大小乱跳。
+   */
+  const [textEditing, setTextEditing] = React.useState(false);
+  const shouldLiftForKeyboard = textEditing && isKeyboardOpen;
   const [manageOpen, setManageOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CategorySummary | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -182,8 +188,8 @@ export function BillFormBody({
         快捷条与金额卡属于同一个视觉块，键盘永远贴底，中间分类区独立滚动。
       */}
       <div
-        className="shrink-0 border-t border-app-divider bg-app-card transition-[margin] duration-150"
-        style={isKeyboardOpen ? { marginBottom: keyboardInset } : undefined}
+        className="shrink-0 border-t border-app-divider bg-app-card"
+        style={shouldLiftForKeyboard ? { marginBottom: keyboardInset } : undefined}
       >
         <div className="mx-3 mt-2 rounded-2xl bg-app-card-subtle/70 px-3 pb-1.5 pt-2">
           <SheetQuickChips accountName={accountName} onOpenAccountPicker={onOpenAccountPicker} />
@@ -209,6 +215,7 @@ export function BillFormBody({
               onNoteChange={(note) => dispatch({ kind: 'setNote', note })}
               timeError={state.timeError}
               suggestions={noteSuggestions}
+              onEditingChange={setTextEditing}
             />
           </div>
         </div>
@@ -217,7 +224,7 @@ export function BillFormBody({
           键盘弹出时数字键盘已被系统键盘覆盖，不再占位；
           但提交动作必须仍可触达，所以换成一条紧凑的保存条，贴在金额卡下方。
         */}
-        {isKeyboardOpen ? (
+        {shouldLiftForKeyboard ? (
           <div className="flex items-center justify-end gap-2 px-3 pb-2 pt-1">
             <button
               type="button"

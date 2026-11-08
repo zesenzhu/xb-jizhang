@@ -21,6 +21,8 @@ export interface SheetMetaFieldsProps {
   timeError: string | null;
   suggestions?: readonly NoteSuggestion[];
   onSelectSuggestion?: (text: string) => void;
+  /** 文本编辑态：交由面板决定是否把底部区抬到键盘上缘 */
+  onEditingChange?: (editing: boolean) => void;
 }
 
 /**
@@ -42,6 +44,7 @@ export function SheetMetaFields({
   timeError,
   suggestions = [],
   onSelectSuggestion,
+  onEditingChange,
 }: SheetMetaFieldsProps): React.JSX.Element {
   const [noteExpanded, setNoteExpanded] = React.useState(false);
   const [noteFocused, setNoteFocused] = React.useState(false);
@@ -61,6 +64,8 @@ export function SheetMetaFields({
           type="button"
           onClick={() => {
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            setNoteFocused(false);
+            onEditingChange?.(false);
             setPickerOpen(true);
           }}
           aria-label={`发生时间 ${occurredAtLabel}，点击修改`}
@@ -79,6 +84,8 @@ export function SheetMetaFields({
         <input
           value={title}
           onChange={(event) => onTitleChange(event.target.value)}
+          onFocus={() => onEditingChange?.(true)}
+          onBlur={() => onEditingChange?.(false)}
           placeholder="商家 / 对象"
           maxLength={200}
           aria-label="商家或对象"
@@ -109,33 +116,31 @@ export function SheetMetaFields({
         </div>
       )}
 
-      {noteExpanded ? (
-        <textarea
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          onFocus={() => setNoteFocused(true)}
-          onBlur={() => setNoteFocused(false)}
-          placeholder="点击填写备注"
-          maxLength={noteMaxLength}
-          rows={2}
-          aria-label="备注"
-          className="w-full resize-none rounded-xl bg-app-card-subtle/70 px-2.5 py-1.5 text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
-        />
-      ) : (
-        <input
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          onFocus={() => {
-            setNoteFocused(true);
-            setNoteExpanded(true);
-          }}
-          onBlur={() => setNoteFocused(false)}
-          placeholder="点击填写备注"
-          maxLength={noteMaxLength}
-          aria-label="备注"
-          className="w-full bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none"
-        />
-      )}
+      {/*
+        备注始终是同一个 textarea：聚焦只改 rows，不换控件。
+        换控件会卸载原节点导致焦点丢失，系统键盘随即收起——表现为「点了没反应」「键盘弹上弹下」。
+      */}
+      <textarea
+        value={note}
+        onChange={(event) => onNoteChange(event.target.value)}
+        onFocus={() => {
+          setNoteFocused(true);
+          setNoteExpanded(true);
+          onEditingChange?.(true);
+        }}
+        onBlur={() => {
+          setNoteFocused(false);
+          onEditingChange?.(false);
+        }}
+        placeholder="点击填写备注"
+        maxLength={noteMaxLength}
+        rows={noteExpanded ? 2 : 1}
+        aria-label="备注"
+        className={cn(
+          'w-full resize-none bg-transparent text-xs text-text-main placeholder:text-text-tertiary focus:outline-none',
+          noteExpanded && 'rounded-xl bg-app-card-subtle/70 px-2.5 py-1.5',
+        )}
+      />
 
       {pickerOpen && (
         <DateTimePickerDialog

@@ -54,7 +54,7 @@ assert.ok(
   '记账面板必须读取可视视口判断键盘状态',
 );
 assert.ok(
-  /style=\{isKeyboardOpen \? \{ marginBottom: keyboardInset \} : undefined\}/.test(body),
+  /style=\{shouldLiftForKeyboard \? \{ marginBottom: keyboardInset \} : undefined\}/.test(body),
   '底部区必须按 keyboardInset 抬到键盘上缘',
 );
 assert.ok(
@@ -62,9 +62,37 @@ assert.ok(
   '面板必须保持 100dvh 基准，不随可视视口收缩',
 );
 
+// 3.1 备注必须是同一个 textarea：聚焦只改 rows，不能换控件。
+assert.ok(
+  /<textarea[\s\S]{0,600}?rows=\{noteExpanded \? 2 : 1\}/.test(meta),
+  '备注需要单一 textarea，用 rows 控制单行/两行',
+);
+assert.ok(
+  !/noteExpanded \? \(\s*<textarea/.test(meta),
+  '不得按展开状态在两个控件之间切换，换控件会卸载节点导致键盘闪退',
+);
+assert.ok(
+  /onEditingChange\?\.\(true\)/.test(meta) && /onEditingChange\?\.\(false\)/.test(meta),
+  '备注与标题必须上报文本编辑态',
+);
+
+// 3.2 抬升只由「文本编辑 + 键盘打开」触发，避免输入金额时被地址栏变化带偏。
+assert.ok(
+  /const shouldLiftForKeyboard = textEditing && isKeyboardOpen;/.test(body),
+  '底部区抬升必须同时满足文本编辑与键盘打开',
+);
+assert.ok(
+  /style=\{shouldLiftForKeyboard \? \{ marginBottom: keyboardInset \} : undefined\}/.test(body),
+  '抬升高度必须来自 keyboardInset',
+);
+assert.ok(
+  !/transition-\[margin\]/.test(body),
+  '底部区不得对 margin 做过渡动画，否则会与键盘动画叠加出抖动',
+);
+
 // 4. 提交必须始终可达：键盘态渲染紧凑保存条，非键盘态用数字键盘。
 assert.ok(
-  /isKeyboardOpen \? \(/.test(body),
+  /shouldLiftForKeyboard \? \(/.test(body),
   '键盘态必须切换到紧凑保存条',
 );
 assert.ok(
