@@ -141,6 +141,13 @@ export function ProfilePage(): React.JSX.Element {
       },
     },
     {
+      key: 'appearance',
+      label: '外观与皮肤',
+      description: '主题色与总支出卡片背景',
+      icon: 'palette',
+      onClick: () => router.push('/user/appearance'),
+    },
+    {
       key: 'invitations',
       label: '我的邀请',
       description: '查看别人发给你的账本邀请',

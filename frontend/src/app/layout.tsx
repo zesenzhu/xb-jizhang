@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ServiceWorkerRegistration } from '@/components/layout/ServiceWorkerRegistration';
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { SkinProvider } from '@/components/skin/SkinProvider';
 
 export const metadata: Metadata = {
   title: '小宝记账',
@@ -28,7 +29,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="zh-CN">
       <body>
         <ServiceWorkerRegistration />
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <SkinProvider />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

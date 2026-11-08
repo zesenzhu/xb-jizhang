@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
 import type { OverviewData } from '@/lib/api/statistics-types';
+import { useSummarySurface } from '@/components/skin/use-summary-surface';
 
 export interface MonthSummaryCardProps {
   overview: OverviewData | undefined;
@@ -23,13 +24,16 @@ export function MonthSummaryCard({
   const netText = `${netCents < 0 ? '-' : ''}¥${formatCentsToYuan(Math.abs(netCents))}`;
   const avgExpenseText = formatCentsToYuan(overview?.averageDailyExpenseCents ?? 0);
   const effectiveDayCount = overview?.effectiveDayCount ?? 0;
+  // 背景来自皮肤设置：主题渐变、自定义底色或本地图片（本地图片不上传服务端）。
+  const surface = useSummarySurface();
 
   return (
     <section
       className={cn(
-        'relative overflow-hidden rounded-3xl bg-[#16181d] p-5 text-white shadow-xl shadow-slate-900/10 border border-white/10',
+        'relative overflow-hidden rounded-3xl bg-cover bg-center p-5 text-white shadow-xl shadow-slate-900/10 border border-white/10',
         className,
       )}
+      style={surface}
     >
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-white/60">总支出</p>

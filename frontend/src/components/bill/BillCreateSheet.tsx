@@ -180,10 +180,14 @@ export function BillCreateSheet({
     dispatch({ kind: 'submitStart' });
     try {
       await createMutation.mutateAsync();
-      // 失效当前账本下全部账单与概览缓存，避免列表与概览口径不一致。
-      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
-      await queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
+      /*
+       * 只等「账单已写入」就关面板，缓存刷新放到后台。
+       * 之前这里串行 await 三组失效，等于等列表和四个统计查询全部回来才关抽屉，
+       * 实测拖到 1-2 秒；用户感觉是「保存很慢」，其实数据早就写成功了。
+       */
+      void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
+      void queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
 
       dispatch({
         kind: 'resetForNext',
