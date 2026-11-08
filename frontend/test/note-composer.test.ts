@@ -53,9 +53,18 @@ assert.ok(
   body.includes('useVisualViewport'),
   '记账面板必须读取可视视口判断键盘状态',
 );
+// 抬升量必须来自「聚焦时测一次并冻结」的值，不能逐帧跟随 keyboardInset（会造成重排与键盘回弹）。
 assert.ok(
-  /style=\{shouldLiftForKeyboard \? \{ marginBottom: keyboardInset \} : undefined\}/.test(body),
-  '底部区必须按 keyboardInset 抬到键盘上缘',
+  /style=\{shouldLiftForKeyboard \? \{ marginBottom: liftInset \} : undefined\}/.test(body),
+  '底部区必须按冻结的 liftInset 抬到键盘上缘',
+);
+assert.ok(
+  /const shouldLiftForKeyboard = liftInset > 0 && isKeyboardOpen;/.test(body),
+  '抬升必须同时满足已测得高度与键盘打开',
+);
+assert.ok(
+  /Math\.min\(peak, Math\.round\(window\.innerHeight \* 0\.5\)\)/.test(body),
+  '抬升高度必须钳制在屏高一半以内，避免把中间滚动区压成 0 高',
 );
 assert.ok(
   /h-\[calc\(100dvh-1\.5rem\)\]/.test(sheet) && !/--app-vv-height/.test(sheet),
@@ -78,12 +87,12 @@ assert.ok(
 
 // 3.2 抬升只由「文本编辑 + 键盘打开」触发，避免输入金额时被地址栏变化带偏。
 assert.ok(
-  /const shouldLiftForKeyboard = textEditing && isKeyboardOpen;/.test(body),
-  '底部区抬升必须同时满足文本编辑与键盘打开',
+  /onEditingChange=\{handleEditingChange\}/.test(body),
+  '编辑态变化必须交给 handleEditingChange 处理',
 );
 assert.ok(
-  /style=\{shouldLiftForKeyboard \? \{ marginBottom: keyboardInset \} : undefined\}/.test(body),
-  '抬升高度必须来自 keyboardInset',
+  /window\.innerHeight - viewport\.height - viewport\.offsetTop/.test(body),
+  '抬升高度必须由可视视口实测得出（布局高 - 可视高 - 偏移）',
 );
 assert.ok(
   !/transition-\[margin\]/.test(body),

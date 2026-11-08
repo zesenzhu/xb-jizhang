@@ -63,6 +63,34 @@ function subscribeNoop(): () => void {
   return () => undefined;
 }
 
+/**
+ * body 滚动锁的引用计数。
+ *
+ * 面板可以嵌套（记账面板里再开分类面板），各自保存/恢复 overflow 会互相覆盖：
+ * 内层关闭时把外层需要的 hidden 恢复成 ''，或外层关闭后又把内层留在 hidden，
+ * 结果就是「面板关了，账单页却滚不动」。
+ */
+let bodyScrollLocks = 0;
+let bodyOverflowBeforeLock = '';
+
+function lockBodyScroll(): void {
+  if (typeof document === 'undefined') return;
+  if (bodyScrollLocks === 0) {
+    bodyOverflowBeforeLock = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  bodyScrollLocks += 1;
+}
+
+function unlockBodyScroll(): void {
+  if (typeof document === 'undefined') return;
+  bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
+  if (bodyScrollLocks === 0) {
+    document.body.style.overflow = bodyOverflowBeforeLock;
+    bodyOverflowBeforeLock = '';
+  }
+}
+
 export function BottomSheet({
   open,
   onOpenChange,
@@ -112,8 +140,7 @@ export function BottomSheet({
     if (!open) return;
 
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -133,7 +160,7 @@ export function BottomSheet({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.clearTimeout(focusTimer);
-      document.body.style.overflow = previousOverflow;
+      unlockBodyScroll();
       restoreFocusRef.current?.focus?.();
     };
   }, [open, requestClose]);

@@ -94,11 +94,54 @@ export function BillFormBody({
    */
   const { keyboardInset, isKeyboardOpen } = useVisualViewport();
   /**
-   * 只有真正在编辑文本时才抬升底部区。
-   * 单看 keyboardInset 会把「地址栏收起」「页面回弹」也当成键盘，导致输入金额时面板大小乱跳。
+   * 底部区抬升量在「开始编辑文本」时测一次并冻结，失焦立刻归零。
+   *
+   * 不再持续跟随 visualViewport：键盘动画期间高度会连续变化，逐帧改 margin
+   * 会让面板反复重排，既可能把键盘顶回去，也会把中间滚动区压到 0 高（表现为账单页不能滚）。
+   * 测量只发生在事件里，并在 600ms 内取最大值，避免首帧读到键盘尚未弹出的 0。
    */
-  const [textEditing, setTextEditing] = React.useState(false);
-  const shouldLiftForKeyboard = textEditing && isKeyboardOpen;
+  const [liftInset, setLiftInset] = React.useState(0);
+  const liftTimerRef = React.useRef<number | null>(null);
+
+  const stopLift = React.useCallback((): void => {
+    if (liftTimerRef.current !== null) {
+      window.clearInterval(liftTimerRef.current);
+      liftTimerRef.current = null;
+    }
+    setLiftInset(0);
+  }, []);
+
+  const handleEditingChange = React.useCallback((editing: boolean): void => {
+    if (!editing) {
+      stopLift();
+      return;
+    }
+    if (liftTimerRef.current !== null) return;
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    let watched = 0;
+    let peak = 0;
+    // 键盘是异步弹出的，轮询一段时间取峰值；上限 50% 屏高，避免极端值把布局压塌。
+    liftTimerRef.current = window.setInterval(() => {
+      watched += 60;
+      const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      if (inset > 120) peak = Math.max(peak, inset);
+      const settled = inset > 120 && peak > 0 && inset <= peak;
+      if (watched >= 600 || (settled && watched >= 240)) {
+        if (liftTimerRef.current !== null) {
+          window.clearInterval(liftTimerRef.current);
+          liftTimerRef.current = null;
+        }
+        setLiftInset(Math.min(peak, Math.round(window.innerHeight * 0.5)));
+      }
+    }, 60);
+  }, [stopLift]);
+
+  React.useEffect(() => () => stopLift(), [stopLift]);
+
+  const shouldLiftForKeyboard = liftInset > 0 && isKeyboardOpen;
   const [manageOpen, setManageOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CategorySummary | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -189,7 +232,7 @@ export function BillFormBody({
       */}
       <div
         className="shrink-0 border-t border-app-divider bg-app-card"
-        style={shouldLiftForKeyboard ? { marginBottom: keyboardInset } : undefined}
+        style={shouldLiftForKeyboard ? { marginBottom: liftInset } : undefined}
       >
         <div className="mx-3 mt-2 rounded-2xl bg-app-card-subtle/70 px-3 pb-1.5 pt-2">
           <SheetQuickChips accountName={accountName} onOpenAccountPicker={onOpenAccountPicker} />
@@ -215,7 +258,7 @@ export function BillFormBody({
               onNoteChange={(note) => dispatch({ kind: 'setNote', note })}
               timeError={state.timeError}
               suggestions={noteSuggestions}
-              onEditingChange={setTextEditing}
+              onEditingChange={handleEditingChange}
             />
           </div>
         </div>

@@ -92,9 +92,13 @@ export function SheetMetaFields({
         />
       </div>
 
-      {/* 历史备注：浮在备注输入之上，点选只回填文本，不提交、不打断输入。 */}
-      {showSuggestions && (
-        <div onMouseDown={keepFocus} onTouchStart={keepFocus}>
+      {/*
+        历史备注：位置固定占位，只在有候选时填充内容。
+        之前是「有候选才插入一行」，聚焦瞬间把下方的备注输入顶下去，
+        iOS 会在键盘动画期间判定焦点元素被移走而收起键盘——表现为“一打字键盘就关”。
+      */}
+      <div className="min-h-[34px]" onMouseDown={keepFocus} onTouchStart={keepFocus}>
+        {showSuggestions && (
           <NoteSuggestionBar
             suggestions={suggestions}
             onSelect={(text) => {
@@ -102,8 +106,8 @@ export function SheetMetaFields({
               onSelectSuggestion?.(text);
             }}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/*
         备注始终是同一个 input：不按状态换控件、也不展开成多行。
