@@ -38,7 +38,7 @@ updatedAt: 2026-11-04
 | 成员与邀请 | `/user/ledgers/:id/members` | [成员与邀请.md](./成员与邀请.md) | 二期已交付 |
 | 统计页 | `/user/statistics` | [统计页.md](./统计页.md) | 二期已交付 |
 | 我的页面 | `/user/profile` | [我的页面.md](./我的页面.md) | 二期已交付 |
-| 我的邀请 | `/user/invitations` | 见本文「邀请处理」 | 二期已交付（Token 链接入口） |
+| 我的邀请 | `/user/invitations` | [我的邀请.md](./我的邀请.md) | 三期改造（详情卡 + 列表就地响应） |
 | 筛选面板 | `/user` 浮层 | 见本文「筛选模型」 | 二期已交付 |
 
 ## 二期导航变化
@@ -201,9 +201,13 @@ toast.action('已删除', { label: '撤销', onClick })
 
 ## 邀请处理
 
-- 邀请链接形如 `/user/invitations?token=...`；页面据 `token` 展示接受入口，`?action=decline` 切换为拒绝。
-- `GET /invitations` 只返回当前用户可处理的邀请，**不返回 Token**，所以列表条目只读展示，不提供「凭空接受」按钮。
-- 成员页通过 `GET /ledgers/:id/invitations` 读取服务端完整的待处理邀请列表；创建响应中的一次性 Token 仍只在本次会话内保留，用于生成邀请链接。
+- 路由统一为 `/user/invitations`，兼容 `?token=<一次性 Token>` 与 `?action=decline`。
+- 登录前用 `GET /invitations/preview?token=` 展示账本名、邀请人、角色与到期时间，不返回 `ledgerId` 和完整邮箱。
+- 登录后用 `GET /invitations/token?token=` 拉详情，页面状态由 `blockedReason` 决定：`null`（可响应）、`EMAIL_REQUIRED`、`EMAIL_MISMATCH`、`ALREADY_MEMBER`、`EXPIRED`、`REVOKED`、`DECLINED`、`ACCEPTED`、`LEDGER_UNAVAILABLE`。
+- 响应统一走 `POST /invitations/:invitationId/accept|decline`，不需要 Token；`GET /invitations` 的列表条目可直接响应。
+- 带 Token 的 `POST /invitations/accept|decline` 仅作为旧链接兼容保留，新页面不作为主路径。
+- 登录回跳必须保留 `token` 与 `action`：`getLoginRedirectUrl(kind, pathname, search)` 按 `REDIRECT_QUERY_ALLOWLIST` 放行参数，禁止开放重定向。
+- 邮箱补全复用 `PATCH /users/me`，成功后重新拉取详情继续响应，不新建接口。
 
 ## 迭代顺序
 
@@ -217,5 +221,8 @@ toast.action('已删除', { label: '撤销', onClick })
 | 二期二 | 我的账本、账本设置 | P2（偏好）可降级 |
 | 二期三 | 成员与邀请、我的邀请 | 已实现 |
 | 二期四 | 统计页 | P1/P6/P7/P8 全部 |
+| 三期一 | 邀请回跳修复 + 我的邀请（详情卡、列表就地响应、邮箱补全） | `preview`/`token`/按 ID 响应 |
+| 三期二 | 记账抽屉键盘覆盖与编辑条 | `note-suggestions` |
+| 三期三 | 日期时间弹窗与账本时区换算 | `occurredAt` 偏移校验 |
 
 每迭代结束执行 `pnpm typecheck`、`pnpm test`、`pnpm lint`，并在浏览器验收该页面文档的「验收清单」。
