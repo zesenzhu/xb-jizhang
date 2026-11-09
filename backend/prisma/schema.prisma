@@ -69,55 +69,63 @@ enum AdminAuditResult {
   FAILURE
 }
 
+enum TransactionAttachmentStatus {
+  PENDING
+  ATTACHED
+  DELETED
+}
+
 model User {
-  id                  String                @id @default(uuid())
-  username            String                @unique
-  passwordHash        String                @map("password_hash")
+  id                  String                  @id @default(uuid())
+  username            String                  @unique
+  passwordHash        String                  @map("password_hash")
   nickname            String?
-  email               String?               @unique
+  email               String?                 @unique
   avatar              String?
-  isActive            Boolean               @default(true) @map("is_active")
-  ledgersCreated      Ledger[]              @relation("LedgerCreator")
+  isActive            Boolean                 @default(true) @map("is_active")
+  ledgersCreated      Ledger[]                @relation("LedgerCreator")
   ledgerMemberships   LedgerMember[]
   ledgerPreference    UserLedgerPreference?
   ledgerCopyRequests  LedgerCopyRequest[]
-  sentInvitations     LedgerInvitation[]    @relation("InvitationSender")
+  sentInvitations     LedgerInvitation[]      @relation("InvitationSender")
   refreshSessions     RefreshSession[]
-  createdTransactions Transaction[]         @relation("TransactionCreator")
-  updatedTransactions Transaction[]         @relation("TransactionUpdater")
-  paidTransactions    Transaction[]         @relation("TransactionPayer")
-  ownedAccounts       Account[]             @relation("AccountOwner")
-  auditLogs           TransactionAuditLog[] @relation("AuditOperator")
-  createdAt           DateTime              @default(now()) @map("created_at")
-  updatedAt           DateTime              @updatedAt @map("updated_at")
+  createdTransactions Transaction[]           @relation("TransactionCreator")
+  updatedTransactions Transaction[]           @relation("TransactionUpdater")
+  paidTransactions    Transaction[]           @relation("TransactionPayer")
+  ownedAccounts       Account[]               @relation("AccountOwner")
+  uploadedAttachments TransactionAttachment[] @relation("AttachmentUploader")
+  auditLogs           TransactionAuditLog[]   @relation("AuditOperator")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
 
   @@map("user")
 }
 
 model Ledger {
-  id                 String                 @id @default(uuid())
+  id                 String                  @id @default(uuid())
   name               String
-  type               LedgerType             @default(PERSONAL)
-  creatorId          String                 @map("creator_id")
-  defaultCurrency    String                 @default("CNY") @map("default_currency")
-  timezone           String                 @default("Asia/Shanghai")
+  type               LedgerType              @default(PERSONAL)
+  creatorId          String                  @map("creator_id")
+  defaultCurrency    String                  @default("CNY") @map("default_currency")
+  timezone           String                  @default("Asia/Shanghai")
   icon               String?
   color              String?
-  isArchived         Boolean                @default(false) @map("is_archived")
-  creator            User                   @relation("LedgerCreator", fields: [creatorId], references: [id])
+  isArchived         Boolean                 @default(false) @map("is_archived")
+  creator            User                    @relation("LedgerCreator", fields: [creatorId], references: [id])
   members            LedgerMember[]
-  currentPreferences UserLedgerPreference[] @relation("CurrentPreferenceLedger")
-  defaultPreferences UserLedgerPreference[] @relation("DefaultPreferenceLedger")
-  sourceCopyRequests LedgerCopyRequest[]    @relation("CopySourceLedger")
-  targetCopyRequest  LedgerCopyRequest?     @relation("CopyTargetLedger")
+  currentPreferences UserLedgerPreference[]  @relation("CurrentPreferenceLedger")
+  defaultPreferences UserLedgerPreference[]  @relation("DefaultPreferenceLedger")
+  sourceCopyRequests LedgerCopyRequest[]     @relation("CopySourceLedger")
+  targetCopyRequest  LedgerCopyRequest?      @relation("CopyTargetLedger")
   invitations        LedgerInvitation[]
   accounts           Account[]
   categories         Category[]
   transactions       Transaction[]
+  attachments        TransactionAttachment[]
   budgets            Budget[]
   auditLogs          TransactionAuditLog[]
-  createdAt          DateTime               @default(now()) @map("created_at")
-  updatedAt          DateTime               @updatedAt @map("updated_at")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
 
   @@index([creatorId])
   @@map("ledger")
@@ -261,37 +269,38 @@ model Category {
 }
 
 model Transaction {
-  id              String                @id @default(uuid())
-  ledgerId        String                @map("ledger_id")
+  id              String                  @id @default(uuid())
+  ledgerId        String                  @map("ledger_id")
   type            TransactionType
-  amountCents     Int                   @map("amount_cents")
-  occurredAt      DateTime              @map("occurred_at")
+  amountCents     Int                     @map("amount_cents")
+  occurredAt      DateTime                @map("occurred_at")
   title           String?
   note            String?
-  noteUpdatedAt   DateTime?             @map("note_updated_at")
-  categoryId      String?               @map("category_id")
-  accountId       String?               @map("account_id")
-  fromAccountId   String?               @map("from_account_id")
-  toAccountId     String?               @map("to_account_id")
-  transferGroupId String?               @map("transfer_group_id")
-  source          TransactionSource     @default(MANUAL)
-  clientRequestId String                @map("client_request_id")
-  createdById     String                @map("created_by_id")
-  updatedById     String                @map("updated_by_id")
-  payerId         String?               @map("payer_id")
-  version         Int                   @default(1)
-  deletedAt       DateTime?             @map("deleted_at")
-  ledger          Ledger                @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
-  category        Category?             @relation(fields: [categoryId], references: [id])
-  account         Account?              @relation("TransactionAccount", fields: [accountId], references: [id])
-  fromAccount     Account?              @relation("TransactionFromAccount", fields: [fromAccountId], references: [id])
-  toAccount       Account?              @relation("TransactionToAccount", fields: [toAccountId], references: [id])
-  createdBy       User                  @relation("TransactionCreator", fields: [createdById], references: [id])
-  updatedBy       User                  @relation("TransactionUpdater", fields: [updatedById], references: [id])
-  payer           User?                 @relation("TransactionPayer", fields: [payerId], references: [id])
+  noteUpdatedAt   DateTime?               @map("note_updated_at")
+  categoryId      String?                 @map("category_id")
+  accountId       String?                 @map("account_id")
+  fromAccountId   String?                 @map("from_account_id")
+  toAccountId     String?                 @map("to_account_id")
+  transferGroupId String?                 @map("transfer_group_id")
+  source          TransactionSource       @default(MANUAL)
+  clientRequestId String                  @map("client_request_id")
+  createdById     String                  @map("created_by_id")
+  updatedById     String                  @map("updated_by_id")
+  payerId         String?                 @map("payer_id")
+  version         Int                     @default(1)
+  deletedAt       DateTime?               @map("deleted_at")
+  ledger          Ledger                  @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  category        Category?               @relation(fields: [categoryId], references: [id])
+  account         Account?                @relation("TransactionAccount", fields: [accountId], references: [id])
+  fromAccount     Account?                @relation("TransactionFromAccount", fields: [fromAccountId], references: [id])
+  toAccount       Account?                @relation("TransactionToAccount", fields: [toAccountId], references: [id])
+  createdBy       User                    @relation("TransactionCreator", fields: [createdById], references: [id])
+  updatedBy       User                    @relation("TransactionUpdater", fields: [updatedById], references: [id])
+  payer           User?                   @relation("TransactionPayer", fields: [payerId], references: [id])
   auditLogs       TransactionAuditLog[]
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  attachments     TransactionAttachment[]
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
 
   @@unique([ledgerId, clientRequestId])
   @@index([ledgerId, occurredAt])
@@ -300,6 +309,43 @@ model Transaction {
   @@index([ledgerId, payerId, occurredAt])
   @@index([ledgerId, createdById, noteUpdatedAt])
   @@map("transaction")
+}
+
+model TransactionAttachment {
+  id                String                      @id @default(uuid())
+  ledgerId          String                      @map("ledger_id")
+  transactionId     String                      @map("transaction_id")
+  uploadedById      String                      @map("uploaded_by_id")
+  clientRequestId   String                      @map("client_request_id")
+  objectKey         String                      @unique @map("object_key")
+  originalName      String?                     @map("original_name")
+  declaredMimeType  String?                     @map("declared_mime_type")
+  declaredSizeBytes Int?                        @map("declared_size_bytes")
+  mimeType          String?                     @map("mime_type")
+  sizeBytes         Int?                        @map("size_bytes")
+  checksumSha256    String?                     @map("checksum_sha256")
+  width             Int?
+  height            Int?
+  status            TransactionAttachmentStatus @default(PENDING)
+  uploadExpiresAt   DateTime?                   @map("upload_expires_at")
+  uploadedAt        DateTime?                   @map("uploaded_at")
+  deletedAt         DateTime?                   @map("deleted_at")
+  purgedAt          DateTime?                   @map("purged_at")
+  purgeAttempts     Int                         @default(0) @map("purge_attempts")
+  lastPurgeError    String?                     @map("last_purge_error")
+  lastUploadError   String?                     @map("last_upload_error")
+  ledger            Ledger                      @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  transaction       Transaction                 @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  uploadedBy        User                        @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+
+  @@unique([transactionId, clientRequestId])
+  @@index([ledgerId, transactionId, status])
+  @@index([status, createdAt])
+  @@index([deletedAt, purgedAt])
+  @@index([uploadedById, createdAt])
+  @@map("transaction_attachment")
 }
 
 model TransactionAuditLog {

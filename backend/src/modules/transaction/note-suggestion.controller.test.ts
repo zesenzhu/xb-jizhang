@@ -14,7 +14,7 @@ describe('NoteSuggestionController 契约对齐', () => {
     };
     const controller = new NoteSuggestionController(service as unknown as TransactionService);
 
-    const result = await controller.noteSuggestions({ id: 'user-1' } as any, 'ledger-1', { limit: 10 });
+    const result = await controller.noteSuggestions({ id: 'user-1' } as never, 'ledger-1', { limit: 10 });
 
     expect(service.getNoteSuggestions).toHaveBeenCalledWith('user-1', 'ledger-1', 10);
     expect(result.items).toHaveLength(1);

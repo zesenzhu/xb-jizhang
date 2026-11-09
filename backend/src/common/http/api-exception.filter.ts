@@ -24,7 +24,10 @@ function getErrorCode(status: number): number {
     [HttpStatus.FORBIDDEN]: 40301,
     [HttpStatus.NOT_FOUND]: 40401,
     [HttpStatus.CONFLICT]: 40901,
+    [HttpStatus.PAYLOAD_TOO_LARGE]: 41301,
+    [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: 41501,
     [HttpStatus.TOO_MANY_REQUESTS]: 42901,
+    [HttpStatus.SERVICE_UNAVAILABLE]: 50341,
   };
   return codes[status] ?? 50001;
 }

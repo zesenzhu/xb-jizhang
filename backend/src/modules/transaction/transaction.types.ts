@@ -64,6 +64,14 @@ export interface TransactionSummary {
   updatedById: string;
   payerId: string | null;
   version: number;
+  attachmentCount?: number;
+  attachments?: Array<{
+    id: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    originalName: string | null;
+    createdAt: Date;
+  }>;
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
