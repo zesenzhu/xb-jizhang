@@ -27,7 +27,7 @@ const membershipSelect = {
   ledger: { select: ledgerSelect },
 } as const;
 
-type PreferenceTransaction = Pick<
+type PreferenceClient = Pick<
   Prisma.TransactionClient,
   'ledgerMember' | 'userLedgerPreference'
 >;
@@ -38,7 +38,7 @@ export class LedgerPreferenceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(userId: string): Promise<LedgerPreferencesResult> {
-    return this.prisma.$transaction((transaction) => this.resolve(userId, transaction));
+    return this.resolve(userId, this.prisma);
   }
 
   async update(
@@ -49,15 +49,18 @@ export class LedgerPreferenceService {
       throw this.invalidInputException();
     }
 
-    return this.prisma.$transaction((transaction) => this.resolve(userId, transaction, input));
+    return this.prisma.$transaction((transaction) =>
+      this.resolve(userId, transaction, input, true),
+    );
   }
 
   private async resolve(
     userId: string,
-    transaction: PreferenceTransaction,
+    client: PreferenceClient,
     requested: UpdateLedgerPreferencesInput = {},
+    persist = false,
   ): Promise<LedgerPreferencesResult> {
-    const preference = await transaction.userLedgerPreference.findUnique({
+    const preference = await client.userLedgerPreference.findUnique({
       where: { userId },
       select: preferenceSelect,
     });
@@ -69,7 +72,7 @@ export class LedgerPreferenceService {
     ].filter((id): id is string => id !== undefined && id !== null);
     const uniqueCandidateIds = [...new Set(candidateIds)];
     const memberships = uniqueCandidateIds.length
-      ? await transaction.ledgerMember.findMany({
+      ? await client.ledgerMember.findMany({
           where: {
             userId,
             status: 'ACTIVE',
@@ -86,7 +89,7 @@ export class LedgerPreferenceService {
       }
     }
 
-    const fallback = await transaction.ledgerMember.findFirst({
+    const fallback = await client.ledgerMember.findFirst({
       where: { userId, status: 'ACTIVE' },
       orderBy: [{ joinedAt: 'asc' }, { ledgerId: 'asc' }],
       select: membershipSelect,
@@ -107,14 +110,15 @@ export class LedgerPreferenceService {
       preference === null ||
       preference.currentLedgerId !== currentLedgerId ||
       preference.defaultLedgerId !== defaultLedgerId;
-    const persisted = changed
-      ? await transaction.userLedgerPreference.upsert({
-          where: { userId },
-          create: { userId, currentLedgerId, defaultLedgerId },
-          update: { currentLedgerId, defaultLedgerId },
-          select: { updatedAt: true },
-        })
-      : null;
+    const persisted =
+      persist && changed
+        ? await client.userLedgerPreference.upsert({
+            where: { userId },
+            create: { userId, currentLedgerId, defaultLedgerId },
+            update: { currentLedgerId, defaultLedgerId },
+            select: { updatedAt: true },
+          })
+        : null;
 
     return {
       currentLedgerId,
