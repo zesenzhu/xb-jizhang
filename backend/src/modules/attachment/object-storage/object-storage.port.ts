@@ -25,5 +25,5 @@ export interface ObjectStoragePort {
   headObject(objectKey: string): Promise<ObjectStorageHead>;
   readPrefix(objectKey: string, bytes: number): Promise<Buffer>;
   deleteObject(objectKey: string): Promise<void>;
-  ensureCors(origins: readonly string[]): Promise<void>;
+  ensureCors(origins?: readonly string[]): Promise<void>;
 }

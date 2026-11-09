@@ -36,6 +36,44 @@ services:
     networks:
       - jizhang-dev
 
+  minio:
+    image: ${MINIO_IMAGE:-elestio/minio:latest}
+    container_name: jizhang-minio-dev
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      # MinIO 在服务端统一处理 CORS，新版不再支持 PutBucketCors S3 API。
+      MINIO_API_CORS_ALLOW_ORIGIN: ${STORAGE_CORS_ORIGINS:-http://localhost:8090}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - jizhang-minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc alias set local http://localhost:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\" >/dev/null && mc ready local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - jizhang-dev
+
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-elestio/minio:latest}
+    container_name: jizhang-minio-init-dev
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin}; do sleep 1; done;
+      mc mb --ignore-existing local/${MINIO_BUCKET:-jizhang-attachments};
+      mc anonymous set none local/${MINIO_BUCKET:-jizhang-attachments};
+      "
+    networks:
+      - jizhang-dev
+
 networks:
   jizhang-dev:
     name: jizhang-dev
@@ -43,3 +81,4 @@ networks:
 volumes:
   jizhang-postgres-data:
   jizhang-redis-data:
+  jizhang-minio-data:

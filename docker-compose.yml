@@ -36,6 +36,43 @@ services:
     networks:
       - jizhang-dev
 
+  minio:
+    image: ${MINIO_IMAGE:-elestio/minio:latest}
+    container_name: jizhang-minio-dev
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${STORAGE_CORS_ORIGINS:-http://localhost:8090}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - jizhang-minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc alias set local http://localhost:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\" >/dev/null && mc ready local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - jizhang-dev
+
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-elestio/minio:latest}
+    container_name: jizhang-minio-init-dev
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin}; do sleep 1; done;
+      mc mb --ignore-existing local/${MINIO_BUCKET:-jizhang-attachments};
+      mc anonymous set none local/${MINIO_BUCKET:-jizhang-attachments};
+      "
+    networks:
+      - jizhang-dev
+
   backend:
     build:
       context: ./backend
@@ -56,11 +93,23 @@ services:
       ADMIN_ACCESS_TOKEN_TTL_SECONDS: ${ADMIN_ACCESS_TOKEN_TTL_SECONDS:-900}
       ADMIN_REFRESH_SESSION_TTL_SECONDS: ${ADMIN_REFRESH_SESSION_TTL_SECONDS:-2592000}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
+      ATTACHMENT_ENABLED: ${ATTACHMENT_ENABLED:-true}
+      OBJECT_STORAGE_PROVIDER: minio
+      MINIO_INTERNAL_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://localhost:9000
+      MINIO_REGION: us-east-1
+      MINIO_BUCKET: ${MINIO_BUCKET:-jizhang-attachments}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_FORCE_PATH_STYLE: "true"
+      STORAGE_CORS_ORIGINS: ${STORAGE_CORS_ORIGINS:-http://localhost:8090}
     command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/src/main.js"]
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8091/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
@@ -104,3 +153,4 @@ networks:
 volumes:
   jizhang-postgres-data:
   jizhang-redis-data:
+  jizhang-minio-data:

@@ -78,7 +78,7 @@ export class AliyunOssObjectStorage implements ObjectStoragePort {
     await this.operationClient.delete(objectKey);
   }
 
-  async ensureCors(origins: readonly string[]): Promise<void> {
+  async ensureCors(origins: readonly string[] = []): Promise<void> {
     await this.operationClient.putBucketCORS(this.options.bucket, [
       {
         allowedOrigin: [...origins],

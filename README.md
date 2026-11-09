@@ -48,6 +48,9 @@ pnpm dev
 - 健康检查：`http://localhost:8091/api/health`
 - PostgreSQL：`localhost:5439`
 - Redis：`localhost:6389`
+- MinIO API：`http://localhost:9000`
+- MinIO Console：`http://localhost:9001`（minioadmin / minioadmin）
+- 本地附件 Bucket：`jizhang-attachments`（初始化容器自动创建，私有）
 
 按 `Ctrl+C` 会停止本次启动的前后端进程，PostgreSQL 和 Redis 会继续运行。停止基础设施：
 
@@ -91,6 +94,9 @@ pnpm docker:full:up
 - 健康检查：`http://localhost:8091/api/health`
 - PostgreSQL：`localhost:5439`
 - Redis：`localhost:6389`
+- MinIO API：`http://localhost:9000`
+- MinIO Console：`http://localhost:9001`（minioadmin / minioadmin）
+- 本地附件 Bucket：`jizhang-attachments`（初始化容器自动创建，私有）
 
 查看日志：
 

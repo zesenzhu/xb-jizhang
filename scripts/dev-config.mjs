@@ -13,6 +13,23 @@ const developmentDefaults = {
   ADMIN_ACCESS_TOKEN_TTL_SECONDS: '900',
   ADMIN_REFRESH_SESSION_TTL_SECONDS: '2592000',
   CORS_ORIGINS: 'http://localhost:8090',
+  // 本地 Docker 基础设施使用固定端口；MinIO 由 docker-compose.infra.yml 提供。
+  ATTACHMENT_ENABLED: 'true',
+  ATTACHMENT_MAX_BYTES: '10485760',
+  ATTACHMENT_MAX_PER_TRANSACTION: '5',
+  ATTACHMENT_USER_QUOTA_BYTES: '2147483648',
+  ATTACHMENT_CLEANUP_INTERVAL_SECONDS: '600',
+  OBJECT_STORAGE_PROVIDER: 'minio',
+  OBJECT_STORAGE_UPLOAD_URL_TTL_SECONDS: '600',
+  OBJECT_STORAGE_READ_URL_TTL_SECONDS: '300',
+  MINIO_INTERNAL_ENDPOINT: 'http://localhost:9000',
+  MINIO_PUBLIC_ENDPOINT: 'http://localhost:9000',
+  MINIO_REGION: 'us-east-1',
+  MINIO_BUCKET: 'jizhang-attachments',
+  MINIO_ACCESS_KEY: 'minioadmin',
+  MINIO_SECRET_KEY: 'minioadmin',
+  MINIO_FORCE_PATH_STYLE: 'true',
+  STORAGE_CORS_ORIGINS: 'http://localhost:8090',
 };
 
 export function createDevelopmentEnvironments(rootDirectory, shellEnvironment = process.env) {

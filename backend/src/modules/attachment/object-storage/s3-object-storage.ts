@@ -2,7 +2,6 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
-  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -103,22 +102,8 @@ export class S3ObjectStorage implements ObjectStoragePort {
     );
   }
 
-  async ensureCors(origins: readonly string[]): Promise<void> {
-    await this.operationClient.send(
-      new PutBucketCorsCommand({
-        Bucket: this.options.bucket,
-        CORSConfiguration: {
-          CORSRules: [
-            {
-              AllowedOrigins: [...origins],
-              AllowedMethods: ['GET', 'PUT', 'HEAD'],
-              AllowedHeaders: ['*'],
-              ExposeHeaders: ['ETag', 'Content-Length', 'Content-Type'],
-              MaxAgeSeconds: 3000,
-            },
-          ],
-        },
-      }),
-    );
+  async ensureCors(): Promise<void> {
+    // MinIO 通过 MINIO_API_CORS_ALLOW_ORIGIN 在服务端处理 CORS；其 S3 兼容层不支持 PutBucketCors。
+    // S3/R2 如需 CORS，请在部署平台配置 Bucket CORS，而不是由应用在启动时写入。
   }
 }
