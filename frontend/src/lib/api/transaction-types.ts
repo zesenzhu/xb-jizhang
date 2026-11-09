@@ -1,4 +1,5 @@
 import type { ApiSuccessResponse } from './auth-types';
+import type { TransactionAttachmentSummary } from './attachment-types';
 
 export type TransactionType = 'EXPENSE' | 'INCOME';
 
@@ -56,6 +57,9 @@ export interface TransactionSummary {
   category: TransactionCategoryRef | null;
   account: TransactionAccountRef | null;
   payer: TransactionPayerRef | null;
+  /** 列表接口只返回数量，详情接口返回已完成附件摘要。 */
+  attachmentCount?: number;
+  attachments?: TransactionAttachmentSummary[];
 }
 
 export interface TransactionListQuery {

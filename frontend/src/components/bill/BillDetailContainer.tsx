@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError } from '@/lib/api/errors';
+import type { TransactionAttachmentSummary } from '@/lib/api/attachment-types';
+import { deleteAttachment, getAttachmentAccessUrl } from '@/lib/api/attachment-api';
 import {
   deleteTransaction,
   getTransaction,
@@ -89,11 +91,13 @@ export function BillDetailContainer({
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [conflict, setConflict] = React.useState(false);
   const [categoryError, setCategoryError] = React.useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = React.useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   // 详情不缓存：编辑后必须立刻看到新值。
   const detailQuery = useQuery({
-    queryKey: [...queryKeys.transactions.all(ledgerId), 'detail', billId ?? ''] as const,
+    queryKey: queryKeys.transactions.detail(ledgerId, billId ?? ''),
     queryFn: () => getTransaction(ledgerId, billId ?? ''),
     staleTime: 0,
     enabled: open && Boolean(billId) && Boolean(ledgerId),
@@ -121,6 +125,7 @@ export function BillDetailContainer({
   });
 
   const bill = detailQuery.data;
+  const attachments = bill?.attachments ?? [];
   const directory = React.useMemo(
     () => buildMemberDirectory(membersQuery.data?.items ?? []),
     [membersQuery.data],
@@ -256,6 +261,43 @@ export function BillDetailContainer({
     }
   };
 
+  const refreshAttachmentUrl = async (attachmentId: string): Promise<string> => {
+    const result = await getAttachmentAccessUrl(ledgerId, attachmentId);
+    queryClient.setQueryData<TransactionSummary>(queryKeys.transactions.detail(ledgerId, billId ?? ''), (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        attachments: current.attachments?.map((attachment) => (
+          attachment.id === attachmentId
+            ? {
+                ...attachment,
+                accessUrl: result.accessUrl,
+                accessUrlExpiresAt: result.accessUrlExpiresAt,
+              }
+            : attachment
+        )),
+      };
+    });
+    return result.accessUrl;
+  };
+
+  const removeAttachment = async (attachment: TransactionAttachmentSummary): Promise<void> => {
+    if (!window.confirm('确定移除这张图片吗？')) return;
+    setAttachmentError(null);
+    setDeletingAttachmentId(attachment.id);
+    try {
+      await deleteAttachment(ledgerId, bill?.id ?? '', attachment.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.detail(ledgerId, billId ?? '') });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+    } catch (error) {
+      setAttachmentError(
+        error instanceof ApiRequestError ? error.message : '图片移除失败，请稍后重试',
+      );
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
   const errorMessage =
     detailQuery.isError && !detailQuery.data
       ? detailQuery.error instanceof ApiRequestError
@@ -286,7 +328,17 @@ export function BillDetailContainer({
           void detailQuery.refetch();
         }}
         onRetry={() => void detailQuery.refetch()}
+        attachments={attachments}
+        deletingAttachmentId={deletingAttachmentId}
+        onDeleteAttachment={(attachment) => void removeAttachment(attachment)}
+        onRefreshAttachmentUrl={refreshAttachmentUrl}
       />
+
+      {attachmentError && open && !editing && (
+        <p role="alert" className="fixed bottom-5 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-rose-600 px-4 py-2 text-xs text-white shadow-lg">
+          {attachmentError}
+        </p>
+      )}
 
       <BottomSheet
         open={open && editing}

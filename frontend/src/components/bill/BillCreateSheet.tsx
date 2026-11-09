@@ -3,6 +3,14 @@
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, X } from 'lucide-react';
+import type { AttachmentDraft } from '@/lib/api/attachment-types';
+import { uploadAttachmentQueue } from '@/lib/bill/attachment-queue';
+import {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_COUNT,
+  createAttachmentDraft,
+  validateAttachmentFiles,
+} from '@/lib/bill/attachment-validation';
 import { createTransaction } from '@/lib/api/transaction-api';
 import { getNoteSuggestions } from '@/lib/api/note-api';
 import { cn } from '@/lib/utils';
@@ -54,6 +62,10 @@ export function BillCreateSheet({
   const [wasOpen, setWasOpen] = React.useState(open);
   const [showInactive, setShowInactive] = React.useState(false);
   const [categoryError, setCategoryError] = React.useState(false);
+  const [attachmentDrafts, setAttachmentDrafts] = React.useState<AttachmentDraft[]>([]);
+  const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
+  const [attachmentTransactionId, setAttachmentTransactionId] = React.useState<string | null>(null);
+  const attachmentInputRef = React.useRef<HTMLInputElement | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const isOnline = useOfflineStore((store) => store.isOnline);
   const remembered = useBillMemoryStore((store) => store.byLedger[ledgerId]);
@@ -72,6 +84,12 @@ export function BillCreateSheet({
       });
       setCategoryError(false);
       setConfirmDiscard(false);
+      setAttachmentError(null);
+      setAttachmentTransactionId(null);
+      setAttachmentDrafts((drafts) => {
+        drafts.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
+        return [];
+      });
     }
   }
 
@@ -161,6 +179,67 @@ export function BillCreateSheet({
       }),
   });
 
+  const addAttachmentFiles = (fileList: FileList | null): void => {
+    if (!fileList) return;
+    const files = Array.from(fileList);
+    const result = validateAttachmentFiles(files, attachmentDrafts.length);
+    const nextDrafts: AttachmentDraft[] = result.accepted.map(createAttachmentDraft);
+    setAttachmentError(result.errors.length > 0 ? result.errors.join('；') : null);
+    setAttachmentDrafts((drafts) => [...drafts, ...nextDrafts]);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+  };
+
+  const removeAttachment = (localId: string): void => {
+    setAttachmentDrafts((drafts) => {
+      const target = drafts.find((draft) => draft.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return drafts.filter((draft) => draft.localId !== localId);
+    });
+  };
+
+  const uploadDrafts = async (transactionId: string): Promise<boolean> => {
+    const drafts = attachmentDrafts.filter((draft) => draft.status !== 'ATTACHED');
+    if (drafts.length === 0) return true;
+    let hasFailure = false;
+    await uploadAttachmentQueue({
+      ledgerId,
+      transactionId,
+      drafts,
+      onProgress: (progress) => {
+        if (progress.status === 'FAILED') hasFailure = true;
+        setAttachmentDrafts((current) => current.map((draft) => (
+          draft.localId === progress.localId
+            ? { ...draft, status: progress.status, error: progress.error }
+            : draft
+        )));
+      },
+    });
+    return !hasFailure;
+  };
+
+  const clearUploadedAttachments = (): void => {
+    setAttachmentDrafts((drafts) => {
+      drafts.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
+      return [];
+    });
+    setAttachmentError(null);
+    setAttachmentTransactionId(null);
+  };
+
+  const retryAttachments = async (): Promise<void> => {
+    if (!attachmentTransactionId || state.submitting) return;
+    dispatch({ kind: 'submitStart' });
+    const attachmentsUploaded = await uploadDrafts(attachmentTransactionId);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+    if (attachmentsUploaded) {
+      clearUploadedAttachments();
+      dispatch({ kind: 'submitFailure', error: '' });
+      return;
+    }
+    setAttachmentError('图片仍未全部上传成功，请稍后重试');
+    dispatch({ kind: 'submitFailure', error: '' });
+  };
+
   const submit = async (keepOpen: boolean): Promise<void> => {
     if (state.submitting) return;
 
@@ -179,7 +258,9 @@ export function BillCreateSheet({
 
     dispatch({ kind: 'submitStart' });
     try {
-      await createMutation.mutateAsync();
+      const transactionId = attachmentTransactionId ?? (await createMutation.mutateAsync()).id;
+      setAttachmentTransactionId(transactionId);
+      const attachmentsUploaded = await uploadDrafts(transactionId);
       /*
        * 只等「账单已写入」就关面板，缓存刷新放到后台。
        * 之前这里串行 await 三组失效，等于等列表和四个统计查询全部回来才关抽屉，
@@ -189,11 +270,17 @@ export function BillCreateSheet({
       void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
       void queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
 
-      dispatch({
-        kind: 'resetForNext',
-        clientRequestId: crypto.randomUUID(),
-        occurredAt: new Date().toISOString(),
-      });
+      if (attachmentsUploaded) {
+        clearUploadedAttachments();
+        dispatch({
+          kind: 'resetForNext',
+          clientRequestId: crypto.randomUUID(),
+          occurredAt: new Date().toISOString(),
+        });
+      } else {
+        setAttachmentError('账单已保存，但部分图片上传失败，请重试');
+        dispatch({ kind: 'resetForNext', clientRequestId: crypto.randomUUID(), occurredAt: new Date().toISOString() });
+      }
       // 记下本次选择，下次打开直接预选。
       remember(ledgerId, state.type, {
         categoryId: effectiveCategoryId,
@@ -201,7 +288,7 @@ export function BillCreateSheet({
         payerId: state.payerId,
       });
 
-      if (!keepOpen) onOpenChange(false);
+      if (!keepOpen && attachmentsUploaded) onOpenChange(false);
       onCreated?.();
     } catch (error) {
       const message =
@@ -215,7 +302,7 @@ export function BillCreateSheet({
   };
 
   const requestClose = (): boolean => {
-    if (state.isDirty && !state.submitting) {
+    if ((state.isDirty || attachmentDrafts.length > 0) && !state.submitting) {
       setConfirmDiscard(true);
       return false;
     }
@@ -272,6 +359,11 @@ export function BillCreateSheet({
               </button>
             </div>
           )}
+          {attachmentError && (
+            <div role="alert" className="mx-4 mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {attachmentError}
+            </div>
+          )}
         </div>
 
         <BillFormBody
@@ -296,6 +388,11 @@ export function BillCreateSheet({
           onSubmit={() => void submit(false)}
           onSecondarySubmit={() => void submit(true)}
           submitDisabled={submitBlocked}
+          attachmentDrafts={attachmentDrafts}
+          onOpenAttachmentPicker={() => attachmentInputRef.current?.click()}
+          onRemoveAttachment={removeAttachment}
+          onRetryAttachments={() => void retryAttachments()}
+          attachmentsDisabled={state.submitting}
           noteSuggestions={noteSuggestionsQuery.data?.items ?? []}
           categoryManage={
             canManageCategories
@@ -317,6 +414,15 @@ export function BillCreateSheet({
           }
         />
       </BottomSheet>
+
+      <input
+        ref={attachmentInputRef}
+        type="file"
+        accept={ATTACHMENT_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(event) => addAttachmentFiles(event.target.files)}
+      />
 
       <AccountPickerSheet
         open={accountPickerOpen}
@@ -341,6 +447,12 @@ export function BillCreateSheet({
               type="button"
               onClick={() => {
                 setConfirmDiscard(false);
+                setAttachmentDrafts((drafts) => {
+                  drafts.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
+                  return [];
+                });
+                setAttachmentError(null);
+                setAttachmentTransactionId(null);
                 onOpenChange(false);
               }}
               className="rounded-2xl bg-rose-500 py-2.5 text-sm font-semibold text-white"

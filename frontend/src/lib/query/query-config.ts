@@ -56,6 +56,8 @@ export const queryKeys = {
   ledgerInvitations: (ledgerId: string) => ['ledger', ledgerId, 'invitations'] as const,
   transactions: {
     all: (ledgerId: string) => ['ledger', ledgerId, 'transactions'] as const,
+    detail: (ledgerId: string, transactionId: string) =>
+      ['ledger', ledgerId, 'transactions', 'detail', transactionId] as const,
     noteSuggestions: (ledgerId: string) => ['ledger', ledgerId, 'notes', 'suggestions'] as const,
     list: (ledgerId: string, filter: TransactionListQuery = {}) =>
       ['ledger', ledgerId, 'transactions', 'list', normalizeFilter(filter)] as const,

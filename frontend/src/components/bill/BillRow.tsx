@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
+import { Paperclip } from 'lucide-react';
 import type { TransactionSummary } from '@/lib/api/transaction-types';
 import { billSecondaryText, formatBillTime } from '@/lib/bill/bill-group';
 import { billCreatorName } from '@/lib/bill/bill-creator';
@@ -46,6 +47,12 @@ export function BillRow({ bill, onClick }: BillRowProps): React.JSX.Element {
         {creatorName && (
           <span className="max-w-20 truncate text-[10px] text-text-tertiary">
             {creatorName}
+          </span>
+        )}
+        {(bill.attachmentCount ?? 0) > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-text-tertiary">
+            <Paperclip size={10} />
+            {bill.attachmentCount}
           </span>
         )}
       </div>

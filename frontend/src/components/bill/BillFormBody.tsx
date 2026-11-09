@@ -18,6 +18,8 @@ import type { CategorySummary, CategoryType } from '@/lib/api/category-types';
 import { SheetMetaFields } from './SheetMetaFields';
 import { useVisualViewport } from '@/lib/viewport/use-visual-viewport';
 import { SheetQuickChips } from './SheetQuickChips';
+import type { AttachmentDraft } from '@/lib/api/attachment-types';
+import { AttachmentPicker } from './AttachmentPicker';
 
 export interface BillFormBodyProps {
   state: BillFormState;
@@ -45,6 +47,11 @@ export interface BillFormBodyProps {
   /** 分类管理（OWNER）：传 session 才渲染「＋」与「管理」 */
   categoryManage?: CategoryManageSession;
   noteSuggestions?: readonly NoteSuggestion[];
+  attachmentDrafts?: readonly AttachmentDraft[];
+  onOpenAttachmentPicker?: () => void;
+  onRemoveAttachment?: (localId: string) => void;
+  onRetryAttachments?: () => void;
+  attachmentsDisabled?: boolean;
 }
 
 export interface CategoryManageSession {
@@ -87,6 +94,11 @@ export function BillFormBody({
   submitDisabled,
   categoryManage,
   noteSuggestions = [],
+  attachmentDrafts = [],
+  onOpenAttachmentPicker,
+  onRemoveAttachment,
+  onRetryAttachments,
+  attachmentsDisabled = false,
 }: BillFormBodyProps): React.JSX.Element {
   /**
    * 键盘覆盖模型：系统键盘不改变面板高度，只把底部固定区整体抬到键盘上缘。
@@ -183,6 +195,14 @@ export function BillFormBody({
         />
       </div>
 
+      <AttachmentPicker
+        drafts={attachmentDrafts}
+        onOpen={onOpenAttachmentPicker ?? (() => undefined)}
+        onRemove={onRemoveAttachment ?? (() => undefined)}
+        onRetry={onRetryAttachments}
+        disabled={attachmentsDisabled}
+      />
+
       {/*
         底部固定区：快捷条 + 金额卡 + 键盘。
         快捷条与金额卡属于同一个视觉块，键盘永远贴底，中间分类区独立滚动。
@@ -192,7 +212,13 @@ export function BillFormBody({
         style={shouldLiftForKeyboard ? { marginBottom: keyboardInset } : undefined}
       >
         <div className="mx-3 mt-2 rounded-2xl bg-app-card-subtle/70 px-3 pb-1.5 pt-2">
-          <SheetQuickChips accountName={accountName} onOpenAccountPicker={onOpenAccountPicker} />
+          <SheetQuickChips
+            accountName={accountName}
+            onOpenAccountPicker={onOpenAccountPicker}
+            attachmentCount={attachmentDrafts.length}
+            onOpenAttachmentPicker={onOpenAttachmentPicker}
+            attachmentsDisabled={attachmentsDisabled}
+          />
           <div className="flex items-baseline justify-end gap-2">
             {amount.cents === null && !state.amountText.endsWith('.') && (
               <span className="text-[11px] text-text-tertiary">请输入金额</span>
