@@ -7,6 +7,8 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { BillDetailFields } from './BillDetailFields';
 import { CategoryIcon } from './CategoryIcon';
 import type { BillDetailView } from '@/lib/bill/bill-detail';
+import type { TransactionAttachmentSummary } from '@/lib/api/attachment-types';
+import { BillAttachmentGallery } from './BillAttachmentGallery';
 
 export interface BillDetailSheetProps {
   open: boolean;
@@ -22,6 +24,10 @@ export interface BillDetailSheetProps {
   onDelete: () => void;
   onReload: () => void;
   onRetry: () => void;
+  attachments: readonly TransactionAttachmentSummary[];
+  deletingAttachmentId: string | null;
+  onDeleteAttachment: (attachment: TransactionAttachmentSummary) => void;
+  onRefreshAttachmentUrl: (attachmentId: string) => Promise<string>;
 }
 
 /**
@@ -43,6 +49,10 @@ export function BillDetailSheet({
   onDelete,
   onReload,
   onRetry,
+  attachments,
+  deletingAttachmentId,
+  onDeleteAttachment,
+  onRefreshAttachmentUrl,
 }: BillDetailSheetProps): React.JSX.Element {
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title="账单详情">
@@ -121,6 +131,13 @@ export function BillDetailSheet({
             </div>
 
             <BillDetailFields view={view} />
+            <BillAttachmentGallery
+              attachments={attachments}
+              canDelete={canEdit}
+              deletingId={deletingAttachmentId}
+              onDelete={onDeleteAttachment}
+              onRefreshUrl={onRefreshAttachmentUrl}
+            />
           </>
         )}
       </div>

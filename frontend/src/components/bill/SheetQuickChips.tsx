@@ -1,12 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { WalletCards } from 'lucide-react';
+import { ImagePlus, WalletCards } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface SheetQuickChipsProps {
   accountName: string | null;
   onOpenAccountPicker: () => void;
+  attachmentCount?: number;
+  onOpenAttachmentPicker?: () => void;
+  attachmentsDisabled?: boolean;
 }
 
 /**
@@ -16,6 +19,9 @@ export interface SheetQuickChipsProps {
 export function SheetQuickChips({
   accountName,
   onOpenAccountPicker,
+  attachmentCount = 0,
+  onOpenAttachmentPicker,
+  attachmentsDisabled = false,
 }: SheetQuickChipsProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 [scrollbar-width:none]">
@@ -33,7 +39,7 @@ export function SheetQuickChips({
         {accountName ?? '选择账户'}
       </button>
 
-      {['报销', '优惠', '图片', '标签'].map((label) => (
+      {['报销', '优惠', '标签'].map((label) => (
         <span
           key={label}
           title="即将上线"
@@ -42,6 +48,20 @@ export function SheetQuickChips({
           {label}
         </span>
       ))}
+      <button
+        type="button"
+        onClick={onOpenAttachmentPicker}
+        disabled={attachmentsDisabled || !onOpenAttachmentPicker}
+        className={cn(
+          'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+          attachmentCount > 0
+            ? 'border-primary/40 bg-primary/10 text-primary'
+            : 'border-app-border bg-app-card-subtle text-text-muted',
+        )}
+      >
+        <ImagePlus size={12} />
+        图片{attachmentCount > 0 ? ` ${attachmentCount}` : ''}
+      </button>
     </div>
   );
 }
