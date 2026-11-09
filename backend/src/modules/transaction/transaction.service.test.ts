@@ -113,7 +113,7 @@ describe('TransactionService', () => {
     dependencies.prisma.ledgerMember.findUnique
       .mockResolvedValueOnce({ role: 'EDITOR', status: 'ACTIVE' })
       .mockResolvedValueOnce({ role: 'ACTIVE', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(null);
+    dependencies.prisma.transaction.findFirst.mockResolvedValueOnce(null).mockResolvedValue(transaction);
     dependencies.prisma.account.findFirst.mockResolvedValue(account);
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.transaction.create.mockResolvedValue(transaction);
@@ -149,10 +149,33 @@ describe('TransactionService', () => {
     expect(result).toEqual(expect.objectContaining({ id: transactionId, amountCents: 3500 }));
   });
 
+  it('给定有效账单，当事务提交后返回创建结果，则事务内不读取关联详情', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(transaction);
+    dependencies.prisma.category.findFirst.mockResolvedValue(category);
+    dependencies.transactionClient.transaction.create.mockResolvedValue(transaction);
+    dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+
+    await dependencies.service.create(userId, ledgerId, { ...validInput, accountId: undefined });
+
+    const createArgs = dependencies.transactionClient.transaction.create.mock.calls[0][0];
+    expect(createArgs.select).not.toHaveProperty('createdBy');
+    expect(createArgs.select).not.toHaveProperty('category');
+    expect(createArgs.select).not.toHaveProperty('account');
+    expect(createArgs.select).not.toHaveProperty('payer');
+    expect(dependencies.prisma.transaction.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { id: transactionId, ledgerId, deletedAt: null },
+      select: expect.objectContaining({ createdBy: expect.any(Object), category: expect.any(Object) }),
+    });
+  });
+
   it('给定收入或支出未选择账户，当其他字段有效，则创建账单且不更新账户余额', async () => {
     const dependencies = createService();
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(null);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ ...transaction, accountId: null, account: null });
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.transaction.create.mockResolvedValue({
       ...transaction,
@@ -575,7 +598,9 @@ describe('TransactionService', () => {
       version: 2,
     };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(transaction)
+      .mockResolvedValue(updatedTransaction);
     dependencies.prisma.account.findFirst.mockResolvedValue(account);
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
@@ -657,7 +682,9 @@ describe('TransactionService', () => {
       version: 2,
     };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(transaction)
+      .mockResolvedValue(updatedTransaction);
     dependencies.prisma.category.findFirst.mockResolvedValue(incomeCategory);
     dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
     dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
@@ -687,7 +714,9 @@ describe('TransactionService', () => {
     const dependencies = createService();
     const deletedTransaction = { ...transaction, deletedAt: new Date('2026-11-01T08:00:00.000Z'), version: 2 };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(transaction);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(transaction)
+      .mockResolvedValue(deletedTransaction);
     dependencies.transactionClient.transaction.updateMany.mockResolvedValue({ count: 1 });
     dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
     dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-4' });
@@ -759,7 +788,7 @@ describe('TransactionService', () => {
       noteUpdatedAt: new Date('2026-11-08T08:00:00.000Z'),
     };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(null);
+    dependencies.prisma.transaction.findFirst.mockResolvedValueOnce(null).mockResolvedValue(noted);
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.transaction.create.mockResolvedValue(noted);
     dependencies.transactionClient.transactionAuditLog.create.mockResolvedValue({ id: 'audit-note' });
@@ -789,7 +818,9 @@ describe('TransactionService', () => {
       noteUpdatedAt: new Date('2026-11-01T08:00:00.000Z'),
     };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(noted);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(noted)
+      .mockResolvedValue({ ...noted, amountCents: 4000, version: 2 });
     dependencies.prisma.account.findFirst.mockResolvedValue(account);
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });
@@ -820,7 +851,9 @@ describe('TransactionService', () => {
       noteUpdatedAt: new Date('2026-11-01T08:00:00.000Z'),
     };
     dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'EDITOR', status: 'ACTIVE' });
-    dependencies.prisma.transaction.findFirst.mockResolvedValue(noted);
+    dependencies.prisma.transaction.findFirst
+      .mockResolvedValueOnce(noted)
+      .mockResolvedValue({ ...noted, note: '晚餐', version: 2 });
     dependencies.prisma.account.findFirst.mockResolvedValue(account);
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.transactionClient.account.updateMany.mockResolvedValue({ count: 1 });

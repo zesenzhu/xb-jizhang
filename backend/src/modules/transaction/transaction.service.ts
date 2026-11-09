@@ -17,7 +17,7 @@ import type {
   UpdateTransactionInput,
 } from './transaction.types';
 
-const transactionSelect = {
+const transactionScalarSelect = {
   id: true,
   ledgerId: true,
   type: true,
@@ -34,19 +34,24 @@ const transactionSelect = {
   source: true,
   clientRequestId: true,
   createdById: true,
-  createdBy: { select: { id: true, username: true, nickname: true, avatar: true } },
   updatedById: true,
   payerId: true,
   version: true,
   deletedAt: true,
   createdAt: true,
   updatedAt: true,
+} as const;
+
+const transactionSelect = {
+  ...transactionScalarSelect,
+  createdBy: { select: { id: true, username: true, nickname: true, avatar: true } },
   category: { select: { id: true, type: true, name: true, parentId: true } },
   account: { select: { id: true, name: true, visibility: true } },
   payer: { select: { id: true, nickname: true } },
 } as const;
 
 type TransactionRecord = Prisma.TransactionGetPayload<{ select: typeof transactionSelect }>;
+type TransactionScalarRecord = Prisma.TransactionGetPayload<{ select: typeof transactionScalarSelect }>;
 function isUniqueConstraintError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -113,7 +118,7 @@ export class TransactionService {
             updatedById: userId,
             payerId: input.payerId ?? null,
           },
-          select: transactionSelect,
+          select: transactionScalarSelect,
         });
 
         if (input.accountId) {
@@ -135,10 +140,10 @@ export class TransactionService {
             afterData: this.toAuditData(createdTransaction),
           },
         });
-        return createdTransaction;
+        return createdTransaction.id;
       });
 
-      return this.toSummary(await this.readDetailRecord(userId, ledgerId, created.id, created));
+      return this.toSummary(await this.readDetailRecord(userId, ledgerId, created));
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const concurrent = await this.findByClientRequestId(ledgerId, input.clientRequestId);
@@ -208,7 +213,7 @@ export class TransactionService {
       if (!payer || payer.status !== 'ACTIVE') throw this.notFoundException();
     }
 
-    const updated = await this.prisma.$transaction(async (transaction) => {
+    const updatedId = await this.prisma.$transaction(async (transaction) => {
       // 先恢复旧账单影响，再应用新账单影响，确保金额方向或账户切换时余额仍与未删除账单一致。
       await this.applyBalanceChange(transaction, ledgerId, current.accountId, current.type, current.amountCents, 'restore');
       if (nextAccountId) {
@@ -265,10 +270,9 @@ export class TransactionService {
           },
         },
       });
-      return transaction.transaction.findUnique({ where: { id: transactionId }, select: transactionSelect });
+      return transactionId;
     });
-    if (!updated) throw this.notFoundException();
-    return this.toSummary(await this.readDetailRecord(userId, ledgerId, transactionId, updated));
+    return this.toSummary(await this.readDetailRecord(userId, ledgerId, updatedId));
   }
 
   /**
@@ -291,7 +295,7 @@ export class TransactionService {
     if (current.deletedAt) return this.toSummary(current);
     if (version !== current.version) throw this.conflictException();
 
-    const deleted = await this.prisma.$transaction(async (transaction) => {
+    const deletedId = await this.prisma.$transaction(async (transaction) => {
       // 软删除和余额恢复必须同事务提交，避免账单不可见但余额仍包含已删除记录。
       const result = await transaction.transaction.updateMany({
         where: { id: transactionId, ledgerId, version, deletedAt: null },
@@ -310,10 +314,9 @@ export class TransactionService {
           afterData: { ...this.toAuditData(current), deletedAt: new Date().toISOString(), version: current.version + 1 },
         },
       });
-      return transaction.transaction.findUnique({ where: { id: transactionId }, select: transactionSelect });
+      return transactionId;
     });
-    if (!deleted) throw this.notFoundException();
-    return this.toSummary(deleted);
+    return this.toSummary(await this.readDetailRecord(userId, ledgerId, deletedId, undefined, true));
   }
 
   /**
@@ -436,12 +439,13 @@ export class TransactionService {
     ledgerId: string,
     transactionId: string,
     fallback?: TransactionRecord,
+    includeDeleted = false,
   ): Promise<TransactionRecord> {
     const record = fallback ?? (await this.prisma.transaction.findFirst({
-      where: { id: transactionId, ledgerId, deletedAt: null },
+      where: { id: transactionId, ledgerId, ...(includeDeleted ? {} : { deletedAt: null }) },
       select: transactionSelect,
     }));
-    if (!record || record.deletedAt) throw this.notFoundException();
+    if (!record || (!includeDeleted && record.deletedAt)) throw this.notFoundException();
     if (record.account?.visibility === 'PRIVATE') {
       const account = await this.prisma.account.findFirst({
         where: { id: record.account.id, ledgerId, ownerId: userId },
@@ -529,7 +533,7 @@ export class TransactionService {
     return normalized.length > 0 ? normalized : null;
   }
 
-  private toAuditData(record: TransactionRecord) {
+  private toAuditData(record: TransactionScalarRecord) {
     return {
       id: record.id,
       type: record.type,
