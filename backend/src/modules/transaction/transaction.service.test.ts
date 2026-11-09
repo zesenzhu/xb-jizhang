@@ -480,6 +480,7 @@ describe('TransactionService', () => {
       categoryId,
       accountId,
       payerId,
+      createdById: 'user-creator',
       from: '2026-10-01T00:00:00.000Z',
       to: '2026-11-01T00:00:00.000Z',
       keyword: ' 早餐 ',
@@ -494,6 +495,7 @@ describe('TransactionService', () => {
           categoryId,
           accountId,
           payerId,
+          createdById: 'user-creator',
           occurredAt: {
             gte: new Date('2026-10-01T00:00:00.000Z'),
             lt: new Date('2026-11-01T00:00:00.000Z'),

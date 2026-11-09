@@ -424,6 +424,7 @@ export class TransactionService {
       }),
       ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
       ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
+      ...(query.createdById === undefined ? {} : { createdById: query.createdById }),
       ...(occurredAt === undefined ? {} : { occurredAt }),
       AND: [
         {

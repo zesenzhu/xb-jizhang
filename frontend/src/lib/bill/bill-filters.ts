@@ -12,11 +12,19 @@ import { billDateOf, zonedDayBoundary, zonedMonthBoundary, shiftDateString, LEDG
 export type BillFilterType = '' | TransactionType;
 
 /** 条件胶囊的键；分类与时间范围各自是一个胶囊，但内部清两个字段。 */
-export type BillFilterChipKey = 'keyword' | 'payerId' | 'type' | 'category' | 'accountId' | 'range';
+export type BillFilterChipKey =
+  | 'keyword'
+  | 'payerId'
+  | 'createdById'
+  | 'type'
+  | 'category'
+  | 'accountId'
+  | 'range';
 
 export interface BillFilter {
   keyword: string;
   payerId: string;
+  createdById: string;
   type: BillFilterType;
   categoryRootId: string;
   categoryId: string;
@@ -62,6 +70,7 @@ export interface BillFilterChip {
 export interface StatisticsFilterQuery {
   keyword?: string;
   payerId?: string;
+  createdById?: string;
   type?: TransactionType;
   accountId?: string;
   categoryId?: string;
@@ -90,6 +99,7 @@ export function createInitialBillFilter(): BillFilter {
   return {
     keyword: '',
     payerId: '',
+    createdById: '',
     type: '',
     categoryRootId: '',
     categoryId: '',
@@ -131,6 +141,7 @@ export function isBillFilterActive(filter: BillFilter): boolean {
   return Boolean(
     filter.keyword ||
       filter.payerId ||
+      filter.createdById ||
       filter.type ||
       filter.categoryRootId ||
       filter.categoryId ||
@@ -157,6 +168,7 @@ export function toBillFilterQuery(
   TransactionListQuery,
   | 'keyword'
   | 'payerId'
+  | 'createdById'
   | 'type'
   | 'categoryId'
   | 'categoryRootId'
@@ -168,6 +180,7 @@ export function toBillFilterQuery(
   return {
     ...(filter.keyword ? { keyword: filter.keyword } : {}),
     ...(filter.payerId ? { payerId: filter.payerId } : {}),
+    ...(filter.createdById ? { createdById: filter.createdById } : {}),
     ...(filter.type ? { type: filter.type } : {}),
     ...(filter.uncategorized && !filter.categoryId && !filter.categoryRootId
       ? { uncategorized: true }
@@ -192,6 +205,7 @@ export function toStatisticsFilterQuery(filter: BillFilter): StatisticsFilterQue
   return {
     ...(filter.keyword ? { keyword: filter.keyword } : {}),
     ...(filter.payerId ? { payerId: filter.payerId } : {}),
+    ...(filter.createdById ? { createdById: filter.createdById } : {}),
     ...(filter.type ? { type: filter.type } : {}),
     ...(filter.accountId ? { accountId: filter.accountId } : {}),
     ...(filter.uncategorized && !filter.categoryId && !filter.categoryRootId
@@ -245,7 +259,7 @@ export function withBillFilterDates(
 /**
  * 条件胶囊。
  *
- * 顺序固定（关键词 → 类型 → 分类 → 账户 → 付款人 → 时间），
+ * 顺序固定（关键词 → 类型 → 分类 → 账户 → 付款人 → 记账人 → 时间），
  * 与面板里的分组顺序一致，避免每次增删条件时胶囊乱跳。
  */
 export function getBillFilterChips(
@@ -272,6 +286,11 @@ export function getBillFilterChips(
   if (filter.payerId) {
     const member = labels.members?.find((item) => item.id === filter.payerId);
     chips.push({ key: 'payerId', label: `付款人：${member?.name ?? '未知成员'}` });
+  }
+
+  if (filter.createdById) {
+    const member = labels.members?.find((item) => item.id === filter.createdById);
+    chips.push({ key: 'createdById', label: `记账人：${member?.name ?? '未知成员'}` });
   }
 
   if (hasRangeFilter(filter)) {

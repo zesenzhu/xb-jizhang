@@ -70,6 +70,7 @@ void (async () => {
       type: 'EXPENSE',
       accountId: 'account-1',
       payerId: 'user-2',
+      createdById: 'user-3',
       keyword: '早餐',
     });
     assert.deepEqual(captured.at(-1)?.params, {
@@ -80,6 +81,7 @@ void (async () => {
       type: 'EXPENSE',
       accountId: 'account-1',
       payerId: 'user-2',
+      createdById: 'user-3',
       keyword: '早餐',
     });
 

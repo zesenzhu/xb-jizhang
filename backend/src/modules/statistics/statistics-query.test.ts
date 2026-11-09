@@ -47,6 +47,7 @@ describe('statistics query builder', () => {
           categoryRootId: 'category-root',
           accountId: 'account-1',
           payerId: 'user-2',
+          createdById: 'user-creator',
           keyword: ' 早餐 ',
         },
         occurredAt,
@@ -57,6 +58,7 @@ describe('statistics query builder', () => {
       type: { in: ['EXPENSE', 'INCOME'] },
       accountId: 'account-1',
       payerId: 'user-2',
+      createdById: 'user-creator',
       occurredAt,
       OR: [
         {
@@ -161,6 +163,7 @@ describe('statistics query builder', () => {
         categoryId: 'category-1',
         accountId: 'account-1',
         payerId: 'user-2',
+        createdById: 'user-creator',
         keyword: '100% 早餐',
       },
       {
@@ -183,6 +186,7 @@ describe('statistics query builder', () => {
         userId,
         'account-1',
         'user-2',
+        'user-creator',
         'category-1',
         '100% 早餐',
         new Date('2026-10-31T16:00:00.000Z'),
@@ -199,6 +203,7 @@ describe('statistics query builder', () => {
         categoryRootId: 'category-root',
         accountId: 'account-1',
         payerId: 'user-2',
+        createdById: 'user-creator',
         keyword: '100% 早餐',
       },
       {

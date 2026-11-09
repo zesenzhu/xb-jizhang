@@ -40,6 +40,7 @@ export interface StatisticsQuery {
   type?: 'EXPENSE' | 'INCOME';
   accountId?: string;
   payerId?: string;
+  createdById?: string;
   keyword?: string;
   /** 只匹配没有分类的账单；与 categoryId/categoryRootId 互斥。 */
   uncategorized?: boolean;

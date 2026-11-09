@@ -28,6 +28,7 @@ export interface StatisticsQuery extends StatisticsDateRangeQuery {
   uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
+  createdById?: string;
   keyword?: string;
   metric?: StatisticsTrendMetric;
   categoryLevel?: 'ROOT' | 'CHILD';

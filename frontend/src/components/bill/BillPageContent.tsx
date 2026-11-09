@@ -52,7 +52,7 @@ function monthShift(year: number, month: number, delta: number): { year: number;
   return { year: Math.floor(zeroBased / 12), month: (zeroBased % 12) + 1 };
 }
 
-/** 参与了「筛选」计数的条件（关键词与付款人在搜索栏里独立呈现，不重复计数）。 */
+/** 参与了「筛选」计数的条件（关键词、付款人、记账人在搜索栏里独立呈现，不重复计数）。 */
 function countSheetFilters(filter: BillFilter): number {
   return [
     filter.type,
@@ -300,6 +300,7 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
         <BillSearchBar
           keyword={keywordInput}
           payerId={filter.payerId}
+          createdById={filter.createdById}
           members={members}
           chips={filterChips}
           isFiltered={isFiltered}
@@ -307,6 +308,9 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
           onKeywordChange={setKeywordInput}
           onSubmitKeyword={() => setFilter((value) => submitBillKeyword(value, keywordInput))}
           onPayerChange={(payerId) => setFilter((value) => ({ ...value, payerId }))}
+          onCreatedByIdChange={(createdById) =>
+            setFilter((value) => ({ ...value, createdById }))
+          }
           onOpenFilter={() => setFilterOpen(true)}
           onClear={handleClear}
           onRemove={handleRemove}

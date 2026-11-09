@@ -96,6 +96,7 @@ assert.deepEqual(
   {
     keyword: '',
     payerId: '',
+    createdById: '',
     type: 'INCOME',
     categoryRootId: ROOT,
     categoryId: '',
@@ -109,6 +110,7 @@ assert.deepEqual(
   {
     keyword: '',
     payerId: '',
+    createdById: '',
     type: '',
     categoryRootId: '',
     categoryId: '',

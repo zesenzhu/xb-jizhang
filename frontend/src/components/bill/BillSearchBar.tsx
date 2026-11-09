@@ -13,6 +13,7 @@ import type {
 export interface BillSearchBarProps {
   keyword: string;
   payerId: string;
+  createdById: string;
   members: readonly BillFilterMember[];
   chips: readonly BillFilterChip[];
   isFiltered: boolean;
@@ -20,6 +21,7 @@ export interface BillSearchBarProps {
   onKeywordChange: (keyword: string) => void;
   onSubmitKeyword: () => void;
   onPayerChange: (payerId: string) => void;
+  onCreatedByIdChange: (createdById: string) => void;
   onOpenFilter: () => void;
   onClear: () => void;
   onRemove: (key: BillFilterChipKey) => void;
@@ -28,6 +30,7 @@ export interface BillSearchBarProps {
 export function BillSearchBar({
   keyword,
   payerId,
+  createdById,
   members,
   chips,
   isFiltered,
@@ -35,6 +38,7 @@ export function BillSearchBar({
   onKeywordChange,
   onSubmitKeyword,
   onPayerChange,
+  onCreatedByIdChange,
   onOpenFilter,
   onClear,
   onRemove,
@@ -60,7 +64,7 @@ export function BillSearchBar({
         </Button>
       </form>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <label className="sr-only" htmlFor="bill-payer-filter">
           实际付款人
         </label>
@@ -69,9 +73,27 @@ export function BillSearchBar({
           aria-label="实际付款人"
           value={payerId}
           onChange={(event) => onPayerChange(event.target.value)}
-          className="h-9 min-w-28 rounded-xl border border-app-border bg-app-card px-3 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          className="h-9 min-w-0 flex-1 rounded-xl border border-app-border bg-app-card px-3 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         >
           <option value="">全部付款人</option>
+          {members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+
+        <label className="sr-only" htmlFor="bill-creator-filter">
+          记账人
+        </label>
+        <select
+          id="bill-creator-filter"
+          aria-label="记账人"
+          value={createdById}
+          onChange={(event) => onCreatedByIdChange(event.target.value)}
+          className="h-9 min-w-0 flex-1 rounded-xl border border-app-border bg-app-card px-3 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        >
+          <option value="">全部记账人</option>
           {members.map((member) => (
             <option key={member.id} value={member.id}>
               {member.name}
@@ -85,7 +107,7 @@ export function BillSearchBar({
           variant="outline"
           onClick={onOpenFilter}
           aria-label="打开筛选面板"
-          className="gap-1.5 rounded-xl border-app-border px-3 text-xs text-text-main"
+          className="shrink-0 gap-1.5 rounded-xl border-app-border px-3 text-xs text-text-main"
         >
           <SlidersHorizontal size={14} className="text-text-muted" />
           {activeFilterCount > 0 ? `筛选·${activeFilterCount}` : '筛选'}

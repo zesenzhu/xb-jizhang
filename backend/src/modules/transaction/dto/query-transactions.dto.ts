@@ -44,6 +44,10 @@ export class QueryTransactionsDto {
   payerId?: string;
 
   @IsOptional()
+  @IsUUID()
+  createdById?: string;
+
+  @IsOptional()
   @IsISO8601()
   from?: string;
 

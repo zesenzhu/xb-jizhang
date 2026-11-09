@@ -20,6 +20,7 @@ const initial = createInitialBillFilter();
 assert.deepEqual(initial, {
   keyword: '',
   payerId: '',
+  createdById: '',
   type: '',
   categoryRootId: '',
   categoryId: '',
@@ -62,6 +63,7 @@ assert.deepEqual(
     {
       keyword: '早餐',
       payerId: 'user-2',
+      createdById: 'user-3',
       type: 'EXPENSE',
       categoryRootId: 'root-1',
       categoryId: '',
@@ -70,7 +72,10 @@ assert.deepEqual(
       to: '2026-11-01T16:00:00.000Z',
     },
     {
-      members: [{ id: 'user-2', name: '小宝' }],
+      members: [
+        { id: 'user-2', name: '小宝' },
+        { id: 'user-3', name: '小贝' },
+      ],
       categories: [{ id: 'root-1', name: '餐饮', parentId: null, type: 'EXPENSE' }],
       accounts: [{ id: 'acc-1', name: '现金' }],
     },
@@ -81,6 +86,7 @@ assert.deepEqual(
     { key: 'category', label: '分类：餐饮' },
     { key: 'accountId', label: '账户：现金' },
     { key: 'payerId', label: '付款人：小宝' },
+    { key: 'createdById', label: '记账人：小贝' },
     { key: 'range', label: '时间：2026-11-01 至 2026-11-01' },
   ],
 );
@@ -113,8 +119,14 @@ assert.deepEqual(getBillFilterChips({ ...initial, uncategorized: true }), [
 // 查询参数：空值全部剔除；分类两字段互斥，精确分类优先。
 assert.deepEqual(toBillFilterQuery(initial), {});
 assert.deepEqual(
-  toBillFilterQuery({ ...initial, keyword: '早餐', payerId: 'user-2', type: 'INCOME' }),
-  { keyword: '早餐', payerId: 'user-2', type: 'INCOME' },
+  toBillFilterQuery({
+    ...initial,
+    keyword: '早餐',
+    payerId: 'user-2',
+    createdById: 'user-3',
+    type: 'INCOME',
+  }),
+  { keyword: '早餐', payerId: 'user-2', createdById: 'user-3', type: 'INCOME' },
 );
 assert.deepEqual(toBillFilterQuery({ ...initial, categoryRootId: 'root-1' }), {
   categoryRootId: 'root-1',
@@ -136,12 +148,20 @@ assert.deepEqual(
   toStatisticsFilterQuery({
     ...initial,
     keyword: '早餐',
+    payerId: 'user-2',
+    createdById: 'user-3',
     type: 'EXPENSE',
     categoryRootId: 'root-1',
     from: '2026-10-31T16:00:00.000Z',
     to: '2026-11-30T16:00:00.000Z',
   }),
-  { keyword: '早餐', type: 'EXPENSE', categoryRootId: 'root-1' },
+  {
+    keyword: '早餐',
+    payerId: 'user-2',
+    createdById: 'user-3',
+    type: 'EXPENSE',
+    categoryRootId: 'root-1',
+  },
 );
 assert.deepEqual(toStatisticsFilterQuery({ ...initial, uncategorized: true }), {
   uncategorized: true,

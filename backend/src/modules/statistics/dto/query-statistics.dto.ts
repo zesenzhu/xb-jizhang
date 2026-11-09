@@ -181,6 +181,10 @@ export class QueryStatisticsDto {
   payerId?: string;
 
   @IsOptional()
+  @IsUUID()
+  createdById?: string;
+
+  @IsOptional()
   @IsString()
   @Length(1, 100)
   keyword?: string;

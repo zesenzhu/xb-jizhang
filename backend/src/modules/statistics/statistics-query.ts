@@ -17,6 +17,7 @@ interface NormalizedStatisticsFilters {
   uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
+  createdById?: string;
   keyword?: string;
 }
 
@@ -42,6 +43,7 @@ function normalizeFilters(query: StatisticsQuery): NormalizedStatisticsFilters {
     ...(query.uncategorized === undefined ? {} : { uncategorized: query.uncategorized }),
     ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
     ...(query.payerId === undefined ? {} : { payerId: query.payerId }),
+    ...(query.createdById === undefined ? {} : { createdById: query.createdById }),
     ...(keyword ? { keyword } : {}),
   };
 }
@@ -122,6 +124,7 @@ export function buildStatisticsWhere(
       ? {}
       : { accountId: filters.accountId }),
     ...(filters.payerId === undefined ? {} : { payerId: filters.payerId }),
+    ...(filters.createdById === undefined ? {} : { createdById: filters.createdById }),
     ...(occurredAt === undefined ? {} : { occurredAt }),
     AND: and,
   };
@@ -175,6 +178,9 @@ function buildStatisticsSqlConditions(
         AND l."user_id" = ${filters.payerId}
         AND l."status" = 'ACTIVE'
     )`);
+  }
+  if (filters.createdById !== undefined) {
+    conditions.push(Prisma.sql`t."created_by_id" = ${filters.createdById}`);
   }
   if (filters.keyword !== undefined) {
     conditions.push(Prisma.sql`(

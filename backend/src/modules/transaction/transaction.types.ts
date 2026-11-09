@@ -38,6 +38,7 @@ export interface TransactionQuery {
   uncategorized?: boolean;
   accountId?: string;
   payerId?: string;
+  createdById?: string;
   from?: string;
   to?: string;
   keyword?: string;
