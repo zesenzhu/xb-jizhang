@@ -243,4 +243,44 @@ describe('AttachmentService', () => {
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
+
+  it('给定附件可读，当读取访问地址，则返回短期签名地址', async () => {
+    const d = createService();
+    (config.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'ATTACHMENT_ENABLED' ? 'true' : '600',
+    );
+    d.prisma.transactionAttachment.findFirst.mockResolvedValue({
+      id: attachmentId,
+      objectKey: baseAttachment.objectKey,
+      transaction: { deletedAt: null, account: { visibility: 'SHARED', ownerId: null } },
+    });
+
+    const result = await d.service.getAccessUrl(userId, ledgerId, attachmentId);
+
+    expect(result.attachmentId).toBe(attachmentId);
+    expect(result.accessUrl).toContain('read');
+    expect(result.accessUrlExpiresAt).toBeInstanceOf(Date);
+  });
+
+  it('给定附件存在，当删除，则标记 DELETED 并写审计', async () => {
+    const d = createService();
+    (config.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'ATTACHMENT_ENABLED' ? 'true' : '600',
+    );
+    d.prisma.transactionAttachment.findFirst.mockResolvedValue({
+      ...baseAttachment,
+      transaction: { deletedAt: null },
+    });
+
+    const result = await d.service.remove(userId, ledgerId, transactionId, attachmentId);
+
+    expect(result).toBeNull();
+    expect(d.tx.transactionAttachment.update).toHaveBeenCalledWith({
+      where: { id: attachmentId },
+      data: expect.objectContaining({ status: 'DELETED' }),
+    });
+    expect(d.tx.transactionAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'ATTACHMENT_REMOVE' }) }),
+    );
+  });
 });
