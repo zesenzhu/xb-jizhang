@@ -67,6 +67,8 @@ export interface TransactionSummary {
   attachmentCount?: number;
   attachments?: Array<{
     id: string;
+    transactionId: string;
+    status: string;
     mimeType: string | null;
     sizeBytes: number | null;
     originalName: string | null;

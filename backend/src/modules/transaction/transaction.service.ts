@@ -52,6 +52,8 @@ const transactionSelect = {
     where: { status: 'ATTACHED', deletedAt: null },
     select: {
       id: true,
+      transactionId: true,
+      status: true,
       mimeType: true,
       sizeBytes: true,
       originalName: true,
