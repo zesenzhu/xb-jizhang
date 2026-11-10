@@ -10,11 +10,12 @@
     "test": "pnpm run test:contract && pnpm run test:attachment",
     "test:attachment": "tsx test/attachment-api.contract.test.ts && tsx test/attachment-validation.test.ts && tsx test/attachment-queue.test.ts",
     "lint": "eslint .",
-    "test:contract": "tsx test/store.contract.test.ts && tsx test/routes.contract.test.ts && tsx test/workspace-layout.contract.test.ts && tsx test/auth-store.contract.test.ts && tsx test/client-state.contract.test.ts && tsx test/api-client.contract.test.ts && tsx test/auth-api.contract.test.ts && tsx test/auth-initialization.test.ts && tsx test/query-config.test.ts && tsx test/amount.test.ts && tsx test/ledger-api.contract.test.ts && tsx test/member-api.contract.test.ts && tsx test/invitation-api.contract.test.ts && tsx test/ledger-form.test.ts && tsx test/ledger-manage.test.ts && tsx test/bill-timezone.test.ts && tsx test/bill-group.test.ts && tsx test/bill-filters.test.ts && tsx test/bill-drilldown.test.ts && tsx test/transaction-api.contract.test.ts && tsx test/bill-amount.test.ts && tsx test/category-tree.test.ts && tsx test/bill-form.test.ts && tsx test/category-api.contract.test.ts && tsx test/category-manage.test.ts && tsx test/bill-detail.test.ts && tsx test/statistics-range.test.ts && tsx test/statistics-chart.test.ts && tsx test/sheet-layout.contract.test.ts && tsx test/datetime-picker.test.ts && tsx test/bill-creator.test.ts && tsx test/keyboard-inset.test.ts && tsx test/note-suggestions.test.ts && tsx test/note-composer.test.ts && tsx test/mobile-input-guard.test.ts && tsx test/skin.test.ts"
+    "test:contract": "tsx test/store.contract.test.ts && tsx test/routes.contract.test.ts && tsx test/workspace-layout.contract.test.ts && tsx test/auth-store.contract.test.ts && tsx test/client-state.contract.test.ts && tsx test/api-client.contract.test.ts && tsx test/auth-api.contract.test.ts && tsx test/auth-initialization.test.ts && tsx test/query-config.test.ts && tsx test/amount.test.ts && tsx test/ledger-api.contract.test.ts && tsx test/member-api.contract.test.ts && tsx test/invitation-api.contract.test.ts && tsx test/ledger-form.test.ts && tsx test/ledger-manage.test.ts && tsx test/bill-timezone.test.ts && tsx test/bill-group.test.ts && tsx test/bill-filters.test.ts && tsx test/bill-drilldown.test.ts && tsx test/transaction-api.contract.test.ts && tsx test/bill-amount.test.ts && tsx test/category-tree.test.ts && tsx test/bill-form.test.ts && tsx test/category-api.contract.test.ts && tsx test/category-manage.test.ts && tsx test/bill-detail.test.ts && tsx test/statistics-range.test.ts && tsx test/statistics-chart.test.ts && tsx test/sheet-layout.contract.test.ts && tsx test/datetime-picker.test.ts && tsx test/bill-creator.test.ts && tsx test/local-transaction.test.ts && tsx test/offline-sync.test.ts && tsx test/keyboard-inset.test.ts && tsx test/note-suggestions.test.ts && tsx test/note-composer.test.ts && tsx test/mobile-input-guard.test.ts && tsx test/skin.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.105.1",
     "axios": "^1.8.4",
+    "idb": "^8.0.4",
     "lucide-react": "^0.511.0",
     "next": "^16.2.6",
     "react": "^19.2.4",
@@ -23,11 +24,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.3",
-    "eslint": "^9.18.0",
-    "eslint-config-next": "^16.2.6",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "^16.2.6",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.3",
     "tsx": "^4.19.3",

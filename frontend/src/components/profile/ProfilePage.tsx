@@ -18,8 +18,9 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ProfileView } from '@/components/profile/ProfileView';
 import type { ProfileEntry } from '@/components/profile/ProfileEntryList';
+import { CacheManagementPanel } from '@/components/profile/CacheManagementPanel';
 
-type Panel = 'profile' | 'security' | 'about' | null;
+type Panel = 'profile' | 'security' | 'about' | 'cache' | null;
 
 function errorText(error: unknown, fallback = '操作失败，请稍后重试'): string | null {
   if (!error) return null;
@@ -153,6 +154,13 @@ export function ProfilePage(): React.JSX.Element {
       description: '查看别人发给你的账本邀请',
       icon: 'mail',
       onClick: () => router.push('/user/invitations'),
+    },
+    {
+      key: 'cache',
+      label: '本地缓存与离线数据',
+      description: '查看占用与管理待同步数据',
+      icon: 'database',
+      onClick: () => setPanel('cache'),
     },
     { key: 'about', label: '帮助与关于', description: '版本、数据口径与说明', icon: 'help', onClick: () => setPanel('about') },
   ];
@@ -296,6 +304,16 @@ export function ProfilePage(): React.JSX.Element {
             </Button>
           </div>
         </div>
+      </BottomSheet>
+
+      <BottomSheet
+        open={panel === 'cache'}
+        onOpenChange={(open) => {
+          if (!open) setPanel(null);
+        }}
+        title="本地缓存与离线数据"
+      >
+        <CacheManagementPanel />
       </BottomSheet>
 
       <BottomSheet

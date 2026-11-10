@@ -37,6 +37,13 @@ import { BillFormBody } from './BillFormBody';
 import { AccountPickerSheet } from './AccountPickerSheet';
 import { SheetTypeSegment } from './SheetTypeSegment';
 import { X } from 'lucide-react';
+import {
+  attachmentCacheKey,
+  deleteAttachmentCache,
+  readAttachmentBlob,
+  saveAttachmentBlob,
+  saveAttachmentSummary,
+} from '@/lib/offline/storage';
 
 export interface BillDetailContainerProps {
   open: boolean;
@@ -94,6 +101,7 @@ export function BillDetailContainer({
   const [deletingAttachmentId, setDeletingAttachmentId] = React.useState<string | null>(null);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const attachmentObjectUrlsRef = React.useRef<Set<string>>(new Set());
 
   // 详情不缓存：编辑后必须立刻看到新值。
   const detailQuery = useQuery({
@@ -126,6 +134,11 @@ export function BillDetailContainer({
 
   const bill = detailQuery.data;
   const attachments = bill?.attachments ?? [];
+
+  React.useEffect(() => () => {
+    for (const objectUrl of attachmentObjectUrlsRef.current) URL.revokeObjectURL(objectUrl);
+    attachmentObjectUrlsRef.current.clear();
+  }, []);
   const directory = React.useMemo(
     () => buildMemberDirectory(membersQuery.data?.items ?? []),
     [membersQuery.data],
@@ -262,7 +275,65 @@ export function BillDetailContainer({
   };
 
   const refreshAttachmentUrl = async (attachmentId: string): Promise<string> => {
+    if (currentUser) {
+      const cachedBlob = await readAttachmentBlob(currentUser.id, ledgerId, attachmentId).catch(() => null);
+      if (cachedBlob) {
+        const objectUrl = URL.createObjectURL(cachedBlob);
+        attachmentObjectUrlsRef.current.add(objectUrl);
+        return objectUrl;
+      }
+    }
     const result = await getAttachmentAccessUrl(ledgerId, attachmentId);
+    const attachment = bill?.attachments?.find((item) => item.id === attachmentId);
+    if (currentUser && attachment) {
+      const response = await fetch(result.accessUrl, { credentials: 'omit' }).catch(() => null);
+      if (response?.ok) {
+        const blob = await response.blob();
+        const now = new Date().toISOString();
+        await saveAttachmentSummary({
+          cacheKey: attachmentCacheKey(currentUser.id, ledgerId, attachment.id),
+          userId: currentUser.id,
+          ledgerId,
+          attachmentId: attachment.id,
+          transactionId: attachment.transactionId,
+          status: attachment.status,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+          originalName: attachment.originalName,
+          createdAt: attachment.createdAt,
+          cachedAt: now,
+          lastAccessedAt: now,
+          cacheState: 'CACHED',
+        }).catch(() => undefined);
+        await saveAttachmentBlob({
+          cacheKey: attachmentCacheKey(currentUser.id, ledgerId, attachment.id),
+          userId: currentUser.id,
+          ledgerId,
+          attachmentId: attachment.id,
+          blob,
+          mimeType: attachment.mimeType,
+          sizeBytes: blob.size,
+          lastAccessedAt: now,
+          createdAt: now,
+        }).catch(() => undefined);
+        const objectUrl = URL.createObjectURL(blob);
+        attachmentObjectUrlsRef.current.add(objectUrl);
+        queryClient.setQueryData<TransactionSummary>(
+          queryKeys.transactions.detail(ledgerId, billId ?? ''),
+          (current) => current
+            ? {
+                ...current,
+                attachments: current.attachments?.map((item) =>
+                  item.id === attachmentId
+                    ? { ...item, accessUrl: objectUrl, accessUrlExpiresAt: undefined }
+                    : item,
+                ),
+              }
+            : current,
+        );
+        return objectUrl;
+      }
+    }
     queryClient.setQueryData<TransactionSummary>(queryKeys.transactions.detail(ledgerId, billId ?? ''), (current) => {
       if (!current) return current;
       return {
@@ -287,6 +358,7 @@ export function BillDetailContainer({
     setDeletingAttachmentId(attachment.id);
     try {
       await deleteAttachment(ledgerId, bill?.id ?? '', attachment.id);
+      if (currentUser) await deleteAttachmentCache(currentUser.id, ledgerId, attachment.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.detail(ledgerId, billId ?? '') });
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
     } catch (error) {

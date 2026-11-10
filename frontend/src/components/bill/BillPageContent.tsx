@@ -44,6 +44,19 @@ import { BillCreateSheet } from '@/components/bill/BillCreateSheet';
 import { CreateBillFab } from '@/components/bill/CreateBillFab';
 import { SyncStatusBar } from '@/components/mobile/SyncStatusBar';
 import { useOfflineStore } from '@/store/offlineStore';
+import { useUserAuthStore } from '@/store/userAuthStore';
+import { matchesTransactionQuery } from '@/lib/offline/local-transaction';
+import {
+  isAccountListResponse,
+  isCategoryListResponse,
+  useCachedLedgerSnapshot,
+  usePersistLedgerSnapshot,
+} from '@/lib/offline/query-snapshot';
+import { useOfflineTransactions } from '@/lib/offline/use-offline-transactions';
+import {
+  isTransactionListSnapshot,
+  saveRecentTransactionSnapshot,
+} from '@/lib/offline/storage';
 
 const PAGE_SIZE = 30;
 
@@ -89,6 +102,29 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [detailBillId, setDetailBillId] = React.useState<string | null>(null);
   const isOnline = useOfflineStore((store) => store.isOnline);
+  const pendingCount = useOfflineStore((store) => store.pendingCount);
+  const syncStatus = useOfflineStore((store) => store.syncStatus);
+  const requestSync = useOfflineStore((store) => store.requestSync);
+  const currentUser = useUserAuthStore((store) => store.currentUser);
+  const cachedCategories = useCachedLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId: currentLedgerId ?? '',
+    kind: 'categories',
+    guard: isCategoryListResponse,
+  });
+  const cachedAccounts = useCachedLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId: currentLedgerId ?? '',
+    kind: 'accounts',
+    guard: isAccountListResponse,
+  });
+  const cachedTransactions = useCachedLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId: currentLedgerId ?? '',
+    kind: 'transactions',
+    guard: isTransactionListSnapshot,
+  });
+  const localTransactions = useOfflineTransactions(currentUser?.id ?? null, currentLedgerId);
 
   /**
    * 统计页下钻带进来的参数只应用一次。
@@ -137,6 +173,21 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
     enabled: Boolean(currentLedgerId),
   });
 
+  usePersistLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId: currentLedgerId ?? '',
+    kind: 'categories',
+    data: categoriesQuery.data,
+    recordCount: categoriesQuery.data?.items.length,
+  });
+  usePersistLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId: currentLedgerId ?? '',
+    kind: 'accounts',
+    data: accountsQuery.data,
+    recordCount: accountsQuery.data?.items.length,
+  });
+
   // 账本时区来自服务端；未加载时退回全局默认值，避免第一帧用错日边界。
   const timeZone = ledgerQuery.data?.timezone || LEDGER_TIME_ZONE;
   const scope = React.useMemo(
@@ -153,12 +204,12 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
     [membersQuery.data],
   );
   const categories = React.useMemo<CategorySummary[]>(
-    () => categoriesQuery.data?.items ?? [],
-    [categoriesQuery.data],
+    () => categoriesQuery.data?.items ?? cachedCategories.data?.items ?? [],
+    [cachedCategories.data, categoriesQuery.data],
   );
   const accounts = React.useMemo(
-    () => accountsQuery.data?.items ?? [],
-    [accountsQuery.data],
+    () => accountsQuery.data?.items ?? cachedAccounts.data?.items ?? [],
+    [cachedAccounts.data, accountsQuery.data],
   );
 
   const filterLabels = React.useMemo<BillFilterLabels>(
@@ -212,19 +263,48 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
     enabled: Boolean(currentLedgerId),
   });
 
-  const bills = React.useMemo(
-    () => listQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [listQuery.data],
+  React.useEffect(() => {
+    if (!currentUser?.id || !currentLedgerId || !listQuery.data?.pages.length) return;
+    void (async () => {
+      for (const page of listQuery.data?.pages ?? []) {
+        await saveRecentTransactionSnapshot(currentUser.id, currentLedgerId, page);
+      }
+    })().catch(() => undefined);
+  }, [currentLedgerId, currentUser?.id, listQuery.data]);
+
+  const localQuery = React.useMemo(
+    () => ({ ...listFilter, from: scope.from, to: scope.to }),
+    [listFilter, scope.from, scope.to],
   );
-  const total = listQuery.data?.pages[0]?.total ?? 0;
+
+  const bills = React.useMemo(
+    () => {
+      const serverBills = listQuery.data?.pages.flatMap((page) => page.items)
+        ?? cachedTransactions.data?.items.filter((item) => matchesTransactionQuery(item, localQuery))
+        ?? [];
+      const localBills = localTransactions.filter((item) => matchesTransactionQuery(item, localQuery));
+      const byId = new Map<string, typeof serverBills[number]>();
+      for (const item of serverBills) byId.set(item.id, item);
+      for (const item of localBills) byId.set(item.id, item);
+      return [...byId.values()].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+    },
+    [cachedTransactions.data, listQuery.data, localQuery, localTransactions],
+  );
+  const localBillCount = localTransactions.filter((item) => matchesTransactionQuery(item, localQuery)).length;
+  const total = listQuery.data
+    ? (listQuery.data.pages[0]?.total ?? 0) + localBillCount
+    : bills.length;
   const groups = React.useMemo(
     () => groupBillsByDay(bills, { timeZone }),
     [bills, timeZone],
   );
 
-  const isLoading = Boolean(currentLedgerId) && listQuery.isPending && !listQuery.data;
+  const isLoading = Boolean(currentLedgerId)
+    && listQuery.isPending
+    && !listQuery.data
+    && !cachedTransactions.data;
   const errorMessage =
-    listQuery.isError && !listQuery.data
+    listQuery.isError && !listQuery.data && !cachedTransactions.data
       ? listQuery.error instanceof ApiRequestError
         ? listQuery.error.message
         : '账单加载失败，请稍后重试'
@@ -295,7 +375,18 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
           onOpenLedgerPicker={() => router.push('/user/ledgers')}
         />
 
-        <SyncStatusBar isOnline={isOnline} />
+        <SyncStatusBar
+          isOnline={isOnline}
+          pendingCount={pendingCount}
+          isSyncing={syncStatus === 'syncing'}
+          hasConflict={syncStatus === 'failed' || syncStatus === 'conflict'}
+          onRetry={requestSync}
+        />
+        {!isOnline && cachedTransactions.updatedAt && (
+          <p className="px-1 text-[11px] text-text-tertiary">
+            当前显示最近缓存的账单：{new Date(cachedTransactions.updatedAt).toLocaleString('zh-CN')}
+          </p>
+        )}
 
         <BillSearchBar
           keyword={keywordInput}

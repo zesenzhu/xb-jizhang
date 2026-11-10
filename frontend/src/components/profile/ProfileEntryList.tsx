@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { User, Shield, Mail, HelpCircle, ChevronRight, Palette } from 'lucide-react';
+import { User, Shield, Mail, HelpCircle, ChevronRight, Palette, Database } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +10,7 @@ export interface ProfileEntry {
   label: string;
   description?: string;
   badge?: string;
-  icon: 'user' | 'shield' | 'mail' | 'help' | 'palette';
+  icon: 'user' | 'shield' | 'mail' | 'help' | 'palette' | 'database';
   onClick: () => void;
 }
 
@@ -24,6 +24,7 @@ const ICON_MAP = {
   mail: Mail,
   help: HelpCircle,
   palette: Palette,
+  database: Database,
 } as const;
 
 export function ProfileEntryList({ entries }: ProfileEntryListProps): React.JSX.Element {

@@ -30,8 +30,7 @@ export function BillAttachmentGallery({
 
   const openViewer = async (attachment: TransactionAttachmentSummary): Promise<void> => {
     setViewer(attachment);
-    setViewerUrl(attachment.accessUrl ?? null);
-    if (attachment.accessUrl) return;
+    setViewerUrl(null);
     setLoadingId(attachment.id);
     try {
       setViewerUrl(await onRefreshUrl(attachment.id));

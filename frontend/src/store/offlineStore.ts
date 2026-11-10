@@ -7,12 +7,17 @@ interface OfflineState {
   syncStatus: SyncStatus;
   pendingCount: number;
   lastError: string | null;
+  lastSyncAt: string | null;
+  stateVersion: number;
+  syncRequestedAt: number;
   setOnline: (isOnline: boolean) => void;
   setSyncState: (state: {
     syncStatus: SyncStatus;
     pendingCount?: number;
     lastError?: string | null;
+    lastSyncAt?: string | null;
   }) => void;
+  requestSync: () => void;
 }
 
 export const useOfflineStore = create<OfflineState>((set) => ({
@@ -20,11 +25,17 @@ export const useOfflineStore = create<OfflineState>((set) => ({
   syncStatus: 'idle',
   pendingCount: 0,
   lastError: null,
+  lastSyncAt: null,
+  stateVersion: 0,
+  syncRequestedAt: 0,
   setOnline: (isOnline) => set({ isOnline }),
-  setSyncState: ({ syncStatus, pendingCount, lastError }) =>
+  setSyncState: ({ syncStatus, pendingCount, lastError, lastSyncAt }) =>
     set((state) => ({
       syncStatus,
       pendingCount: pendingCount ?? state.pendingCount,
       lastError: lastError === undefined ? state.lastError : lastError,
+      lastSyncAt: lastSyncAt === undefined ? state.lastSyncAt : lastSyncAt,
+      stateVersion: state.stateVersion + 1,
     })),
+  requestSync: () => set({ syncRequestedAt: Date.now() }),
 }));

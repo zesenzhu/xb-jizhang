@@ -8,6 +8,7 @@ import { resolveInitialLedgerId } from '@/lib/ledger/ledger-form';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useUserAuthStore } from '@/store/userAuthStore';
 import { useOnlineStatusSync } from '@/lib/offline/use-online-status';
+import { useOfflineSync } from '@/lib/offline/use-offline-sync';
 
 export function UserWorkspaceProvider({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   const currentLedgerId = useWorkspaceStore((state) => state.currentLedgerId);
@@ -15,6 +16,7 @@ export function UserWorkspaceProvider({ children }: Readonly<{ children: React.R
   const authStatus = useUserAuthStore((state) => state.status);
   // 离线性是全应用级事实，挂在这里保证所有用户页共享同一份状态。
   useOnlineStatusSync();
+  useOfflineSync();
   const queryClient = useQueryClient();
   const ledgersQuery = useQuery({
     queryKey: queryKeys.ledgers.list(),

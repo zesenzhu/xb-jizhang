@@ -19,6 +19,16 @@ import { getAccounts } from '@/lib/api/account-api'
 import { ApiRequestError } from '@/lib/api/errors'
 import { queryKeys, queryStaleTime } from '@/lib/query/query-config'
 import { parseAmountText } from '@/lib/bill/amount'
+import { useUserAuthStore } from '@/store/userAuthStore'
+import {
+  isAccountListResponse as isAccountSnapshot,
+  isCategoryListResponse as isCategorySnapshot,
+  useCachedLedgerSnapshot,
+  usePersistLedgerSnapshot,
+} from '@/lib/offline/query-snapshot'
+import { createOfflineTransactionRecord } from '@/lib/offline/local-transaction'
+import { enqueueOfflineTransaction, getLocalCacheStats } from '@/lib/offline/storage'
+import type { OfflineAttachmentRecord } from '@/lib/offline/storage-types'
 import {
   buildCategoryTree,
   resolveInitialCategoryId,
@@ -75,8 +85,23 @@ export function BillCreateSheet({
   const attachmentInputRef = React.useRef<HTMLInputElement | null>(null)
   const scrollRef = React.useRef<HTMLDivElement | null>(null)
   const isOnline = useOfflineStore((store) => store.isOnline)
+  const setSyncState = useOfflineStore((store) => store.setSyncState)
+  const currentUser = useUserAuthStore((store) => store.currentUser)
   const remembered = useBillMemoryStore((store) => store.byLedger[ledgerId])
   const remember = useBillMemoryStore((store) => store.remember)
+
+  const cachedCategories = useCachedLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId,
+    kind: 'categories',
+    guard: isCategorySnapshot,
+  })
+  const cachedAccounts = useCachedLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId,
+    kind: 'accounts',
+    guard: isAccountSnapshot,
+  })
 
   // 每次打开都重置表单。用渲染期比较代替 effect，避免级联渲染与首帧闪旧值。
   if (wasOpen !== open) {
@@ -130,7 +155,22 @@ export function BillCreateSheet({
     enabled: open && Boolean(ledgerId),
   })
 
-  const categories = categoriesQuery.data?.items
+  usePersistLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId,
+    kind: 'categories',
+    data: categoriesQuery.data,
+    recordCount: categoriesQuery.data?.items.length,
+  })
+  usePersistLedgerSnapshot({
+    userId: currentUser?.id ?? null,
+    ledgerId,
+    kind: 'accounts',
+    data: accountsQuery.data,
+    recordCount: accountsQuery.data?.items.length,
+  })
+
+  const categories = categoriesQuery.data?.items ?? cachedCategories.data?.items
   // 分类树只随数据与类型变化；切换支出/收入会换一整棵树，不适合每次渲染重建。
   const categoryNodes = React.useMemo(
     () =>
@@ -139,7 +179,7 @@ export function BillCreateSheet({
       ),
     [categories, state.type],
   )
-  const accounts = accountsQuery.data?.items ?? []
+  const accounts = accountsQuery.data?.items ?? cachedAccounts.data?.items ?? []
 
   /**
    * 有效分类 = 用户本次选的，否则回退到「上次用过的 / 该类型第一个」。
@@ -177,7 +217,7 @@ export function BillCreateSheet({
    * 提交键的禁用只覆盖「无论怎么点都不可能成功」的情况：金额非法、时间为未来、离线。
    * 未选分类不在此列——用户需要能点一下，才看得到高亮和滚动引导。
    */
-  const submitBlocked = amount.cents === null || isFutureTime || !isOnline
+  const submitBlocked = amount.cents === null || isFutureTime
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -287,6 +327,77 @@ export function BillCreateSheet({
 
     dispatch({ kind: 'submitStart' })
     try {
+      const payload = {
+        clientRequestId: state.clientRequestId,
+        type: state.type,
+        amountCents: amount.cents,
+        occurredAt: state.occurredAt,
+        categoryId: effectiveCategoryId,
+        accountId: state.accountId,
+        title: state.title.trim() || null,
+        note: state.note.trim() || null,
+        payerId: state.payerId,
+      }
+
+      if (!isOnline) {
+        if (!currentUser) {
+          dispatch({ kind: 'submitFailure', error: '登录状态已失效，请重新登录后再试' })
+          return
+        }
+        const localId = crypto.randomUUID()
+        const now = new Date().toISOString()
+        const offlineAttachments: OfflineAttachmentRecord[] = attachmentDrafts.map((draft) => ({
+          localId: draft.localId,
+          userId: currentUser.id,
+          ledgerId,
+          transactionLocalId: localId,
+          clientRequestId: draft.clientRequestId,
+          blob: draft.file,
+          fileName: draft.file.name,
+          mimeType: draft.file.type,
+          sizeBytes: draft.file.size,
+          status: 'LOCAL',
+          attachmentId: null,
+          lastError: null,
+          createdAt: now,
+          updatedAt: now,
+        }))
+        const category = categories?.find((item) => item.id === effectiveCategoryId) ?? null
+        const account = accounts.find((item) => item.id === state.accountId) ?? null
+        const record = createOfflineTransactionRecord({
+          localId,
+          user: currentUser,
+          ledgerId,
+          payload,
+          category,
+          account,
+          payer: null,
+          attachments: offlineAttachments,
+          now,
+        })
+        await enqueueOfflineTransaction(record, offlineAttachments)
+        const stats = await getLocalCacheStats(currentUser.id)
+        setSyncState({
+          syncStatus: 'idle',
+          pendingCount: stats.pendingTransactionCount + stats.pendingAttachmentCount,
+          lastSyncAt: stats.lastSyncAt,
+        })
+        remember(ledgerId, state.type, {
+          categoryId: effectiveCategoryId,
+          accountId: state.accountId,
+          payerId: state.payerId,
+        })
+        clearUploadedAttachments()
+        dispatch({
+          kind: 'resetForNext',
+          clientRequestId: crypto.randomUUID(),
+          occurredAt: new Date().toISOString(),
+        })
+        if (!keepOpen) onOpenChange(false)
+        onCreated?.()
+        return
+      }
+
       const transactionId =
         attachmentTransactionId ?? (await createMutation.mutateAsync()).id
       setAttachmentTransactionId(transactionId)
@@ -331,8 +442,9 @@ export function BillCreateSheet({
       if (!keepOpen && attachmentsUploaded) onOpenChange(false)
       onCreated?.()
     } catch (error) {
-      const message =
-        error instanceof ApiRequestError
+      const message = !isOnline
+        ? '无法保存到本机，请检查浏览器存储权限或清理缓存后重试'
+        : error instanceof ApiRequestError
           ? error.code === 40321
             ? '你的账本权限已变化，请让账本所有者调整后再试'
             : error.message
@@ -414,7 +526,9 @@ export function BillCreateSheet({
           dispatch={dispatch}
           categoryNodes={categoryNodes}
           categories={categories ?? []}
-          categoriesLoading={categoriesQuery.isPending && !categoriesQuery.data}
+          categoriesLoading={
+            categoriesQuery.isPending && !categoriesQuery.data && !cachedCategories.data
+          }
           categoriesError={
             categoriesQuery.isError && !categoriesQuery.data
               ? '分类加载失败'
