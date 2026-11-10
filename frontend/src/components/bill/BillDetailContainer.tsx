@@ -274,7 +274,7 @@ export function BillDetailContainer({
     }
   };
 
-  const refreshAttachmentUrl = async (attachmentId: string): Promise<string> => {
+  const refreshAttachmentUrl = React.useCallback(async (attachmentId: string): Promise<string> => {
     if (currentUser) {
       const cachedBlob = await readAttachmentBlob(currentUser.id, ledgerId, attachmentId).catch(() => null);
       if (cachedBlob) {
@@ -350,7 +350,7 @@ export function BillDetailContainer({
       };
     });
     return result.accessUrl;
-  };
+  }, [bill, billId, currentUser, ledgerId, queryClient]);
 
   const removeAttachment = async (attachment: TransactionAttachmentSummary): Promise<void> => {
     if (!window.confirm('确定移除这张图片吗？')) return;

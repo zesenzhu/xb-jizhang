@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  billDrilldownInputFromCategory,
   buildBillDrilldownUrl,
   parseBillDrilldown,
   toBillFilterFromDrilldown,
@@ -11,6 +12,55 @@ const ROOT = '11111111-1111-4111-8111-111111111111';
 const CHILD = '22222222-2222-4222-8222-222222222222';
 const ACCOUNT = '33333333-3333-4333-8333-333333333333';
 const PAYER = '44444444-4444-4444-8444-444444444444';
+
+assert.deepEqual(
+  billDrilldownInputFromCategory({
+    drilldown: {
+      from: START,
+      to: END,
+      type: 'EXPENSE',
+      categoryRootId: ROOT,
+    },
+  }),
+  {
+    startAt: START,
+    endAt: END,
+    type: 'EXPENSE',
+    categoryRootId: ROOT,
+  },
+);
+assert.deepEqual(
+  billDrilldownInputFromCategory({
+    drilldown: {
+      from: START,
+      to: END,
+      type: 'EXPENSE',
+      categoryId: CHILD,
+    },
+  }),
+  {
+    startAt: START,
+    endAt: END,
+    type: 'EXPENSE',
+    categoryId: CHILD,
+  },
+);
+assert.deepEqual(
+  billDrilldownInputFromCategory({
+    drilldown: {
+      from: START,
+      to: END,
+      type: 'EXPENSE',
+      uncategorized: true,
+    },
+  }),
+  {
+    startAt: START,
+    endAt: END,
+    type: 'EXPENSE',
+    uncategorized: true,
+  },
+);
 
 function params(entries: Record<string, string>): { get(key: string): string | null } {
   const map = new Map(Object.entries(entries));

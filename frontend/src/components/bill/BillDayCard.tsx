@@ -7,10 +7,12 @@ import { BillRow } from './BillRow';
 
 export interface BillDayCardProps {
   group: BillDayGroup;
+  ledgerId?: string;
+  userId?: string | null;
   onSelectBill?: (bill: TransactionSummary) => void;
 }
 
-export function BillDayCard({ group, onSelectBill }: BillDayCardProps): React.JSX.Element {
+export function BillDayCard({ group, ledgerId, userId = null, onSelectBill }: BillDayCardProps): React.JSX.Element {
   const [collapsed, setCollapsed] = React.useState(false);
   const hasExpense = group.expenseCents > 0;
   const hasIncome = group.incomeCents > 0;
@@ -41,7 +43,13 @@ export function BillDayCard({ group, onSelectBill }: BillDayCardProps): React.JS
       {!collapsed && (
         <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card shadow-xs">
           {group.items.map((bill) => (
-            <BillRow key={bill.id} bill={bill} onClick={onSelectBill} />
+            <BillRow
+              key={bill.id}
+              bill={bill}
+              ledgerId={ledgerId}
+              userId={userId}
+              onClick={onSelectBill}
+            />
           ))}
         </div>
       )}

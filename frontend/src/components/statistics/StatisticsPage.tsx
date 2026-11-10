@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { buildBillDrilldownUrl } from '@/lib/bill/bill-drilldown';
+import {
+  billDrilldownInputFromCategory,
+  buildBillDrilldownUrl,
+} from '@/lib/bill/bill-drilldown';
 import { ApiRequestError } from '@/lib/api/errors';
 import {
   getStatisticsCategories,
@@ -34,6 +37,7 @@ import {
   RangeNavigator,
 } from '@/components/statistics/PeriodTabs';
 import { TrendChart, TrendMetricTabs } from '@/components/statistics/TrendChart';
+import { DateField } from '@/components/ui/date-field';
 
 /**
  * 统计页。
@@ -241,23 +245,8 @@ export function StatisticsPage(): React.JSX.Element {
               setCategoryRootId(null);
             }}
             onOpenBills={(item) => {
-              const range = categoryQuery.data.range;
-              if (!range.startAt || !range.endAt) return;
               router.push(
-                buildBillDrilldownUrl({
-                  startAt: range.startAt,
-                  endAt: range.endAt,
-                  type: categoryQuery.data.type,
-                  // 一级分类用 categoryRootId（含其全部二级分类）；
-                  // 二级/ROOT_DIRECT 行用精确 categoryId；未分类行不带分类参数。
-                  ...(item.categoryId
-                    ? item.parentId || item.bucketType === 'ROOT_DIRECT'
-                      ? { categoryId: item.categoryId }
-                      : { categoryRootId: item.categoryId }
-                    : item.bucketType === 'UNCATEGORIZED'
-                      ? { uncategorized: true }
-                      : {}),
-                }),
+                buildBillDrilldownUrl(billDrilldownInputFromCategory(item)),
               );
             }}
           />
@@ -366,23 +355,21 @@ function RangeInputs({
 }): React.JSX.Element {
   return (
     <div className="flex items-center gap-2 px-1">
-      <input
-        type="date"
+      <DateField
         value={start}
         max={end}
         aria-label="起始日期"
+        placeholder="开始日期"
         onChange={(event) => event.target.value && onChange(event.target.value, end)}
-        className="min-w-0 flex-1 rounded-xl border border-app-border bg-app-card-subtle/70 px-2 py-1.5 text-xs text-text-main"
       />
       <span className="text-xs text-text-tertiary">至</span>
-      <input
-        type="date"
+      <DateField
         value={end}
         min={start}
         max={max}
         aria-label="结束日期"
+        placeholder="结束日期"
         onChange={(event) => event.target.value && onChange(start, event.target.value)}
-        className="min-w-0 flex-1 rounded-xl border border-app-border bg-app-card-subtle/70 px-2 py-1.5 text-xs text-text-main"
       />
     </div>
   );

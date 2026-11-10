@@ -1,4 +1,5 @@
 import type { TransactionType } from '@/lib/api/transaction-types';
+import type { CategoryItem } from '@/lib/api/statistics-types';
 import { createInitialBillFilter, type BillFilter } from './bill-filters';
 
 /**
@@ -32,6 +33,25 @@ export interface BillDrilldownInput {
   accountId?: string | null;
   payerId?: string | null;
   keyword?: string | null;
+}
+
+/** 使用统计接口返回的规范化下钻字段，避免页面层重新猜测根分类和直接分类。 */
+export function billDrilldownInputFromCategory(
+  item: Pick<CategoryItem, 'drilldown'>,
+): BillDrilldownInput {
+  const drilldown = item.drilldown;
+  return {
+    startAt: drilldown.from,
+    endAt: drilldown.to,
+    type: drilldown.type,
+    ...(drilldown.uncategorized
+      ? { uncategorized: true }
+      : drilldown.categoryId
+        ? { categoryId: drilldown.categoryId }
+        : drilldown.categoryRootId
+          ? { categoryRootId: drilldown.categoryRootId }
+          : {}),
+  };
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

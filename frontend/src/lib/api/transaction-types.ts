@@ -57,7 +57,7 @@ export interface TransactionSummary {
   category: TransactionCategoryRef | null;
   account: TransactionAccountRef | null;
   payer: TransactionPayerRef | null;
-  /** 列表接口只返回数量，详情接口返回已完成附件摘要。 */
+  /** 列表和详情都返回已完成附件摘要；临时 accessUrl 只在详情按需获取。 */
   attachmentCount?: number;
   attachments?: TransactionAttachmentSummary[];
 }

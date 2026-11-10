@@ -4,6 +4,7 @@ import * as React from 'react';
 import { ImageOff, Loader2, RotateCw, Trash2, X } from 'lucide-react';
 import type { TransactionAttachmentSummary } from '@/lib/api/attachment-types';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { attachmentIdsNeedingUrl } from '@/lib/bill/bill-attachments';
 
 export interface BillAttachmentGalleryProps {
   attachments: readonly TransactionAttachmentSummary[];
@@ -24,7 +25,34 @@ export function BillAttachmentGallery({
   const [viewerUrl, setViewerUrl] = React.useState<string | null>(null);
   const [loadingId, setLoadingId] = React.useState<string | null>(null);
   const [failedIds, setFailedIds] = React.useState<Set<string>>(() => new Set());
+  const [resolvedUrls, setResolvedUrls] = React.useState<Record<string, string>>({});
   const autoRefreshAttemptedIds = React.useRef<Set<string>>(new Set());
+  const loadingPreviewIds = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const pendingIds = attachmentIdsNeedingUrl(attachments, new Set(Object.keys(resolvedUrls)));
+    for (const attachmentId of pendingIds) {
+      if (loadingPreviewIds.current.has(attachmentId)) continue;
+      loadingPreviewIds.current.add(attachmentId);
+      void onRefreshUrl(attachmentId)
+        .then((url) => {
+          if (cancelled) return;
+          setResolvedUrls((current) => ({ ...current, [attachmentId]: url }));
+          setFailedIds((current) => {
+            const next = new Set(current);
+            next.delete(attachmentId);
+            return next;
+          });
+        })
+        .catch(() => undefined)
+        .finally(() => loadingPreviewIds.current.delete(attachmentId));
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachments, onRefreshUrl, resolvedUrls]);
 
   if (attachments.length === 0) return null;
 
@@ -33,7 +61,9 @@ export function BillAttachmentGallery({
     setViewerUrl(null);
     setLoadingId(attachment.id);
     try {
-      setViewerUrl(await onRefreshUrl(attachment.id));
+      const url = await onRefreshUrl(attachment.id);
+      setResolvedUrls((current) => ({ ...current, [attachment.id]: url }));
+      setViewerUrl(url);
     } catch {
       setViewerUrl(null);
     } finally {
@@ -46,7 +76,9 @@ export function BillAttachmentGallery({
     autoRefreshAttemptedIds.current.delete(viewer.id);
     setLoadingId(viewer.id);
     try {
-      setViewerUrl(await onRefreshUrl(viewer.id));
+      const url = await onRefreshUrl(viewer.id);
+      setResolvedUrls((current) => ({ ...current, [viewer.id]: url }));
+      setViewerUrl(url);
       setFailedIds((current) => {
         const next = new Set(current);
         next.delete(viewer.id);
@@ -64,6 +96,7 @@ export function BillAttachmentGallery({
     if (autoRefreshAttemptedIds.current.has(attachmentId)) return;
     autoRefreshAttemptedIds.current.add(attachmentId);
     void onRefreshUrl(attachmentId).then((url) => {
+      setResolvedUrls((current) => ({ ...current, [attachmentId]: url }));
       setFailedIds((current) => {
         const next = new Set(current);
         next.delete(attachmentId);
@@ -89,9 +122,9 @@ export function BillAttachmentGallery({
                 className="size-full"
                 aria-label={`查看${attachment.originalName ?? '图片附件'}`}
               >
-                {attachment.accessUrl && !failedIds.has(attachment.id) ? (
+                {(resolvedUrls[attachment.id] ?? attachment.accessUrl) && !failedIds.has(attachment.id) ? (
                   <img
-                    src={attachment.accessUrl}
+                    src={resolvedUrls[attachment.id] ?? attachment.accessUrl}
                     alt={attachment.originalName ?? '账单图片'}
                     className="size-full object-cover"
                     onError={() => handleImageError(attachment.id)}

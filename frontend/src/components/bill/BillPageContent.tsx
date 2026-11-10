@@ -77,17 +77,25 @@ function countSheetFilters(filter: BillFilter): number {
 
 export function BillPageContent(): React.JSX.Element {
   const currentLedgerId = useWorkspaceStore((state) => state.currentLedgerId);
-  // 切换账本时整体重挂载：筛选、月份、下钻参数都必须从干净状态开始，避免旧账本条件残留。
-  return <BillPageLedger key={currentLedgerId ?? 'empty-ledger'} currentLedgerId={currentLedgerId} />;
+  const searchParams = useSearchParams();
+  const drilldownKey = searchParams.toString();
+  // 统计下钻通过 URL 进入首页；按账本和查询串重挂载，避免旧月份和旧筛选参与新请求。
+  return (
+    <BillPageLedger
+      key={`${currentLedgerId ?? 'empty-ledger'}:${drilldownKey}`}
+      currentLedgerId={currentLedgerId}
+      searchParams={searchParams}
+    />
+  );
 }
 
 interface BillPageLedgerProps {
   currentLedgerId: string | null;
+  searchParams: ReturnType<typeof useSearchParams>;
 }
 
-function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Element {
+function BillPageLedger({ currentLedgerId, searchParams }: BillPageLedgerProps): React.JSX.Element {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const now = React.useMemo(() => currentZonedMonth(new Date(), LEDGER_TIME_ZONE), []);
   const [selected, setSelected] = React.useState(now);
   // 首帧就带上 URL 里的下钻条件：否则会先按默认当月请求一次，再被覆盖成下钻范围。
@@ -125,24 +133,6 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
     guard: isTransactionListSnapshot,
   });
   const localTransactions = useOfflineTransactions(currentUser?.id ?? null, currentLedgerId);
-
-  /**
-   * 统计页下钻带进来的参数只应用一次。
-   *
-   * 用「已应用的查询串」做比较而不是 effect：URL 变化后要在同一帧把筛选灌进去，
-   * effect 里 setState 会先渲染一帧默认当月的数据，视觉上像闪了一下旧范围。
-   * 用户随后手动改的筛选不会被覆盖，因为 key 没变。
-   */
-  const drilldownKey = searchParams.toString();
-  const [appliedDrilldownKey, setAppliedDrilldownKey] = React.useState<string | null>(null);
-  if (appliedDrilldownKey !== drilldownKey) {
-    setAppliedDrilldownKey(drilldownKey);
-    const drilldown = parseBillDrilldown(searchParams);
-    if (drilldown) {
-      setFilter(toBillFilterFromDrilldown(drilldown));
-      setKeywordInput(drilldown.keyword ?? '');
-    }
-  }
 
   const ledgerQuery = useQuery({
     queryKey: queryKeys.ledgers.detail(currentLedgerId ?? ''),
@@ -342,7 +332,7 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
   /** 自定义范围或下钻参数生效时，月份已不参与查询，清掉它们才能回到按月浏览。 */
   const clearRangeWithUrl = (): void => {
     setFilter((value) => removeBillFilter(value, 'range'));
-    if (searchParams.has('startAt') || searchParams.has('endAt')) router.replace('/user');
+    if (searchParams.toString()) router.replace('/user');
   };
 
   const handleRemove = (key: BillFilterChipKey): void => {
@@ -357,7 +347,7 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
   const handleClear = (): void => {
     setFilter(createInitialBillFilter());
     setKeywordInput('');
-    if (searchParams.has('startAt') || searchParams.has('endAt')) router.replace('/user');
+    if (searchParams.toString()) router.replace('/user');
   };
 
   return (
@@ -479,6 +469,8 @@ function BillPageLedger({ currentLedgerId }: BillPageLedgerProps): React.JSX.Ele
               <BillDayCard
                 key={group.billDate}
                 group={group}
+                ledgerId={currentLedgerId ?? undefined}
+                userId={currentUser?.id ?? null}
                 onSelectBill={(bill) => setDetailBillId(bill.id)}
               />
             ))}

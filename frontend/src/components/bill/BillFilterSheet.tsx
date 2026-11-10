@@ -4,6 +4,7 @@ import * as React from 'react';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 import { cn } from '@/lib/utils';
 import type { CategorySummary } from '@/lib/api/category-types';
 import type { AccountSummary } from '@/lib/api/account-types';
@@ -278,39 +279,27 @@ export function BillFilterSheet({
             日期范围
           </span>
           <div className="flex items-center gap-2">
-            <div className="flex-1 space-y-1">
-              <label htmlFor="filter-start-date" className="sr-only">
-                开始日期
-              </label>
-              <input
-                id="filter-start-date"
-                type="date"
-                max={today}
-                aria-label="开始日期"
-                value={dates.fromDate}
-                onChange={(e) =>
-                  setDates((prev) => ({ ...prev, fromDate: e.target.value }))
-                }
-                className="h-11 w-full rounded-2xl border border-app-border bg-app-card px-3 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+            <DateField
+              id="filter-start-date"
+              max={today}
+              aria-label="开始日期"
+              placeholder="开始日期"
+              value={dates.fromDate}
+              onChange={(e) =>
+                setDates((prev) => ({ ...prev, fromDate: e.target.value }))
+              }
+            />
             <span className="shrink-0 text-xs text-text-tertiary">至</span>
-            <div className="flex-1 space-y-1">
-              <label htmlFor="filter-end-date" className="sr-only">
-                结束日期
-              </label>
-              <input
-                id="filter-end-date"
-                type="date"
-                max={today}
-                aria-label="结束日期"
-                value={dates.toDate}
-                onChange={(e) =>
-                  setDates((prev) => ({ ...prev, toDate: e.target.value }))
-                }
-                className="h-11 w-full rounded-2xl border border-app-border bg-app-card px-3 text-xs text-text-main outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+            <DateField
+              id="filter-end-date"
+              max={today}
+              aria-label="结束日期"
+              placeholder="结束日期"
+              value={dates.toDate}
+              onChange={(e) =>
+                setDates((prev) => ({ ...prev, toDate: e.target.value }))
+              }
+            />
           </div>
           {rangeErrorText && (
             <p role="alert" className="text-xs text-rose-500">
