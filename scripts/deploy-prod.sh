@@ -37,6 +37,29 @@ validate_production_env() {
       exit 1
     }
   done
+
+  attachment_enabled=$(awk -F= '$1 == "ATTACHMENT_ENABLED" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+  case "$attachment_enabled" in
+    ''|false) ;;
+    true)
+      provider=$(awk -F= '$1 == "OBJECT_STORAGE_PROVIDER" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+      [ "$provider" = "aliyun-oss" ] || {
+        echo "附件已开启时 OBJECT_STORAGE_PROVIDER 必须为 aliyun-oss" >&2
+        exit 1
+      }
+      for key in OSS_REGION OSS_ENDPOINT OSS_INTERNAL_ENDPOINT OSS_BUCKET OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET; do
+        value=$(awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$env_file")
+        [ -n "$value" ] || {
+          echo "附件已开启时生产环境变量缺少必填项：$key" >&2
+          exit 1
+        }
+      done
+      ;;
+    *)
+      echo "ATTACHMENT_ENABLED 必须是 true 或 false" >&2
+      exit 1
+      ;;
+  esac
 }
 
 validate_production_env "$PRODUCTION_ENV_FILE"

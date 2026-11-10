@@ -26,6 +26,15 @@ test('给定生产环境未配置 CORS_ORIGINS，当生成生产配置时，则�
   assert.doesNotMatch(workflow, /GitHub Environment 缺少 CORS_ORIGINS/);
 });
 
+test('给定附件功能开启，当生成生产配置时，则注入 OSS 参数和凭据并在缺失时失败', () => {
+  assert.match(workflow, /ATTACHMENT_ENABLED: \$\{\{ vars\.ATTACHMENT_ENABLED \|\| 'false' \}\}/);
+  assert.match(workflow, /OBJECT_STORAGE_PROVIDER: \$\{\{ vars\.OBJECT_STORAGE_PROVIDER \|\| 'aliyun-oss' \}\}/);
+  assert.match(workflow, /OSS_INTERNAL_ENDPOINT: \$\{\{ vars\.OSS_INTERNAL_ENDPOINT \|\| '' \}\}/);
+  assert.match(workflow, /OSS_ACCESS_KEY_ID: \$\{\{ secrets\.OSS_ACCESS_KEY_ID \}\}/);
+  assert.match(workflow, /OSS_ACCESS_KEY_SECRET: \$\{\{ secrets\.OSS_ACCESS_KEY_SECRET \}\}/);
+  assert.match(workflow, /附件已开启，但 GitHub Environment 缺少 OSS_BUCKET/);
+});
+
 test('给定部署包已准备，当执行 SCP 上传时，则上传部署目录而不是不稳定的通配符路径', () => {
   assert.match(workflow, /test -n "\$\(find deployment-bundle -type f -print -quit\)"/);
   assert.match(workflow, /source: deployment-bundle\n/);

@@ -187,6 +187,36 @@ test('给定新的生产配置缺少管理员密钥，当部署时，则拒绝�
   assert.match(result.remainingProductionEnvCandidate, /DB_PASSWORD=new-password/);
 });
 
+test('给定附件功能已开启但缺少 OSS 配置，当部署时，则在启动容器前失败', async () => {
+  const result = await createFakeDeployment({
+    productionEnv: [
+      'DB_USER=test',
+      'DB_PASSWORD=password',
+      'DB_NAME=jizhang',
+      'JWT_ACCESS_SECRET=access',
+      'JWT_ADMIN_ACCESS_SECRET=admin-access',
+      'CORS_ORIGINS=https://example.com',
+      'ATTACHMENT_ENABLED=true',
+      'OBJECT_STORAGE_PROVIDER=aliyun-oss',
+      'OSS_REGION=oss-cn-heyuan',
+      'OSS_ENDPOINT=https://oss-cn-heyuan.aliyuncs.com',
+      'OSS_INTERNAL_ENDPOINT=https://oss-cn-heyuan-internal.aliyuncs.com',
+      'OSS_BUCKET=xiaobao-jizhang',
+      '',
+    ].join('\n'),
+    releaseEnv: [
+      'BACKEND_IMAGE=xiaobao-jizhang-backend:old-backend',
+      'FRONTEND_IMAGE=xiaobao-jizhang-frontend:old-frontend',
+      '',
+    ].join('\n'),
+    changed: { backend: false, frontend: false },
+  });
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /附件已开启时生产环境变量缺少必填项：OSS_ACCESS_KEY_ID/);
+  assert.equal(result.dockerLog, '');
+});
+
 test('给定部署脚本直接位于部署目录，当执行发布时，则使用部署目录作为根路径', async () => {
   const result = await createFakeDeployment({
     releaseEnv: [

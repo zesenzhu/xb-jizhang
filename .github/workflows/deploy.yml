@@ -177,11 +177,44 @@ jobs:
           CORS_ORIGINS: ${{ vars.CORS_ORIGINS || 'https://jizhang.xiaobao.work' }}
           BACKEND_PORT: ${{ vars.BACKEND_PORT || '8091' }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '8090' }}
+          ATTACHMENT_ENABLED: ${{ vars.ATTACHMENT_ENABLED || 'false' }}
+          OBJECT_STORAGE_PROVIDER: ${{ vars.OBJECT_STORAGE_PROVIDER || 'aliyun-oss' }}
+          OSS_REGION: ${{ vars.OSS_REGION || '' }}
+          OSS_ENDPOINT: ${{ vars.OSS_ENDPOINT || '' }}
+          OSS_INTERNAL_ENDPOINT: ${{ vars.OSS_INTERNAL_ENDPOINT || '' }}
+          OSS_BUCKET: ${{ vars.OSS_BUCKET || '' }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OBJECT_STORAGE_UPLOAD_URL_TTL_SECONDS: ${{ vars.OBJECT_STORAGE_UPLOAD_URL_TTL_SECONDS || '600' }}
+          OBJECT_STORAGE_READ_URL_TTL_SECONDS: ${{ vars.OBJECT_STORAGE_READ_URL_TTL_SECONDS || '300' }}
+          ATTACHMENT_MAX_BYTES: ${{ vars.ATTACHMENT_MAX_BYTES || '10485760' }}
+          ATTACHMENT_MAX_PER_TRANSACTION: ${{ vars.ATTACHMENT_MAX_PER_TRANSACTION || '5' }}
+          ATTACHMENT_USER_QUOTA_BYTES: ${{ vars.ATTACHMENT_USER_QUOTA_BYTES || '2147483648' }}
+          ATTACHMENT_CLEANUP_INTERVAL_SECONDS: ${{ vars.ATTACHMENT_CLEANUP_INTERVAL_SECONDS || '600' }}
         run: |
           set -euo pipefail
           : "${DB_PASSWORD:?GitHub Environment 缺少 DB_PASSWORD}"
           : "${JWT_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ACCESS_SECRET}"
           : "${JWT_ADMIN_ACCESS_SECRET:?GitHub Environment 缺少 JWT_ADMIN_ACCESS_SECRET}"
+          case "$ATTACHMENT_ENABLED" in
+            false) ;;
+            true)
+              [ "$OBJECT_STORAGE_PROVIDER" = "aliyun-oss" ] || {
+                echo "附件已开启时 OBJECT_STORAGE_PROVIDER 必须为 aliyun-oss" >&2
+                exit 1
+              }
+              : "${OSS_REGION:?附件已开启，但 GitHub Environment 缺少 OSS_REGION}"
+              : "${OSS_ENDPOINT:?附件已开启，但 GitHub Environment 缺少 OSS_ENDPOINT}"
+              : "${OSS_INTERNAL_ENDPOINT:?附件已开启，但 GitHub Environment 缺少 OSS_INTERNAL_ENDPOINT}"
+              : "${OSS_BUCKET:?附件已开启，但 GitHub Environment 缺少 OSS_BUCKET}"
+              : "${OSS_ACCESS_KEY_ID:?附件已开启，但 GitHub Secret 缺少 OSS_ACCESS_KEY_ID}"
+              : "${OSS_ACCESS_KEY_SECRET:?附件已开启，但 GitHub Secret 缺少 OSS_ACCESS_KEY_SECRET}"
+              ;;
+            *)
+              echo "ATTACHMENT_ENABLED 必须是 true 或 false" >&2
+              exit 1
+              ;;
+          esac
           umask 077
           {
             printf 'DB_USER=%s\n' "$DB_USER"
@@ -196,6 +229,20 @@ jobs:
             printf 'CORS_ORIGINS=%s\n' "$CORS_ORIGINS"
             printf 'BACKEND_PORT=%s\n' "$BACKEND_PORT"
             printf 'FRONTEND_PORT=%s\n' "$FRONTEND_PORT"
+            printf 'ATTACHMENT_ENABLED=%s\n' "$ATTACHMENT_ENABLED"
+            printf 'OBJECT_STORAGE_PROVIDER=%s\n' "$OBJECT_STORAGE_PROVIDER"
+            printf 'OSS_REGION=%s\n' "$OSS_REGION"
+            printf 'OSS_ENDPOINT=%s\n' "$OSS_ENDPOINT"
+            printf 'OSS_INTERNAL_ENDPOINT=%s\n' "$OSS_INTERNAL_ENDPOINT"
+            printf 'OSS_BUCKET=%s\n' "$OSS_BUCKET"
+            printf 'OSS_ACCESS_KEY_ID=%s\n' "$OSS_ACCESS_KEY_ID"
+            printf 'OSS_ACCESS_KEY_SECRET=%s\n' "$OSS_ACCESS_KEY_SECRET"
+            printf 'OBJECT_STORAGE_UPLOAD_URL_TTL_SECONDS=%s\n' "$OBJECT_STORAGE_UPLOAD_URL_TTL_SECONDS"
+            printf 'OBJECT_STORAGE_READ_URL_TTL_SECONDS=%s\n' "$OBJECT_STORAGE_READ_URL_TTL_SECONDS"
+            printf 'ATTACHMENT_MAX_BYTES=%s\n' "$ATTACHMENT_MAX_BYTES"
+            printf 'ATTACHMENT_MAX_PER_TRANSACTION=%s\n' "$ATTACHMENT_MAX_PER_TRANSACTION"
+            printf 'ATTACHMENT_USER_QUOTA_BYTES=%s\n' "$ATTACHMENT_USER_QUOTA_BYTES"
+            printf 'ATTACHMENT_CLEANUP_INTERVAL_SECONDS=%s\n' "$ATTACHMENT_CLEANUP_INTERVAL_SECONDS"
           } > production.env.new
           mkdir -p deployment-bundle
           cp docker-compose.prod.yml scripts/deploy-prod.sh scripts/backup-prod.sh deployment-bundle/
