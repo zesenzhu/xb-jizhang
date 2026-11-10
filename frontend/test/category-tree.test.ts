@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
-import { buildCategoryTree, categoryPathText } from '../src/lib/bill/category-tree';
+import {
+  buildCategoryTree,
+  categoryPathText,
+  categorySelectionSheetTitle,
+  resolveCategorySelection,
+} from '../src/lib/bill/category-tree';
 import type { CategorySummary } from '../src/lib/api/category-types';
 
 function category(overrides: Partial<CategorySummary> & { id: string; name: string }): CategorySummary {
@@ -129,3 +134,17 @@ assert.equal(resolveInitialCategoryId(grid, 'deleted-category'), 'food');
 
 // 空分类：返回 null，由调用方走空态
 assert.equal(resolveInitialCategoryId([], 'food'), null);
+
+// 分类点击契约：有子分类打开独立二级弹窗，无子分类直接选择。
+const nestedSelection = resolveCategorySelection(foodNode);
+assert.equal(nestedSelection.kind, 'OPEN_CHILDREN');
+if (nestedSelection.kind === 'OPEN_CHILDREN') {
+  assert.equal(nestedSelection.node.id, 'food');
+}
+
+const leafSelection = resolveCategorySelection(foodNode.children[0]);
+assert.deepEqual(leafSelection, { kind: 'SELECT', categoryId: 'breakfast' });
+
+// 二级弹窗标题：选中子级时显示完整路径，否则只显示一级分类。
+assert.equal(categorySelectionSheetTitle(foodNode, null), '餐饮');
+assert.equal(categorySelectionSheetTitle(foodNode, 'breakfast'), '餐饮 · 早餐');

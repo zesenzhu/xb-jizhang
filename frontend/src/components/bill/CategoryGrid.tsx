@@ -1,9 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronLeft, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { resolveGridTile, type CategoryNode } from '@/lib/bill/category-tree';
+import {
+  categorySelectionSheetTitle,
+  resolveCategorySelection,
+  resolveGridTile,
+  type CategoryNode,
+} from '@/lib/bill/category-tree';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { CategoryIcon } from './CategoryIcon';
 
 export interface CategoryGridProps {
@@ -25,7 +31,7 @@ const SKELETON_COUNT = 15;
 /**
  * 记账面板正中的分类九宫格。
  *
- * 有子分类的一级分类在九宫格下方内联展开，避免再打开一层抽屉导致用户丢失记账上下文。
+ * 有子分类的一级分类点击后打开独立的二级分类弹窗，保留记账抽屉的原交互。
  */
 export function CategoryGrid({
   nodes,
@@ -89,12 +95,11 @@ export function CategoryGrid({
   }
 
   return (
-    <div>
+    <>
       <div className="grid grid-cols-5 gap-y-3.5 px-4 pb-3 pt-1">
         {nodes.map((node) => {
           const tile = resolveGridTile(node, selectedId);
           const hasChildren = node.children.length > 0;
-          const isExpanded = expandedId === node.id;
           const isGroupPick = tile.isRoot && !tile.selected && hasChildren;
 
           return (
@@ -102,25 +107,23 @@ export function CategoryGrid({
               key={node.id}
               type="button"
               onClick={() => {
-                if (hasChildren) {
-                  setExpandedId((current) => (current === node.id ? null : node.id));
+                const selection = resolveCategorySelection(node);
+                if (selection.kind === 'OPEN_CHILDREN') {
+                  setExpandedId(selection.node.id);
                   return;
                 }
-                onSelect(node.id);
+                onSelect(selection.categoryId);
               }}
               aria-pressed={tile.selected}
-              aria-expanded={hasChildren ? isExpanded : undefined}
               className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
             >
               <span className="relative">
                 <CategoryIcon {...iconProps(tile.node)} size="lg" className={cn(tile.selected && 'ring-2 ring-primary ring-offset-2 ring-offset-app-card')} />
                 {isGroupPick && (
                   <span
-                    className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-app-card text-primary shadow-xs"
+                    className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-primary ring-2 ring-app-card"
                     aria-hidden="true"
-                  >
-                    <ChevronDown size={11} className={cn(isExpanded && 'rotate-180')} />
-                  </span>
+                  />
                 )}
               </span>
               <span
@@ -150,20 +153,28 @@ export function CategoryGrid({
         )}
       </div>
 
-      {expanded && (
-        <div className="mx-4 mb-3 rounded-2xl border border-app-border bg-app-card-subtle/60 p-2">
-          <div className="mb-1 flex items-center justify-between px-1">
-            <span className="text-[11px] font-semibold text-text-muted">{expanded.name} 下的分类</span>
-            <span className="text-[10px] text-text-tertiary">也可以只记到一级</span>
-          </div>
-          <CategoryChildList
-            node={expanded}
-            selectedId={selectedId}
-            onPick={onSelect}
-          />
+      <BottomSheet
+        open={expanded !== undefined}
+        onOpenChange={(next) => {
+          if (!next) setExpandedId(null);
+        }}
+        layer="nested"
+        title={expanded ? categorySelectionSheetTitle(expanded, selectedId) : ''}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
+          {expanded && (
+            <CategoryChildList
+              node={expanded}
+              selectedId={selectedId}
+              onPick={(categoryId) => {
+                onSelect(categoryId);
+                setExpandedId(null);
+              }}
+            />
+          )}
         </div>
-      )}
-    </div>
+      </BottomSheet>
+    </>
   );
 }
 
@@ -177,56 +188,55 @@ function CategoryChildList({
   onPick: (categoryId: string) => void;
 }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <CategoryChildButton
-        name={node.name}
-        selected={node.id === selectedId}
-        icon={node}
-        hint="一级"
+    <div className="space-y-2">
+      <button
+        type="button"
         onClick={() => onPick(node.id)}
-      />
-      {node.children.map((child) => (
-        <CategoryChildButton
-          key={child.id}
-          name={child.name}
-          selected={child.id === selectedId}
-          icon={child}
-          onClick={() => onPick(child.id)}
-        />
-      ))}
-    </div>
-  );
-}
+        aria-pressed={node.id === selectedId}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
+          node.id === selectedId
+            ? 'border-primary/40 bg-primary/10'
+            : 'border-app-border bg-app-card active:bg-app-card-subtle',
+        )}
+      >
+        <CategoryIcon {...iconProps(node)} size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-text-main">{node.name}</span>
+          <span className="mt-0.5 block text-[11px] text-text-tertiary">只记到一级分类</span>
+        </span>
+        {node.id === selectedId && <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>}
+      </button>
 
-function CategoryChildButton({
-  name,
-  selected,
-  icon,
-  hint,
-  onClick,
-}: {
-  name: string;
-  selected: boolean;
-  icon: CategoryNode;
-  hint?: string;
-  onClick: () => void;
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-center',
-        selected ? 'border-primary/40 bg-primary/10' : 'border-transparent bg-app-card',
-      )}
-    >
-      <CategoryIcon {...iconProps(icon)} size="sm" />
-      <span className={cn('max-w-full truncate text-[11px]', selected ? 'font-semibold text-primary' : 'text-text-main')}>
-        {name}
-      </span>
-      {hint && <span className="text-[9px] text-text-tertiary">{hint}</span>}
-    </button>
+      <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border">
+        {node.children.map((child) => {
+          const selected = child.id === selectedId;
+          return (
+            <button
+              key={child.id}
+              type="button"
+              onClick={() => onPick(child.id)}
+              aria-pressed={selected}
+              className={cn(
+                'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                selected ? 'bg-primary/8' : 'bg-app-card active:bg-app-card-subtle',
+              )}
+            >
+              <CategoryIcon {...iconProps(child)} size="sm" />
+              <span className={cn('min-w-0 flex-1 truncate text-xs', selected ? 'font-semibold text-primary' : 'text-text-main')}>
+                {child.name}
+              </span>
+              {selected && <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="flex items-center justify-center gap-1 pt-1 text-[11px] text-text-tertiary">
+        <ChevronLeft size={12} />
+        返回上一级可换其他分类
+      </p>
+    </div>
   );
 }
 

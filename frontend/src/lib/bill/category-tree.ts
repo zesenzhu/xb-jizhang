@@ -70,6 +70,23 @@ export function resolveGridTile(node: CategoryNode, selectedId: string | null): 
   return { node, isRoot: true, selected: false };
 }
 
+export type CategorySelection =
+  | { kind: 'OPEN_CHILDREN'; node: CategoryNode }
+  | { kind: 'SELECT'; categoryId: string };
+
+/** 决定点击分类格后的动作：有子级先进入二级分类弹窗，否则直接选择。 */
+export function resolveCategorySelection(node: CategoryNode): CategorySelection {
+  return node.children.length > 0
+    ? { kind: 'OPEN_CHILDREN', node }
+    : { kind: 'SELECT', categoryId: node.id };
+}
+
+/** 二级分类弹窗标题：选中子级时补充完整路径，避免用户丢失当前层级。 */
+export function categorySelectionSheetTitle(node: CategoryNode, selectedId: string | null): string {
+  const selectedChild = node.children.find((child) => child.id === selectedId);
+  return selectedChild ? `${node.name} · ${selectedChild.name}` : node.name;
+}
+
 /** 按类型筛选，供支出/收入切换使用。 */
 export function filterByType(
   categories: readonly CategorySummary[],
