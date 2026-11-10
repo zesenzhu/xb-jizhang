@@ -1,13 +1,29 @@
 'use client';
 
 import * as React from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, ImagePlus, Loader2, RotateCcw, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ApiRequestError } from '@/lib/api/errors';
-import { createCategory, updateCategory } from '@/lib/api/category-api';
+import {
+  completeCategoryIconUpload,
+  createCategory,
+  createCategoryIconUploadSession,
+  getCategoryIconLibrary,
+  restoreDefaultCategoryIcon,
+  updateCategory,
+  uploadCategoryIconObject,
+} from '@/lib/api/category-api';
 import type { CategorySummary, CategoryType } from '@/lib/api/category-types';
 import { queryKeys } from '@/lib/query/query-config';
+import {
+  categoryIconFileErrorMessage,
+  categoryIconPayload,
+  normalizeCategoryIcon,
+  validateCategoryIconFile,
+  type NormalizedCategoryIcon,
+} from '@/lib/bill/category-icon';
+import { CategoryIcon } from './CategoryIcon';
 import {
   CATEGORY_NAME_MAX_LENGTH,
   canDeactivateCategory,
@@ -54,6 +70,12 @@ export function CategoryEditorSheet({
   const [parentId, setParentId] = React.useState<string | null>(null);
   const [sortOrder, setSortOrder] = React.useState('0');
   const [isActive, setIsActive] = React.useState(true);
+  const [iconDraft, setIconDraft] = React.useState<NormalizedCategoryIcon>(() =>
+    normalizeCategoryIcon({ icon: null, color: null }),
+  );
+  const [iconSearch, setIconSearch] = React.useState('');
+  const [iconError, setIconError] = React.useState<string | null>(null);
+  const [uploadingIcon, setUploadingIcon] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [wasOpen, setWasOpen] = React.useState(open);
 
@@ -67,6 +89,19 @@ export function CategoryEditorSheet({
         String(editing?.sortOrder ?? nextSortOrder(categories, type, null)),
       );
       setIsActive(editing?.isActive ?? true);
+      setIconDraft(
+        normalizeCategoryIcon({
+          icon: editing?.icon ?? null,
+          iconSource: editing?.iconSource,
+          iconKey: editing?.iconKey,
+          iconAssetId: editing?.iconAssetId,
+          iconUrl: editing?.iconUrl,
+          iconUrlExpiresAt: editing?.iconUrlExpiresAt,
+          color: editing?.color ?? null,
+        }),
+      );
+      setIconSearch('');
+      setIconError(null);
       setError(null);
     }
   }
@@ -80,6 +115,93 @@ export function CategoryEditorSheet({
 
   const nameCheck = validateCategoryName(name);
   const canSubmit = nameCheck.error === null;
+
+  const iconLibraryQuery = useQuery({
+    queryKey: queryKeys.categoryIconLibrary(ledgerId, editing?.type ?? type),
+    queryFn: () =>
+      getCategoryIconLibrary(ledgerId, {
+        type: editing?.type ?? type,
+        q: iconSearch.trim() || undefined,
+        page: 1,
+        pageSize: 40,
+      }),
+    enabled: open,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const libraryItems = iconLibraryQuery.data?.items ?? [];
+
+  const selectLibraryIcon = (key: string, color: string | null): void => {
+    setIconDraft({
+      source: 'LIBRARY',
+      key,
+      assetId: null,
+      url: null,
+      urlExpiresAt: null,
+      color,
+    });
+    setIconError(null);
+  };
+
+  const handleIconFile = async (file: File | undefined): Promise<void> => {
+    if (!file) return;
+    const validationError = validateCategoryIconFile(file);
+    if (validationError) {
+      setIconError(categoryIconFileErrorMessage(validationError));
+      return;
+    }
+
+    setUploadingIcon(true);
+    setIconError(null);
+    try {
+      const session = await createCategoryIconUploadSession(ledgerId, {
+        clientRequestId: crypto.randomUUID(),
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      });
+      await uploadCategoryIconObject(
+        session.uploadUrl,
+        session.uploadMethod,
+        session.requiredHeaders,
+        file,
+      );
+      const completed = await completeCategoryIconUpload(ledgerId, session.assetId);
+      setIconDraft({
+        source: 'IMAGE',
+        key: null,
+        assetId: completed.assetId,
+        url: completed.accessUrl,
+        urlExpiresAt: completed.accessUrlExpiresAt,
+        color: iconDraft.color,
+      });
+    } catch (caught) {
+      setIconError(caught instanceof Error ? caught.message : '图标上传失败，请重试');
+    } finally {
+      setUploadingIcon(false);
+    }
+  };
+
+  const restoreDefault = async (): Promise<void> => {
+    if (!editing) return;
+    setIconError(null);
+    try {
+      const restored = await restoreDefaultCategoryIcon(ledgerId, editing.id);
+      setIconDraft(
+        normalizeCategoryIcon({
+          icon: restored.icon ?? null,
+          iconSource: restored.iconSource,
+          iconKey: restored.iconKey,
+          iconAssetId: restored.iconAssetId,
+          iconUrl: restored.iconUrl,
+          iconUrlExpiresAt: restored.iconUrlExpiresAt,
+          color: restored.color ?? null,
+        }),
+      );
+    } catch (caught) {
+      setIconError(caught instanceof Error ? caught.message : '恢复默认图标失败');
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -96,6 +218,7 @@ export function CategoryEditorSheet({
           parentId,
           sortOrder: sortValue,
           isActive,
+          ...categoryIconPayload(iconDraft),
         });
       }
       return createCategory(ledgerId, {
@@ -103,6 +226,7 @@ export function CategoryEditorSheet({
         name: nameCheck.name,
         parentId,
         sortOrder: sortValue,
+        ...categoryIconPayload(iconDraft),
       });
     },
   });
@@ -158,6 +282,124 @@ export function CategoryEditorSheet({
               <span className="mt-1 block text-[11px] text-rose-500">{nameCheck.error}</span>
             )}
           </label>
+
+          <fieldset>
+            <legend className="mb-1 block text-[11px] font-semibold text-text-tertiary">分类图标</legend>
+            <div className="space-y-2 rounded-xl border border-app-border p-3">
+              <div className="flex items-center gap-3">
+                <CategoryIcon
+                  name={name || '分类'}
+                  iconSource={iconDraft.source}
+                  iconKey={iconDraft.key}
+                  iconAssetId={iconDraft.assetId}
+                  iconUrl={iconDraft.url}
+                  iconUrlExpiresAt={iconDraft.urlExpiresAt}
+                  color={iconDraft.color}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-text-main">
+                    {iconDraft.source === 'IMAGE'
+                      ? '自定义图片'
+                      : iconDraft.source === 'LIBRARY'
+                        ? '图标库'
+                        : '默认图标'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-text-tertiary">图片仅支持 PNG、JPEG、WebP，最大 2MB</p>
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-app-border px-2.5 py-1.5 text-[11px] text-text-main has-[:disabled]:opacity-50">
+                  {uploadingIcon ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+                  上传
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="sr-only"
+                    disabled={uploadingIcon}
+                    onChange={(event) => {
+                      void handleIconFile(event.target.files?.[0]);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Search size={13} className="shrink-0 text-text-tertiary" />
+                <input
+                  value={iconSearch}
+                  onChange={(event) => setIconSearch(event.target.value)}
+                  placeholder="搜索图标"
+                  aria-label="搜索图标"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-text-main outline-none placeholder:text-text-tertiary"
+                />
+                <label className="flex items-center gap-1 text-[11px] text-text-tertiary">
+                  颜色
+                  <input
+                    type="color"
+                    value={iconDraft.color ?? '#64748B'}
+                    aria-label="图标颜色"
+                    onChange={(event) => setIconDraft((current) => ({ ...current, color: event.target.value }))}
+                    className="size-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                </label>
+              </div>
+
+              <div className="grid max-h-40 grid-cols-6 gap-1.5 overflow-y-auto">
+                {libraryItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    title={item.label}
+                    aria-label={`选择${item.label}`}
+                    aria-pressed={iconDraft.source === 'LIBRARY' && iconDraft.key === item.key}
+                    onClick={() => selectLibraryIcon(item.key, iconDraft.color)}
+                    className={cn(
+                      'flex flex-col items-center gap-0.5 rounded-lg p-1',
+                      iconDraft.source === 'LIBRARY' && iconDraft.key === item.key
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/40'
+                        : 'text-text-muted hover:bg-app-card-subtle',
+                    )}
+                  >
+                    <CategoryIcon
+                      name={item.label}
+                      iconSource="LIBRARY"
+                      iconKey={item.key}
+                      color={iconDraft.color}
+                      size="sm"
+                    />
+                    <span className="max-w-full truncate text-[9px]">{item.label}</span>
+                  </button>
+                ))}
+                {!iconLibraryQuery.isPending && libraryItems.length === 0 && (
+                  <span className="col-span-6 py-2 text-center text-[11px] text-text-tertiary">
+                    图标库暂不可用，可直接上传图片或使用默认图标
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIconDraft((current) => ({ ...current, source: 'NONE', key: null, assetId: null, url: null, urlExpiresAt: null }))}
+                  className="text-[11px] text-text-muted"
+                >
+                  使用默认图标
+                </button>
+                {editing?.isSystem && editing.defaultKey && (
+                  <button
+                    type="button"
+                    onClick={() => void restoreDefault()}
+                    disabled={uploadingIcon}
+                    className="flex items-center gap-1 text-[11px] text-primary disabled:opacity-50"
+                  >
+                    <RotateCcw size={12} />
+                    恢复系统默认
+                  </button>
+                )}
+              </div>
+              {iconError && <p className="text-[11px] text-rose-500">{iconError}</p>}
+            </div>
+          </fieldset>
 
           <fieldset>
             <legend className="mb-1 block text-[11px] font-semibold text-text-tertiary">归类</legend>
@@ -257,7 +499,7 @@ export function CategoryEditorSheet({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || uploadingIcon}
             className="rounded-2xl border border-app-border py-2.5 text-sm text-text-main disabled:opacity-50"
           >
             取消
@@ -265,7 +507,7 @@ export function CategoryEditorSheet({
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={!canSubmit || mutation.isPending}
+            disabled={!canSubmit || mutation.isPending || uploadingIcon}
             className="flex items-center justify-center gap-1.5 rounded-2xl bg-primary py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
             {mutation.isPending && <Loader2 size={14} className="animate-spin" />}

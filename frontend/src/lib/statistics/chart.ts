@@ -44,6 +44,71 @@ export interface DonutSegment {
   ratio: number;
 }
 
+import type { CategoryChartItem, CategoryItem } from '@/lib/api/statistics-types';
+
+/**
+ * 环形图最多显示前 N 项，其余合并为“其他”。
+ * 该结果只用于展示：聚合项没有真实 categoryId，也没有下钻信息。
+ */
+export function aggregateCategoryChartItems(
+  items: readonly CategoryItem[],
+  maxItems = 8,
+): CategoryChartItem[] {
+  if (maxItems < 1) return [];
+
+  const positiveItems = items.filter((item) => item.amountCents > 0);
+  if (positiveItems.length === 0) return [];
+
+  const visible = positiveItems.slice(0, maxItems);
+  const rest = positiveItems.slice(maxItems);
+  const totalCents = positiveItems.reduce((sum, item) => sum + item.amountCents, 0);
+  const normalize = (item: CategoryItem): CategoryChartItem => ({
+    ...item,
+    percentage: totalCents > 0 ? (item.amountCents / totalCents) * 100 : 0,
+  });
+  const result = visible.map(normalize);
+
+  if (rest.length === 0) return result;
+
+  const amountCents = rest.reduce((sum, item) => sum + item.amountCents, 0);
+  const transactionCount = rest.reduce((sum, item) => sum + item.transactionCount, 0);
+  const comparisons = rest.flatMap((item) => (item.comparison ? [item.comparison] : []));
+  const comparison = comparisons.length
+    ? {
+        amountCents: comparisons.reduce((sum, item) => sum + item.amountCents, 0),
+        amountDeltaCents: comparisons.reduce((sum, item) => sum + item.amountDeltaCents, 0),
+        percentagePointDelta: comparisons.every((item) => item.percentagePointDelta === null)
+          ? null
+          : comparisons.reduce(
+              (sum, item) => sum + (item.percentagePointDelta ?? 0),
+              0,
+            ),
+      }
+    : null;
+
+  result.push({
+    categoryId: null,
+    categoryRootId: null,
+    parentId: null,
+    bucketType: 'OTHER',
+    name: '其他',
+    icon: null,
+    color: '#94a3b8',
+    iconSource: 'NONE',
+    iconKey: null,
+    iconAssetId: null,
+    iconUrl: null,
+    iconUrlExpiresAt: null,
+    amountCents,
+    percentage: totalCents > 0 ? (amountCents / totalCents) * 100 : 0,
+    transactionCount,
+    comparison,
+    drilldown: null,
+  });
+
+  return result;
+}
+
 /**
  * 环形图扇区。
  *

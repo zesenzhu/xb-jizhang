@@ -197,6 +197,11 @@ export function StatisticsPage(): React.JSX.Element {
             metric={metric}
             granularity={trendQuery.data.range.granularity}
             hasData={trendQuery.data.hasData}
+            onSelectPeriod={(item) => {
+              router.push(
+                buildBillDrilldownUrl({ startAt: item.drilldown.from, endAt: item.drilldown.to }),
+              );
+            }}
           />
         )}
       </Section>

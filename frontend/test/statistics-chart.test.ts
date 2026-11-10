@@ -4,9 +4,27 @@ import {
   formatPercentage,
   formatPeriodLabel,
   hasNegative,
+  aggregateCategoryChartItems,
   toDonutSegments,
   toTrendPoints,
 } from '../src/lib/statistics/chart';
+import type { CategoryItem } from '../src/lib/api/statistics-types';
+
+function categoryItem(overrides: Partial<CategoryItem> & { categoryId: string; name: string }): CategoryItem {
+  return {
+    categoryRootId: null,
+    parentId: null,
+    bucketType: 'CATEGORY',
+    icon: null,
+    color: null,
+    amountCents: 0,
+    percentage: 0,
+    transactionCount: 0,
+    comparison: null,
+    drilldown: { from: '2026-11-01T00:00:00.000Z', to: '2026-12-01T00:00:00.000Z', type: 'EXPENSE' },
+    ...overrides,
+  };
+}
 
 // 趋势归一：最大值占满 100%，其余按比例
 assert.deepEqual(toTrendPoints([100, 50, 0]), [
@@ -67,5 +85,40 @@ assert.equal(formatCompactYuan(250_000_000), '250.0万');
 // 1 亿元 = 10_000_000_000 分
 assert.equal(formatCompactYuan(10_000_000_000), '1.0亿');
 assert.equal(formatCompactYuan(-1_500_000), '-1.5万');
+
+const categoryChartItems = aggregateCategoryChartItems(
+  Array.from({ length: 10 }, (_, index) =>
+    categoryItem({
+      categoryId: `category-${index}`,
+      name: `分类${index}`,
+      amountCents: 100 - index,
+      transactionCount: index + 1,
+    }),
+  ),
+  8,
+);
+assert.equal(categoryChartItems.length, 9);
+assert.deepEqual(categoryChartItems.slice(0, 8).map((item) => item.categoryId), [
+  'category-0',
+  'category-1',
+  'category-2',
+  'category-3',
+  'category-4',
+  'category-5',
+  'category-6',
+  'category-7',
+]);
+const other = categoryChartItems[8];
+assert.equal(other.name, '其他');
+assert.equal(other.categoryId, null);
+assert.equal(other.bucketType, 'OTHER');
+assert.equal(other.drilldown, null);
+assert.equal(other.amountCents, 183);
+assert.equal(other.transactionCount, 19);
+assert.equal(
+  categoryChartItems.reduce((sum, item) => sum + item.percentage, 0),
+  100,
+);
+assert.deepEqual(aggregateCategoryChartItems([categoryItem({ categoryId: 'zero', name: '空' })]), []);
 
 console.log('statistics chart contract passed');

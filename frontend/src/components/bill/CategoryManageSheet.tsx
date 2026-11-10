@@ -5,6 +5,7 @@ import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CategorySummary } from '@/lib/api/category-types';
 import { countActiveChildren, sortCategories } from '@/lib/bill/category-manage';
+import { CategoryIcon } from './CategoryIcon';
 
 export interface CategoryManageSheetProps {
   /** 当前类型下的全部分类（含停用，由调用方按 includeInactive 拉取） */
@@ -102,6 +103,17 @@ export function CategoryManageBody({
                       isCollapsed && '-rotate-90',
                     )}
                   />
+                  <CategoryIcon
+                    name={root.name}
+                    icon={root.icon}
+                    iconSource={root.iconSource}
+                    iconKey={root.iconKey}
+                    iconAssetId={root.iconAssetId}
+                    iconUrl={root.iconUrl}
+                    iconUrlExpiresAt={root.iconUrlExpiresAt}
+                    color={root.color}
+                    size="sm"
+                  />
                   <span className="truncate text-xs font-semibold text-text-main">{root.name}</span>
                   {children.length > 0 && (
                     <span className="shrink-0 text-[11px] text-text-tertiary">
@@ -132,7 +144,18 @@ export function CategoryManageBody({
                       !child.isActive && 'opacity-60',
                     )}
                   >
-                    <span className="min-w-0 flex-1 truncate pl-5 text-xs text-text-muted">
+                    <CategoryIcon
+                      name={child.name}
+                      icon={child.icon}
+                      iconSource={child.iconSource}
+                      iconKey={child.iconKey}
+                      iconAssetId={child.iconAssetId}
+                      iconUrl={child.iconUrl}
+                      iconUrlExpiresAt={child.iconUrlExpiresAt}
+                      color={child.color}
+                      size="sm"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-xs text-text-muted">
                       {child.name}
                     </span>
                     {!child.isActive && (

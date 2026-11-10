@@ -3,8 +3,13 @@
 import * as React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn, formatCentsToYuan } from '@/lib/utils';
-import type { CategoryItem } from '@/lib/api/statistics-types';
-import { formatPercentage, toDonutSegments } from '@/lib/statistics/chart';
+import type { CategoryBucketType, CategoryChartItem, CategoryItem } from '@/lib/api/statistics-types';
+import {
+  aggregateCategoryChartItems,
+  formatPercentage,
+  toDonutSegments,
+} from '@/lib/statistics/chart';
+import { CategoryIcon } from '@/components/bill/CategoryIcon';
 
 export interface CategoryDonutProps {
   items: readonly CategoryItem[];
@@ -31,7 +36,9 @@ export function CategoryDonut({
   onSelect,
   className,
 }: CategoryDonutProps): React.JSX.Element {
-  const segments = toDonutSegments(items.map((item) => item.percentage));
+  const [selectedIndex, setSelectedIndex] = React.useState<number | null>(null);
+  const chartItems = React.useMemo(() => aggregateCategoryChartItems(items, 8), [items]);
+  const segments = toDonutSegments(chartItems.map((item) => item.percentage));
 
   if (items.length === 0 || totalCents === 0) {
     return (
@@ -44,48 +51,100 @@ export function CategoryDonut({
   }
 
   return (
-    <div className={cn('flex flex-col items-center', className)}>
-      <svg
-        viewBox="0 0 100 100"
-        className="size-44 -rotate-90"
-        role="img"
-        aria-label={`分类占比，共 ${items.length} 项`}
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r={RADIUS}
-          fill="none"
-          className="stroke-app-card-subtle"
-          strokeWidth="14"
-        />
-        {segments.map((segment, index) => (
+    <div className={cn('flex flex-col items-center', className)} onKeyDown={(event) => {
+      if (event.key === 'Escape') setSelectedIndex(null);
+    }}>
+      <div className="relative size-44">
+        <svg
+          viewBox="0 0 100 100"
+          className="size-44 -rotate-90"
+          role="img"
+          aria-label={`分类占比，共 ${chartItems.length} 项`}
+        >
           <circle
-            key={items[index].categoryId ?? `bucket-${index}`}
             cx="50"
             cy="50"
             r={RADIUS}
             fill="none"
-            stroke={colorFor(items[index], index, isExpense)}
+            className="stroke-app-card-subtle"
             strokeWidth="14"
-            strokeDasharray={`${segment.ratio * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={-segment.offset * CIRCUMFERENCE}
-            className="cursor-pointer transition-[stroke-width] hover:stroke-[16]"
-            onClick={() => onSelect?.(items[index])}
-          >
-            <title>
-              {items[index].name} {formatPercentage(items[index].percentage)}
-            </title>
-          </circle>
-        ))}
-      </svg>
+          />
+          {segments.map((segment, index) => {
+            const item = chartItems[index];
+            if (!item) return null;
+            const selected = selectedIndex === index;
+            return (
+              <circle
+                key={item.categoryId ?? `bucket-${item.bucketType}-${item.name}`}
+                cx="50"
+                cy="50"
+                r={RADIUS}
+                fill="none"
+                stroke={colorFor(item, index, isExpense)}
+                strokeWidth={selected ? 17 : 14}
+                strokeDasharray={`${segment.ratio * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                strokeDashoffset={-segment.offset * CIRCUMFERENCE}
+                className="cursor-pointer transition-[stroke-width] focus:outline-none"
+                tabIndex={0}
+                role="button"
+                aria-label={`${item.name}，${formatPercentage(item.percentage)}，${item.transactionCount} 笔`}
+                onClick={() => {
+                  setSelectedIndex(index);
+                  if (item.bucketType !== 'OTHER') onSelect?.(item as CategoryItem);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedIndex(index);
+                    if (item.bucketType !== 'OTHER') onSelect?.(item as CategoryItem);
+                  }
+                }}
+              >
+                <title>
+                  {item.name} {formatPercentage(item.percentage)}，¥{formatCentsToYuan(item.amountCents)}
+                </title>
+              </circle>
+            );
+          })}
+        </svg>
 
-      {/* 中心总额：绝对定位盖在环中间，避免 SVG 内文字被 rotate 影响 */}
-      <div className="pointer-events-none -mt-[7.4rem] flex size-44 flex-col items-center justify-center gap-0.5">
-        <span className="text-[11px] text-text-tertiary">{isExpense ? '总支出' : '总收入'}</span>
-        <span className="font-mono text-lg font-bold text-text-main">
-          ¥{formatCentsToYuan(totalCents)}
-        </span>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+          <span className="text-[11px] text-text-tertiary">{isExpense ? '总支出' : '总收入'}</span>
+          <span className="font-mono text-lg font-bold text-text-main">
+            ¥{formatCentsToYuan(totalCents)}
+          </span>
+        </div>
+      </div>
+
+      {selectedIndex !== null && chartItems[selectedIndex] && (
+        <CategoryTooltip item={chartItems[selectedIndex]} isExpense={isExpense} />
+      )}
+    </div>
+  );
+}
+
+function CategoryTooltip({ item, isExpense }: { item: CategoryChartItem; isExpense: boolean }): React.JSX.Element {
+  return (
+    <div role="tooltip" className="mt-2 flex w-full max-w-[260px] items-center gap-2 rounded-xl bg-app-card-subtle px-3 py-2">
+      <CategoryIcon
+        name={item.name}
+        icon={item.icon}
+        iconSource={item.iconSource}
+        iconKey={item.iconKey}
+        iconAssetId={item.iconAssetId}
+        iconUrl={item.iconUrl}
+        iconUrlExpiresAt={item.iconUrlExpiresAt}
+        color={item.color}
+        size="sm"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-xs font-semibold text-text-main">{item.name}</span>
+          <span className="font-mono text-xs font-semibold text-text-main">¥{formatCentsToYuan(item.amountCents)}</span>
+        </div>
+        <div className="mt-0.5 text-[10px] text-text-tertiary">
+          {formatPercentage(item.percentage)} · {item.transactionCount} 笔 · {isExpense ? '支出' : '收入'}
+        </div>
       </div>
     </div>
   );
@@ -99,9 +158,13 @@ export function CategoryDonut({
  */
 const PALETTE = ['#ff6b5b', '#f2994a', '#f2c94c', '#6fcf97', '#56ccf2', '#9b8cf5', '#eb7ab8', '#8d9db6'];
 
-function colorFor(item: CategoryItem, index: number, isExpense: boolean): string {
+function colorFor(
+  item: Pick<CategoryItem, 'color'> & { bucketType: CategoryBucketType | 'OTHER' },
+  index: number,
+  isExpense: boolean,
+): string {
   if (item.color) return item.color;
-  if (item.bucketType === 'UNCATEGORIZED') return '#94a3b8';
+  if (item.bucketType === 'UNCATEGORIZED' || item.bucketType === 'OTHER') return '#94a3b8';
   if (item.bucketType === 'ROOT_DIRECT') return isExpense ? '#fbbf24' : '#34d399';
   return PALETTE[index % PALETTE.length];
 }
@@ -131,13 +194,17 @@ export function CategoryRow({
         onClick={onClick}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        <span
-          aria-hidden="true"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ backgroundColor: accent }}
-        >
-          {item.name.trim().slice(0, 1) || '账'}
-        </span>
+        <CategoryIcon
+          name={item.name}
+          icon={item.icon}
+          iconSource={item.iconSource}
+          iconKey={item.iconKey}
+          iconAssetId={item.iconAssetId}
+          iconUrl={item.iconUrl}
+          iconUrlExpiresAt={item.iconUrlExpiresAt}
+          color={item.color ?? accent}
+          size="sm"
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">

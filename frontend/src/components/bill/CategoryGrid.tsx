@@ -1,10 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveGridTile, type CategoryNode } from '@/lib/bill/category-tree';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { CategoryIcon } from './CategoryIcon';
 
 export interface CategoryGridProps {
   /** 已按类型过滤并构造成两级树的分类 */
@@ -25,9 +25,7 @@ const SKELETON_COUNT = 15;
 /**
  * 记账面板正中的分类九宫格。
  *
- * 有子分类的一级分类在图标右下角显示角标，点击打开**独立的二级抽屉**，
- * 而不是在九宫格下方就地展开 —— 就地展开会把下面的字段区推走，
- * 视觉上像一张被截断的长列表，且和底部金额卡挤在一起。
+ * 有子分类的一级分类在九宫格下方内联展开，避免再打开一层抽屉导致用户丢失记账上下文。
  */
 export function CategoryGrid({
   nodes,
@@ -91,13 +89,12 @@ export function CategoryGrid({
   }
 
   return (
-    <>
+    <div>
       <div className="grid grid-cols-5 gap-y-3.5 px-4 pb-3 pt-1">
         {nodes.map((node) => {
-          // 选中二级时，这一格显示二级本身（一级与二级都是「分类项」），
-          // 否则选完子分类后九宫格毫无变化，用户不知道有没有选中。
           const tile = resolveGridTile(node, selectedId);
           const hasChildren = node.children.length > 0;
+          const isExpanded = expandedId === node.id;
           const isGroupPick = tile.isRoot && !tile.selected && hasChildren;
 
           return (
@@ -106,20 +103,26 @@ export function CategoryGrid({
               type="button"
               onClick={() => {
                 if (hasChildren) {
-                  setExpandedId(node.id);
+                  setExpandedId((current) => (current === node.id ? null : node.id));
                   return;
                 }
                 onSelect(node.id);
               }}
               aria-pressed={tile.selected}
-              className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
+              aria-expanded={hasChildren ? isExpanded : undefined}
+              className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
             >
-              <CategoryBubble
-                name={tile.node.name}
-                color={tile.node.color}
-                selected={tile.selected}
-                hasChildren={isGroupPick}
-              />
+              <span className="relative">
+                <CategoryIcon {...iconProps(tile.node)} size="lg" className={cn(tile.selected && 'ring-2 ring-primary ring-offset-2 ring-offset-app-card')} />
+                {isGroupPick && (
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-app-card text-primary shadow-xs"
+                    aria-hidden="true"
+                  >
+                    <ChevronDown size={11} className={cn(isExpanded && 'rotate-180')} />
+                  </span>
+                )}
+              </span>
               <span
                 className={cn(
                   'max-w-full truncate text-[11px] leading-none',
@@ -137,9 +140,9 @@ export function CategoryGrid({
             type="button"
             onClick={onCreate}
             aria-label="新增分类"
-            className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
+            className="flex min-w-0 flex-col items-center gap-1.5 rounded-xl py-1 transition-transform active:scale-95"
           >
-            <span className="flex size-11 items-center justify-center rounded-full border border-dashed border-app-border text-text-tertiary">
+            <span className="flex size-12 items-center justify-center rounded-full border border-dashed border-app-border text-text-tertiary">
               <Plus size={18} />
             </span>
             <span className="max-w-full truncate text-[11px] leading-none text-text-tertiary">新增</span>
@@ -147,43 +150,23 @@ export function CategoryGrid({
         )}
       </div>
 
-      <BottomSheet
-        open={expanded !== undefined}
-        onOpenChange={(next) => {
-          if (!next) setExpandedId(null);
-        }}
-        layer="nested"
-        title={expanded ? sheetTitle(expanded, selectedId) : ''}
-      >
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
-          {expanded && (
-            <CategoryChildList
-              node={expanded}
-              selectedId={selectedId}
-              onPick={(categoryId) => {
-                onSelect(categoryId);
-                setExpandedId(null);
-              }}
-            />
-          )}
+      {expanded && (
+        <div className="mx-4 mb-3 rounded-2xl border border-app-border bg-app-card-subtle/60 p-2">
+          <div className="mb-1 flex items-center justify-between px-1">
+            <span className="text-[11px] font-semibold text-text-muted">{expanded.name} 下的分类</span>
+            <span className="text-[10px] text-text-tertiary">也可以只记到一级</span>
+          </div>
+          <CategoryChildList
+            node={expanded}
+            selectedId={selectedId}
+            onPick={onSelect}
+          />
         </div>
-      </BottomSheet>
-    </>
+      )}
+    </div>
   );
 }
 
-/** 二级抽屉标题：已选子分类时显示「一级 › 二级」，让用户确认当前选中的是哪一层。 */
-function sheetTitle(node: CategoryNode, selectedId: string | null): string {
-  const selectedChild = node.children.find((child) => child.id === selectedId);
-  return selectedChild ? `${node.name} · ${selectedChild.name}` : node.name;
-}
-
-/**
- * 二级分类列表。
- *
- * 一级自身始终在首行且可选（需求 7.5：直接选一级不自动猜测二级），
- * 子分类按后端 `sortOrder` 顺序排列。
- */
 function CategoryChildList({
   node,
   selectedId,
@@ -194,111 +177,68 @@ function CategoryChildList({
   onPick: (categoryId: string) => void;
 }): React.JSX.Element {
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
+    <div className="grid grid-cols-3 gap-2">
+      <CategoryChildButton
+        name={node.name}
+        selected={node.id === selectedId}
+        icon={node}
+        hint="一级"
         onClick={() => onPick(node.id)}
-        aria-pressed={node.id === selectedId}
-        className={cn(
-          'flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
-          node.id === selectedId
-            ? 'border-primary/40 bg-primary/10'
-            : 'border-app-border bg-app-card active:bg-app-card-subtle',
-        )}
-      >
-        <CategoryBubble name={node.name} color={node.color} selected={false} hasChildren={false} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-text-main">{node.name}</span>
-          <span className="mt-0.5 block text-[11px] text-text-tertiary">只记到一级分类</span>
-        </span>
-        {node.id === selectedId && (
-          <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>
-        )}
-      </button>
-
-      <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border">
-        {node.children.map((child) => {
-          const selected = child.id === selectedId;
-          return (
-            <button
-              key={child.id}
-              type="button"
-              onClick={() => onPick(child.id)}
-              aria-pressed={selected}
-              className={cn(
-                'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                selected ? 'bg-primary/8' : 'bg-app-card active:bg-app-card-subtle',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                style={{ backgroundColor: child.color ?? paletteFor(child.name) }}
-              >
-                {child.name.trim().slice(0, 1) || '账'}
-              </span>
-              <span
-                className={cn(
-                  'min-w-0 flex-1 truncate text-xs',
-                  selected ? 'font-semibold text-primary' : 'text-text-main',
-                )}
-              >
-                {child.name}
-              </span>
-              {selected && <span className="shrink-0 text-[11px] font-semibold text-primary">已选</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="flex items-center justify-center gap-1 pt-1 text-[11px] text-text-tertiary">
-        <ChevronLeft size={12} />
-        返回上一级可换其他分类
-      </p>
+      />
+      {node.children.map((child) => (
+        <CategoryChildButton
+          key={child.id}
+          name={child.name}
+          selected={child.id === selectedId}
+          icon={child}
+          onClick={() => onPick(child.id)}
+        />
+      ))}
     </div>
   );
 }
 
-function CategoryBubble({
+function CategoryChildButton({
   name,
-  color,
   selected,
-  hasChildren,
+  icon,
+  hint,
+  onClick,
 }: {
   name: string;
-  color: string | null;
   selected: boolean;
-  hasChildren: boolean;
+  icon: CategoryNode;
+  hint?: string;
+  onClick: () => void;
 }): React.JSX.Element {
   return (
-    <span className="relative">
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex size-11 items-center justify-center rounded-full text-base font-semibold text-white shadow-xs',
-          selected && 'ring-2 ring-primary ring-offset-2 ring-offset-app-card',
-        )}
-        style={{ backgroundColor: color ?? paletteFor(name) }}
-      >
-        {name.trim().slice(0, 1) || '账'}
-      </span>
-      {hasChildren && (
-        <span
-          className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-primary ring-2 ring-app-card"
-          aria-hidden="true"
-        />
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-center',
+        selected ? 'border-primary/40 bg-primary/10' : 'border-transparent bg-app-card',
       )}
-    </span>
+    >
+      <CategoryIcon {...iconProps(icon)} size="sm" />
+      <span className={cn('max-w-full truncate text-[11px]', selected ? 'font-semibold text-primary' : 'text-text-main')}>
+        {name}
+      </span>
+      {hint && <span className="text-[9px] text-text-tertiary">{hint}</span>}
+    </button>
   );
 }
 
-/** 与 CategoryIcon 同一色板：同一分类在全站颜色一致。 */
-const PALETTE = ['#ff6b5b', '#f2994a', '#f2c94c', '#6fcf97', '#56ccf2', '#9b8cf5', '#eb7ab8', '#8d9db6'];
-
-function paletteFor(name: string): string {
-  let hash = 0;
-  for (let index = 0; index < name.length; index += 1) {
-    hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
-  }
-  return PALETTE[hash % PALETTE.length];
+function iconProps(category: CategoryNode) {
+  return {
+    name: category.name,
+    icon: category.icon,
+    iconSource: category.iconSource,
+    iconKey: category.iconKey,
+    iconAssetId: category.iconAssetId,
+    iconUrl: category.iconUrl,
+    iconUrlExpiresAt: category.iconUrlExpiresAt,
+    color: category.color,
+  };
 }

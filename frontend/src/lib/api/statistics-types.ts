@@ -1,4 +1,5 @@
 import type { ApiSuccessResponse } from './auth-types';
+import type { CategoryIconSource } from './category-types';
 
 /**
  * 二期统计契约（`docs/api/统计接口.md`）。
@@ -116,8 +117,13 @@ export interface CategoryItem {
   parentId: string | null;
   bucketType: CategoryBucketType;
   name: string;
-  icon: string | null;
+  icon?: string | null;
   color: string | null;
+  iconSource?: CategoryIconSource | null;
+  iconKey?: string | null;
+  iconAssetId?: string | null;
+  iconUrl?: string | null;
+  iconUrlExpiresAt?: string | null;
   amountCents: number;
   percentage: number;
   transactionCount: number;
@@ -131,6 +137,12 @@ export interface CategoryItem {
     type: 'EXPENSE' | 'INCOME';
   };
 }
+
+/** 统计图表前端聚合的“其他”项，不代表后端真实分类。 */
+export type CategoryChartItem = Omit<CategoryItem, 'bucketType' | 'drilldown'> & {
+  bucketType: CategoryBucketType | 'OTHER';
+  drilldown: CategoryItem['drilldown'] | null;
+};
 
 export interface CategoryData {
   ledgerId: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatCentsToYuan } from '@/lib/utils';
 import type { TrendItem, TrendMetric } from '@/lib/api/statistics-types';
 import { formatCompactYuan, formatPeriodLabel, hasNegative, toTrendPoints } from '@/lib/statistics/chart';
 import type { StatisticsGranularity } from '@/lib/api/statistics-types';
@@ -33,6 +33,7 @@ export function TrendChart({
   onSelectPeriod,
   className,
 }: TrendChartProps): React.JSX.Element {
+  const [selectedIndex, setSelectedIndex] = React.useState<number | null>(null);
   const values = items.map((item) => pickValue(item, metric));
   const points = toTrendPoints(values);
   const bipolar = hasNegative(values);
@@ -60,7 +61,12 @@ export function TrendChart({
   const step = 100 / items.length;
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setSelectedIndex(null);
+      }}
+    >
       <div className="flex items-baseline justify-between px-1 pb-1">
         <span className="text-[11px] text-text-muted">
           峰值 {formatCompactYuan(max)}
@@ -88,22 +94,39 @@ export function TrendChart({
 
         {items.map((item, index) => {
           const point = points[index];
-          if (!point || point.heightPercent === 0) return null;
+          if (!point) return null;
 
           const height = (point.heightPercent / 100) * available;
           const x = index * step + (step - barWidth) / 2;
           const y = values[index] < 0 ? zeroY : zeroY - height;
+          const selected = selectedIndex === index;
 
           return (
             <rect
               key={`${item.fromDate}-${item.toDate}`}
               x={x}
-              y={y}
+              y={point.heightPercent === 0 ? zeroY - 0.5 : y}
               width={barWidth}
-              height={height}
+              height={point.heightPercent === 0 ? 1 : height}
               rx={0.6}
-              className={cn(barClass, 'cursor-pointer')}
-              onClick={() => onSelectPeriod?.(item)}
+              className={cn(
+                point.heightPercent === 0 ? 'fill-transparent' : barClass,
+                selected && 'stroke-text-main',
+                'cursor-pointer outline-none',
+              )}
+              strokeWidth={selected ? 1 : 0}
+              tabIndex={0}
+              role="button"
+              aria-label={`${formatPeriodLabel(item.fromDate, item.toDate, granularity)}：支出 ¥${formatCentsToYuan(item.expenseCents)}，收入 ¥${formatCentsToYuan(item.incomeCents)}，结余 ¥${formatCentsToYuan(item.netCents)}，${item.transactionCount} 笔`}
+              onClick={() => {
+                setSelectedIndex(index);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedIndex(index);
+                }
+              }}
             >
               <title>
                 {formatPeriodLabel(item.fromDate, item.toDate, granularity)}：
@@ -113,6 +136,15 @@ export function TrendChart({
           );
         })}
       </svg>
+
+      {selectedIndex !== null && items[selectedIndex] && (
+        <TrendTooltip
+          item={items[selectedIndex]}
+          metric={metric}
+          granularity={granularity}
+          onSelectPeriod={onSelectPeriod}
+        />
+      )}
 
       <div className="flex justify-between px-1 pt-1 text-[10px] text-text-tertiary">
         <span>{formatPeriodLabel(items[0].fromDate, items[0].toDate, granularity)}</span>
@@ -132,6 +164,45 @@ export function TrendChart({
             granularity,
           )}
         </span>
+      </div>
+    </div>
+  );
+}
+
+function TrendTooltip({
+  item,
+  metric,
+  granularity,
+  onSelectPeriod,
+}: {
+  item: TrendItem;
+  metric: TrendMetric;
+  granularity: 'DAY' | 'MONTH' | 'YEAR';
+  onSelectPeriod?: (item: TrendItem) => void;
+}): React.JSX.Element {
+  const value = pickValue(item, metric);
+  return (
+    <div role="tooltip" className="mt-2 rounded-xl bg-app-card-subtle px-3 py-2 text-[10px] text-text-tertiary">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold text-text-main">{formatPeriodLabel(item.fromDate, item.toDate, granularity)}</span>
+        <span className="font-mono font-semibold text-text-main">当前指标 ¥{formatCentsToYuan(value)}</span>
+      </div>
+      <div className="mt-1 grid grid-cols-3 gap-2">
+        <span>支出 ¥{formatCentsToYuan(item.expenseCents)}</span>
+        <span>收入 ¥{formatCentsToYuan(item.incomeCents)}</span>
+        <span>结余 ¥{formatCentsToYuan(item.netCents)}</span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span>{item.transactionCount} 笔账单</span>
+        {onSelectPeriod && (
+          <button
+            type="button"
+            onClick={() => onSelectPeriod(item)}
+            className="shrink-0 font-semibold text-primary"
+          >
+            查看本周期账单
+          </button>
+        )}
       </div>
     </div>
   );

@@ -52,6 +52,8 @@ export const queryKeys = {
   invitations: ['user', 'invitations'] as const,
   accounts: (ledgerId: string) => ['ledger', ledgerId, 'accounts'] as const,
   categories: (ledgerId: string) => ['ledger', ledgerId, 'categories'] as const,
+  categoryIconLibrary: (ledgerId: string, type: 'EXPENSE' | 'INCOME') =>
+    ['ledger', ledgerId, 'category-icons', 'library', type] as const,
   members: (ledgerId: string) => ['ledger', ledgerId, 'members'] as const,
   ledgerInvitations: (ledgerId: string) => ['ledger', ledgerId, 'invitations'] as const,
   transactions: {
