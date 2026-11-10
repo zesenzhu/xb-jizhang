@@ -30,7 +30,7 @@ describe('AttachmentService', () => {
     sizeBytes: null,
     checksumSha256: null,
     status: 'PENDING' as const,
-    uploadExpiresAt: new Date(now.getTime() + 60_000),
+    uploadExpiresAt: new Date(Date.now() + 60_000),
     uploadedAt: null,
     deletedAt: null,
     createdAt: now,

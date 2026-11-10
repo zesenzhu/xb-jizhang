@@ -15,6 +15,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { CategoryIconModule } from './modules/category-icon/category-icon.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
     UserModule,
     TransactionModule,
     StatisticsModule,
+    CategoryIconModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],

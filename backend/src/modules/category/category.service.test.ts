@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoryService } from './category.service';
 
@@ -21,6 +26,18 @@ describe('CategoryService', () => {
   };
 
   const createService = () => {
+    const categoryIconService = {
+      getBoundIconUrl: jest.fn().mockResolvedValue(null),
+      validateBindableAsset: jest.fn().mockResolvedValue(undefined),
+    };
+    const transactionClient = {
+      categoryIconAsset: { updateMany: jest.fn() },
+      category: {
+        create: jest.fn(),
+        updateMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+    };
     const prisma = {
       category: {
         findMany: jest.fn(),
@@ -30,12 +47,21 @@ describe('CategoryService', () => {
         updateMany: jest.fn(),
         findUnique: jest.fn(),
       },
+      categoryIconAsset: { updateMany: jest.fn() },
       ledgerMember: { findUnique: jest.fn() },
+      $transaction: jest.fn(
+        async (callback: (client: typeof transactionClient) => unknown) =>
+          callback(transactionClient),
+      ),
     };
-
     return {
       prisma,
-      service: new CategoryService(prisma as unknown as PrismaService),
+      transactionClient,
+      categoryIconService,
+      service: new CategoryService(
+        prisma as unknown as PrismaService,
+        categoryIconService as never,
+      ),
     };
   };
 
@@ -180,7 +206,9 @@ describe('CategoryService', () => {
         }),
       }),
     );
-    expect(result).toEqual(expect.objectContaining({ parentId: 'category-parent' }));
+    expect(result).toEqual(
+      expect.objectContaining({ parentId: 'category-parent' }),
+    );
   });
 
   it('给定跨账本或二级分类作为父级，当 Owner 创建分类，则拒绝并且不写入', async () => {
@@ -224,7 +252,9 @@ describe('CategoryService', () => {
     dependencies.prisma.category.findFirst.mockResolvedValue(null);
 
     await expect(
-      dependencies.service.update(userId, ledgerId, 'category-1', { name: '新分类' }),
+      dependencies.service.update(userId, ledgerId, 'category-1', {
+        name: '新分类',
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
   });
@@ -237,15 +267,23 @@ describe('CategoryService', () => {
     });
     dependencies.prisma.category.findFirst.mockResolvedValue(category);
     dependencies.prisma.category.updateMany.mockResolvedValue({ count: 1 });
-    dependencies.prisma.category.findUnique.mockResolvedValue({ ...category, name: '新餐饮' });
+    dependencies.prisma.category.findUnique.mockResolvedValue({
+      ...category,
+      name: '新餐饮',
+    });
 
-    const result = await dependencies.service.update(userId, ledgerId, 'category-1', {
-      name: ' 新餐饮 ',
-      sortOrder: 20,
-      isActive: false,
-      type: 'INCOME',
-      isSystem: true,
-    } as never);
+    const result = await dependencies.service.update(
+      userId,
+      ledgerId,
+      'category-1',
+      {
+        name: ' 新餐饮 ',
+        sortOrder: 20,
+        isActive: false,
+        type: 'INCOME',
+        isSystem: true,
+      } as never,
+    );
 
     expect(dependencies.prisma.category.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -264,7 +302,11 @@ describe('CategoryService', () => {
     });
     dependencies.prisma.category.findFirst
       .mockResolvedValueOnce(category)
-      .mockResolvedValueOnce({ ...category, id: 'category-child-parent', parentId: 'category-parent' });
+      .mockResolvedValueOnce({
+        ...category,
+        id: 'category-child-parent',
+        parentId: 'category-parent',
+      });
 
     await expect(
       dependencies.service.update(userId, ledgerId, 'category-1', {
@@ -284,7 +326,9 @@ describe('CategoryService', () => {
     dependencies.prisma.category.count.mockResolvedValue(1);
 
     await expect(
-      dependencies.service.update(userId, ledgerId, 'category-1', { parentId: 'category-parent' }),
+      dependencies.service.update(userId, ledgerId, 'category-1', {
+        parentId: 'category-parent',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
   });
@@ -299,8 +343,157 @@ describe('CategoryService', () => {
     dependencies.prisma.category.count.mockResolvedValue(1);
 
     await expect(
-      dependencies.service.update(userId, ledgerId, 'category-1', { isActive: false }),
+      dependencies.service.update(userId, ledgerId, 'category-1', {
+        isActive: false,
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(dependencies.prisma.category.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('给定未列入白名单的图标键，当 Owner 创建分类，则拒绝非法图标组合', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+
+    await expect(
+      dependencies.service.create(userId, ledgerId, {
+        type: 'EXPENSE',
+        name: '宠物',
+        iconSource: 'LIBRARY',
+        iconKey: 'tabler:unknown',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dependencies.prisma.category.create).not.toHaveBeenCalled();
+  });
+
+  it('给定已确认且同账本的图片资源，当 Owner 创建图片分类，则在事务中校验并绑定', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.transactionClient.category.create.mockResolvedValue({
+      ...category,
+      iconSource: 'IMAGE',
+      iconKey: null,
+      iconAssetId: 'asset-1',
+      defaultKey: null,
+    });
+
+    const result = await dependencies.service.create(userId, ledgerId, {
+      type: 'EXPENSE',
+      name: '宠物',
+      iconSource: 'IMAGE',
+      iconAssetId: 'asset-1',
+      color: '#F97316',
+    });
+
+    expect(
+      dependencies.categoryIconService.validateBindableAsset,
+    ).toHaveBeenCalledWith(
+      dependencies.transactionClient,
+      ledgerId,
+      'asset-1',
+      null,
+    );
+    expect(dependencies.prisma.$transaction).toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({ iconSource: 'IMAGE', iconAssetId: 'asset-1' }),
+    );
+  });
+
+  it('给定图片分类资源可读取，当查询分类列表，则返回短期 iconUrl', async () => {
+    const dependencies = createService();
+    const imageCategory = {
+      ...category,
+      iconSource: 'IMAGE' as const,
+      iconKey: null,
+      iconAssetId: 'asset-1',
+      defaultKey: null,
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'VIEWER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findMany.mockResolvedValue([imageCategory]);
+    dependencies.prisma.category.count.mockResolvedValue(1);
+    dependencies.categoryIconService.getBoundIconUrl.mockResolvedValue({
+      url: 'https://storage.example/icon.png',
+      expiresAt: new Date('2026-11-10T08:05:00.000Z'),
+    });
+
+    const result = await dependencies.service.list(userId, ledgerId, {
+      page: 1,
+      pageSize: 20,
+      includeInactive: false,
+    });
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        iconSource: 'IMAGE',
+        iconAssetId: 'asset-1',
+        iconUrl: 'https://storage.example/icon.png',
+      }),
+    );
+  });
+
+  it('给定系统分类存在默认键，当 Owner 恢复默认图标，则解除旧图片并恢复图标颜色', async () => {
+    const dependencies = createService();
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({
+      role: 'OWNER',
+      status: 'ACTIVE',
+    });
+    dependencies.prisma.category.findFirst.mockResolvedValue({
+      ...category,
+      isSystem: true,
+      defaultKey: 'expense.food',
+      iconSource: 'IMAGE',
+      iconKey: null,
+      iconAssetId: 'asset-1',
+    });
+    dependencies.transactionClient.category.findUnique.mockResolvedValue({
+      ...category,
+      isSystem: true,
+      defaultKey: 'expense.food',
+      iconSource: 'LIBRARY',
+      iconKey: 'tabler:tools-kitchen-2',
+      iconAssetId: null,
+      icon: 'tabler:tools-kitchen-2',
+      color: '#F97316',
+    });
+    dependencies.transactionClient.category.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    const result = await dependencies.service.restoreDefaultIcon(
+      userId,
+      ledgerId,
+      'category-1',
+    );
+
+    expect(
+      dependencies.transactionClient.categoryIconAsset.updateMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'asset-1', status: 'ATTACHED' } }),
+    );
+    expect(
+      dependencies.transactionClient.category.updateMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          iconSource: 'LIBRARY',
+          iconKey: 'tabler:tools-kitchen-2',
+          iconAssetId: null,
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        iconSource: 'LIBRARY',
+        iconKey: 'tabler:tools-kitchen-2',
+      }),
+    );
   });
 });

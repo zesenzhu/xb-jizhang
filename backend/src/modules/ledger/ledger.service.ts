@@ -38,7 +38,10 @@ function toLedgerSummary(
   ledger: LedgerRecord,
   memberRole: LedgerSummary['memberRole'],
   joinedAt: Date,
-  preference?: { currentLedgerId: string | null; defaultLedgerId: string | null } | null,
+  preference?: {
+    currentLedgerId: string | null;
+    defaultLedgerId: string | null;
+  } | null,
 ): LedgerSummary {
   const { _count, ...fields } = ledger;
   return {
@@ -54,18 +57,34 @@ function toLedgerSummary(
 function validateTimezone(timezone: string | undefined): void {
   if (timezone === undefined) return;
   if (!isLedgerTimezone(timezone)) {
-    throw new BadRequestException({ code: 40001, message: '账本时区无效', data: null });
+    throw new BadRequestException({
+      code: 40001,
+      message: '账本时区无效',
+      data: null,
+    });
   }
 }
 
 function validateCurrency(currency: string | undefined): void {
-  if (currency !== undefined && !Intl.supportedValuesOf('currency').includes(currency)) {
-    throw new BadRequestException({ code: 40001, message: '账本币种无效', data: null });
+  if (
+    currency !== undefined &&
+    !Intl.supportedValuesOf('currency').includes(currency)
+  ) {
+    throw new BadRequestException({
+      code: 40001,
+      message: '账本币种无效',
+      data: null,
+    });
   }
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
 }
 
 @Injectable()
@@ -85,7 +104,11 @@ export class LedgerService {
         orderBy: { joinedAt: 'asc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: { role: true, joinedAt: true, ledger: { select: ledgerSelect } },
+        select: {
+          role: true,
+          joinedAt: true,
+          ledger: { select: ledgerSelect },
+        },
       }),
       this.prisma.ledgerMember.count({ where }),
       this.prisma.userLedgerPreference.findUnique({
@@ -105,7 +128,10 @@ export class LedgerService {
     };
   }
 
-  async create(userId: string, input: CreateLedgerInput): Promise<LedgerSummary> {
+  async create(
+    userId: string,
+    input: CreateLedgerInput,
+  ): Promise<LedgerSummary> {
     const name = input.name.trim();
     if (!name) throw this.invalidNameException();
     validateTimezone(input.timezone);
@@ -128,31 +154,49 @@ export class LedgerService {
         data: { ledgerId: ledger.id, userId, role: 'OWNER', status: 'ACTIVE' },
         select: { role: true, joinedAt: true },
       });
-      await transaction.category.createMany({ data: getDefaultCategoryData(ledger.id) });
-      return { ...toLedgerSummary(ledger, membership.role, membership.joinedAt), memberCount: 1 };
+      await transaction.category.createMany({
+        data: getDefaultCategoryData(ledger.id),
+      });
+      return {
+        ...toLedgerSummary(ledger, membership.role, membership.joinedAt),
+        memberCount: 1,
+      };
     });
   }
 
-  async copy(userId: string, sourceLedgerId: string, input: CopyLedgerInput): Promise<LedgerSummary> {
+  async copy(
+    userId: string,
+    sourceLedgerId: string,
+    input: CopyLedgerInput,
+  ): Promise<LedgerSummary> {
     const name = input.name.trim();
     if (!name) throw this.invalidNameException();
     validateTimezone(input.timezone);
     validateCurrency(input.defaultCurrency);
 
-    const requestWhere = { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } };
+    const requestWhere = {
+      userId_clientRequestId: {
+        userId,
+        clientRequestId: input.clientRequestId,
+      },
+    };
     const readExisting = async (): Promise<LedgerSummary | null> => {
       const request = await this.prisma.ledgerCopyRequest.findUnique({
         where: requestWhere,
         select: { sourceLedgerId: true, targetLedgerId: true },
       });
       if (!request) return null;
-      if ((request.sourceLedgerId && request.sourceLedgerId !== sourceLedgerId) || !request.targetLedgerId) {
+      if (
+        (request.sourceLedgerId && request.sourceLedgerId !== sourceLedgerId) ||
+        !request.targetLedgerId
+      ) {
         throw this.copyConflictException();
       }
       try {
         return await this.getDetail(userId, request.targetLedgerId);
       } catch (error) {
-        if (error instanceof NotFoundException) throw this.copyConflictException();
+        if (error instanceof NotFoundException)
+          throw this.copyConflictException();
         throw error;
       }
     };
@@ -160,17 +204,27 @@ export class LedgerService {
     const existing = await readExisting();
     if (existing) return existing;
     const sourceMembership = await this.getMembership(userId, sourceLedgerId);
-    if (!sourceMembership || sourceMembership.status !== 'ACTIVE') throw this.notFoundException();
+    if (!sourceMembership || sourceMembership.status !== 'ACTIVE')
+      throw this.notFoundException();
     if (sourceMembership.role !== 'OWNER') throw this.forbiddenException();
 
     try {
       return await this.prisma.$transaction(async (transaction) => {
-        const membership = await this.getMembership(userId, sourceLedgerId, transaction);
-        if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+        const membership = await this.getMembership(
+          userId,
+          sourceLedgerId,
+          transaction,
+        );
+        if (!membership || membership.status !== 'ACTIVE')
+          throw this.notFoundException();
         if (membership.role !== 'OWNER') throw this.forbiddenException();
 
         await transaction.ledgerCopyRequest.create({
-          data: { userId, clientRequestId: input.clientRequestId, sourceLedgerId },
+          data: {
+            userId,
+            clientRequestId: input.clientRequestId,
+            sourceLedgerId,
+          },
         });
         const source = membership.ledger;
         const ledger = await transaction.ledger.create({
@@ -186,20 +240,40 @@ export class LedgerService {
           select: ledgerSelect,
         });
         const owner = await transaction.ledgerMember.create({
-          data: { ledgerId: ledger.id, userId, role: 'OWNER', status: 'ACTIVE' },
+          data: {
+            ledgerId: ledger.id,
+            userId,
+            role: 'OWNER',
+            status: 'ACTIVE',
+          },
           select: { role: true, joinedAt: true },
         });
 
         const categories = await transaction.category.findMany({
           where: { ledgerId: sourceLedgerId },
-          select: { id: true, type: true, name: true, parentId: true, icon: true, color: true,
-            sortOrder: true, isSystem: true, isActive: true },
+          select: {
+            id: true,
+            type: true,
+            name: true,
+            parentId: true,
+            icon: true,
+            color: true,
+            iconSource: true,
+            iconKey: true,
+            iconAssetId: true,
+            defaultKey: true,
+            sortOrder: true,
+            isSystem: true,
+            isActive: true,
+          },
           orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
         });
         const ids = new Map<string, string>();
         let pending = categories;
         while (pending.length > 0) {
-          const next = pending.filter((category) => !category.parentId || ids.has(category.parentId));
+          const next = pending.filter(
+            (category) => !category.parentId || ids.has(category.parentId),
+          );
           if (next.length === 0) throw this.copyConflictException();
           for (const category of next) {
             const created = await transaction.category.create({
@@ -207,8 +281,23 @@ export class LedgerService {
                 ledgerId: ledger.id,
                 type: category.type,
                 name: category.name,
-                parentId: category.parentId ? ids.get(category.parentId)! : null,
-                icon: category.icon,
+                parentId: category.parentId
+                  ? ids.get(category.parentId)!
+                  : null,
+                icon:
+                  category.iconSource === 'LIBRARY'
+                    ? category.iconKey
+                    : category.iconSource === 'IMAGE'
+                      ? null
+                      : category.icon,
+                iconSource:
+                  category.iconSource === 'IMAGE'
+                    ? 'NONE'
+                    : (category.iconSource ?? 'NONE'),
+                iconKey:
+                  category.iconSource === 'LIBRARY' ? category.iconKey : null,
+                iconAssetId: null,
+                defaultKey: category.defaultKey,
                 color: category.color,
                 sortOrder: category.sortOrder,
                 isSystem: category.isSystem,
@@ -226,7 +315,10 @@ export class LedgerService {
           where: requestWhere,
           data: { targetLedgerId: ledger.id },
         });
-        return { ...toLedgerSummary(ledger, owner.role, owner.joinedAt), memberCount: 1 };
+        return {
+          ...toLedgerSummary(ledger, owner.role, owner.joinedAt),
+          memberCount: 1,
+        };
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
@@ -241,7 +333,8 @@ export class LedgerService {
   /** 预检提供具体阻碍原因；锁后复核把并发资格变化统一报告为冲突。 */
   async remove(userId: string, ledgerId: string): Promise<null> {
     const membership = await this.getMembership(userId, ledgerId);
-    if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+    if (!membership || membership.status !== 'ACTIVE')
+      throw this.notFoundException();
     if (membership.role !== 'OWNER') throw this.forbiddenException();
     await this.checkDeletionEligibility(this.prisma, userId, ledgerId, false);
 
@@ -256,7 +349,9 @@ export class LedgerService {
       if (owner.role !== 'OWNER') throw this.deletionConflictException();
 
       // 与其他账本删除、成员退出/移除串行化，保护最后一本可访问账本。
-      await transaction.$queryRaw(Prisma.sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      await transaction.$queryRaw(
+        Prisma.sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`,
+      );
       // 角色更新不触发账本外键锁；在用户锁后固定成员行，避免等待期间 Owner 资格变化。
       await transaction.$queryRaw(Prisma.sql`
         SELECT id FROM "ledger_member" WHERE ledger_id = ${ledgerId} AND user_id = ${userId} FOR UPDATE
@@ -267,7 +362,9 @@ export class LedgerService {
 
       await this.checkDeletionEligibility(transaction, userId, ledgerId, true);
       // Cascade 清理账本配置；偏好和复制历史的账本引用由 SET NULL 在同一事务清理。
-      const deleted = await transaction.ledger.deleteMany({ where: { id: ledgerId } });
+      const deleted = await transaction.ledger.deleteMany({
+        where: { id: ledgerId },
+      });
       if (deleted.count !== 1) throw this.deletionConflictException();
       return null;
     });
@@ -287,28 +384,51 @@ export class LedgerService {
     if (await client.transaction.count({ where: { ledgerId } })) {
       reject(40911, '账本存在账单，不能删除');
     }
-    if (await client.ledgerMember.count({ where: { ledgerId, status: 'ACTIVE', userId: { not: userId } } })) {
+    if (
+      await client.ledgerMember.count({
+        where: { ledgerId, status: 'ACTIVE', userId: { not: userId } },
+      })
+    ) {
       reject(40912, '账本仍有其他活跃成员，不能删除');
     }
-    if (await client.ledgerInvitation.count({ where: { ledgerId, status: 'PENDING', expiresAt: { gt: new Date() } } })) {
+    if (
+      await client.ledgerInvitation.count({
+        where: { ledgerId, status: 'PENDING', expiresAt: { gt: new Date() } },
+      })
+    ) {
       reject(40913, '账本存在待处理邀请，不能删除');
     }
-    if (!await client.ledgerMember.count({ where: { userId, status: 'ACTIVE', ledgerId: { not: ledgerId } } })) {
+    if (
+      !(await client.ledgerMember.count({
+        where: { userId, status: 'ACTIVE', ledgerId: { not: ledgerId } },
+      }))
+    ) {
       reject(40914, '不能删除最后一本可访问账本');
     }
   }
 
   private deletionConflictException(): ConflictException {
-    return new ConflictException({ code: 40902, message: '账本删除条件已变化，请刷新后重试', data: null });
+    return new ConflictException({
+      code: 40902,
+      message: '账本删除条件已变化，请刷新后重试',
+      data: null,
+    });
   }
 
   async getDetail(userId: string, ledgerId: string): Promise<LedgerSummary> {
     const membership = await this.getMembership(userId, ledgerId);
-    if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+    if (!membership || membership.status !== 'ACTIVE')
+      throw this.notFoundException();
     const preference = await this.prisma.userLedgerPreference.findUnique({
-      where: { userId }, select: { currentLedgerId: true, defaultLedgerId: true },
+      where: { userId },
+      select: { currentLedgerId: true, defaultLedgerId: true },
     });
-    return toLedgerSummary(membership.ledger, membership.role, membership.joinedAt, preference);
+    return toLedgerSummary(
+      membership.ledger,
+      membership.role,
+      membership.joinedAt,
+      preference,
+    );
   }
 
   async update(
@@ -319,7 +439,8 @@ export class LedgerService {
     validateTimezone(input.timezone);
     validateCurrency(input.defaultCurrency);
     const membership = await this.getMembership(userId, ledgerId);
-    if (!membership || membership.status !== 'ACTIVE') throw this.notFoundException();
+    if (!membership || membership.status !== 'ACTIVE')
+      throw this.notFoundException();
     if (membership.role !== 'OWNER') throw this.forbiddenException();
 
     const ledger = await this.prisma.ledger.findUnique({
@@ -333,17 +454,27 @@ export class LedgerService {
 
     const data: Prisma.LedgerUpdateManyMutationInput = {
       ...(input.name === undefined ? {} : { name: input.name.trim() }),
-      ...(input.defaultCurrency === undefined ? {} : { defaultCurrency: input.defaultCurrency }),
+      ...(input.defaultCurrency === undefined
+        ? {}
+        : { defaultCurrency: input.defaultCurrency }),
       ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
       ...(input.icon === undefined ? {} : { icon: input.icon }),
       ...(input.color === undefined ? {} : { color: input.color }),
     };
-    if (input.name !== undefined && !input.name.trim()) throw this.invalidNameException();
+    if (input.name !== undefined && !input.name.trim())
+      throw this.invalidNameException();
 
     return this.prisma.$transaction(async (transaction) => {
-      if (input.defaultCurrency !== undefined && input.defaultCurrency !== ledger.defaultCurrency) {
-        await transaction.$queryRaw(Prisma.sql`SELECT id FROM "ledger" WHERE id = ${ledgerId} FOR UPDATE`);
-        const count = await transaction.transaction.count({ where: { ledgerId } });
+      if (
+        input.defaultCurrency !== undefined &&
+        input.defaultCurrency !== ledger.defaultCurrency
+      ) {
+        await transaction.$queryRaw(
+          Prisma.sql`SELECT id FROM "ledger" WHERE id = ${ledgerId} FOR UPDATE`,
+        );
+        const count = await transaction.transaction.count({
+          where: { ledgerId },
+        });
         if (count > 0) throw this.currencyConflictException();
       }
       const updated = await transaction.ledger.updateMany({
@@ -358,13 +489,23 @@ export class LedgerService {
       });
       if (!latest) throw this.notFoundException();
       const preference = await transaction.userLedgerPreference.findUnique({
-        where: { userId }, select: { currentLedgerId: true, defaultLedgerId: true },
+        where: { userId },
+        select: { currentLedgerId: true, defaultLedgerId: true },
       });
-      return toLedgerSummary(latest, membership.role, membership.joinedAt, preference);
+      return toLedgerSummary(
+        latest,
+        membership.role,
+        membership.joinedAt,
+        preference,
+      );
     });
   }
 
-  async getMembership(userId: string, ledgerId: string, transaction?: PrismaClient | TransactionClient) {
+  async getMembership(
+    userId: string,
+    ledgerId: string,
+    transaction?: PrismaClient | TransactionClient,
+  ) {
     const client = transaction ?? this.prisma;
     return client.ledgerMember.findUnique({
       where: { ledgerId_userId: { ledgerId, userId } },
@@ -378,26 +519,50 @@ export class LedgerService {
   }
 
   private notFoundException(): NotFoundException {
-    return new NotFoundException({ code: 40401, message: '账本资源不存在', data: null });
+    return new NotFoundException({
+      code: 40401,
+      message: '账本资源不存在',
+      data: null,
+    });
   }
 
   private forbiddenException(): ForbiddenException {
-    return new ForbiddenException({ code: 40301, message: '账本成员权限不足', data: null });
+    return new ForbiddenException({
+      code: 40301,
+      message: '账本成员权限不足',
+      data: null,
+    });
   }
 
   private conflictException(): ConflictException {
-    return new ConflictException({ code: 40902, message: '账本版本已变化，请刷新后重试', data: null });
+    return new ConflictException({
+      code: 40902,
+      message: '账本版本已变化，请刷新后重试',
+      data: null,
+    });
   }
 
   private currencyConflictException(): ConflictException {
-    return new ConflictException({ code: 40902, message: '账本已有账单，不能修改默认币种', data: null });
+    return new ConflictException({
+      code: 40902,
+      message: '账本已有账单，不能修改默认币种',
+      data: null,
+    });
   }
 
   private copyConflictException(): ConflictException {
-    return new ConflictException({ code: 40902, message: '复制请求已失效或发生冲突', data: null });
+    return new ConflictException({
+      code: 40902,
+      message: '复制请求已失效或发生冲突',
+      data: null,
+    });
   }
 
   private invalidNameException(): BadRequestException {
-    return new BadRequestException({ code: 40001, message: '账本名称不能为空', data: null });
+    return new BadRequestException({
+      code: 40001,
+      message: '账本名称不能为空',
+      data: null,
+    });
   }
 }

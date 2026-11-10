@@ -619,6 +619,9 @@ describe('StatisticsService categories', () => {
     parentId: null,
     name: 'Food',
     icon: 'food',
+    iconSource: 'LIBRARY',
+    iconKey: 'tabler:tools-kitchen-2',
+    iconAssetId: null,
     color: '#123456',
     isActive: false,
   };
@@ -647,9 +650,16 @@ describe('StatisticsService categories', () => {
         findFirst: jest.fn().mockResolvedValue(null),
       },
     };
+    const categoryIconService = {
+      getBoundIconUrl: jest.fn().mockResolvedValue(null),
+    };
     return {
       prisma,
-      service: new StatisticsService(prisma as unknown as PrismaService),
+      categoryIconService,
+      service: new StatisticsService(
+        prisma as unknown as PrismaService,
+        categoryIconService as never,
+      ),
     };
   };
   const categories = (
@@ -686,6 +696,11 @@ describe('StatisticsService categories', () => {
             bucketType: 'CATEGORY',
             name: 'Food',
             icon: 'food',
+            iconSource: 'LIBRARY',
+            iconKey: 'tabler:tools-kitchen-2',
+            iconAssetId: null,
+            iconUrl: null,
+            iconUrlExpiresAt: null,
             color: '#123456',
             amountCents: 600,
             percentage: 66.67,
@@ -705,13 +720,18 @@ describe('StatisticsService categories', () => {
             bucketType: 'UNCATEGORIZED',
             name: '未分类',
             icon: null,
+            iconSource: 'NONE',
+            iconKey: null,
+            iconAssetId: null,
+            iconUrl: null,
+            iconUrlExpiresAt: null,
             color: null,
             amountCents: 300,
             percentage: 33.33,
             transactionCount: 1,
             comparison: null,
             drilldown: {
-              uncategorized: true,
+              categoryId: null,
               from: '2026-09-30T16:00:00.000Z',
               to: '2026-10-31T16:00:00.000Z',
               type: 'EXPENSE',
@@ -722,6 +742,37 @@ describe('StatisticsService categories', () => {
     );
     expect(prisma.category.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { ledgerId, type: 'EXPENSE' } }),
+    );
+  });
+
+  it('给定图片分类存在已确认资源，当查询分类统计，则返回短期图片地址和结构化图标字段', async () => {
+    const { prisma, service, categoryIconService } = setup();
+    prisma.category.findMany.mockResolvedValue([
+      {
+        ...root,
+        icon: null,
+        iconSource: 'IMAGE',
+        iconKey: null,
+        iconAssetId: 'asset-1',
+      },
+    ]);
+    prisma.transaction.groupBy.mockResolvedValue([group('root', 100)]);
+    categoryIconService.getBoundIconUrl.mockResolvedValue({
+      url: 'https://storage.example/category.png',
+      expiresAt: new Date('2026-11-10T08:05:00.000Z'),
+    });
+
+    const result = await categories(service);
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        icon: null,
+        iconSource: 'IMAGE',
+        iconKey: null,
+        iconAssetId: 'asset-1',
+        iconUrl: 'https://storage.example/category.png',
+        iconUrlExpiresAt: '2026-11-10T08:05:00.000Z',
+      }),
     );
   });
 

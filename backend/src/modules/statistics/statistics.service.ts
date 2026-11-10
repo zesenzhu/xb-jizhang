@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Temporal } from '@js-temporal/polyfill';
 import type { Category } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CategoryIconService } from '../category-icon/category-icon.service';
 import { resolveStatisticsDateRange } from './statistics-date-range';
 import {
   buildStatisticsPeriodSlots,
@@ -30,7 +32,14 @@ import type {
 
 type CategoryMetadata = Pick<
   Category,
-  'id' | 'parentId' | 'name' | 'icon' | 'color'
+  | 'id'
+  | 'parentId'
+  | 'name'
+  | 'icon'
+  | 'iconSource'
+  | 'iconKey'
+  | 'iconAssetId'
+  | 'color'
 >;
 interface CategoryAggregate {
   categoryId: string | null;
@@ -64,7 +73,10 @@ function aggregateCents(
 
 @Injectable()
 export class StatisticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly categoryIconService?: CategoryIconService,
+  ) {}
 
   async categories(
     userId: string,
@@ -129,6 +141,9 @@ export class StatisticsService {
           parentId: true,
           name: true,
           icon: true,
+          iconSource: true,
+          iconKey: true,
+          iconAssetId: true,
           color: true,
         },
       }),
@@ -165,6 +180,16 @@ export class StatisticsService {
         category?.id === query.categoryRootId;
       const rootView = query.categoryLevel !== 'CHILD';
       const currentPercentage = percentage(amountCents, totalCents);
+      const iconUrl =
+        category?.iconSource === 'IMAGE' &&
+        category.iconAssetId &&
+        this.categoryIconService
+          ? await this.categoryIconService.getBoundIconUrl(
+              userId,
+              ledgerId,
+              category.iconAssetId,
+            )
+          : null;
       items.push({
         categoryId: id,
         categoryRootId: category ? (category.parentId ?? category.id) : null,
@@ -181,7 +206,14 @@ export class StatisticsService {
             : direct
               ? `${category.name}（未细分）`
               : category.name,
-        icon: category?.icon ?? null,
+        icon:
+          category?.icon ??
+          (category?.iconSource === 'LIBRARY' ? category.iconKey : null),
+        iconSource: category?.iconSource ?? 'NONE',
+        iconKey: category?.iconKey ?? null,
+        iconAssetId: category?.iconAssetId ?? null,
+        iconUrl: iconUrl?.url ?? null,
+        iconUrlExpiresAt: iconUrl?.expiresAt.toISOString() ?? null,
         color: category?.color ?? null,
         amountCents,
         percentage: currentPercentage,
@@ -201,11 +233,9 @@ export class StatisticsService {
             }
           : null,
         drilldown: {
-          ...(category === null
-            ? { uncategorized: true }
-            : rootView
-              ? { categoryRootId: category.id }
-              : { categoryId: id }),
+          ...(rootView && category
+            ? { categoryRootId: category.id }
+            : { categoryId: id }),
           from: range.startAt,
           to: range.endAt,
           type,

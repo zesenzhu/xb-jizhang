@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AuthUser } from '../../common/auth/authenticated-request';
 import { AuthGuard } from '../auth/auth.guard';
@@ -6,7 +15,11 @@ import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { QueryCategoriesDto } from './dto/query-categories.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import type { CategoryQuery, CreateCategoryInput, UpdateCategoryInput } from './category.types';
+import type {
+  CategoryQuery,
+  CreateCategoryInput,
+  UpdateCategoryInput,
+} from './category.types';
 
 @Controller('ledgers/:ledgerId/categories')
 @UseGuards(AuthGuard)
@@ -34,6 +47,9 @@ export class CategoryController {
       parentId: dto.parentId,
       sortOrder: dto.sortOrder,
       icon: dto.icon,
+      iconSource: dto.iconSource,
+      iconKey: dto.iconKey,
+      iconAssetId: dto.iconAssetId,
       color: dto.color,
     };
     return this.categoryService.create(user.id, ledgerId, input);
@@ -51,9 +67,25 @@ export class CategoryController {
       parentId: dto.parentId,
       sortOrder: dto.sortOrder,
       icon: dto.icon,
+      iconSource: dto.iconSource,
+      iconKey: dto.iconKey,
+      iconAssetId: dto.iconAssetId,
       color: dto.color,
       isActive: dto.isActive,
     };
     return this.categoryService.update(user.id, ledgerId, categoryId, input);
+  }
+
+  @Post(':categoryId/restore-default-icon')
+  restoreDefaultIcon(
+    @CurrentUser() user: AuthUser,
+    @Param('ledgerId') ledgerId: string,
+    @Param('categoryId') categoryId: string,
+  ) {
+    return this.categoryService.restoreDefaultIcon(
+      user.id,
+      ledgerId,
+      categoryId,
+    );
   }
 }

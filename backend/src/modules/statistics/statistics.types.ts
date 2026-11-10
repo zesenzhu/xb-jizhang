@@ -1,4 +1,4 @@
-import type { TransactionType } from '@prisma/client';
+import type { CategoryIconSource, TransactionType } from '@prisma/client';
 
 export type StatisticsPeriod = 'WEEK' | 'MONTH' | 'YEAR' | 'ALL' | 'RANGE';
 
@@ -128,6 +128,11 @@ export interface StatisticsCategoryItem {
   bucketType: 'CATEGORY' | 'ROOT_DIRECT' | 'UNCATEGORIZED';
   name: string;
   icon: string | null;
+  iconSource: CategoryIconSource;
+  iconKey: string | null;
+  iconAssetId: string | null;
+  iconUrl: string | null;
+  iconUrlExpiresAt: string | null;
   color: string | null;
   amountCents: number;
   percentage: number;

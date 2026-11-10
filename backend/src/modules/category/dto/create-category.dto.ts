@@ -1,4 +1,12 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Min,
+} from 'class-validator';
 
 export class CreateCategoryDto {
   @IsIn(['EXPENSE', 'INCOME'])
@@ -21,6 +29,19 @@ export class CreateCategoryDto {
   @IsString()
   @Length(1, 50)
   icon?: string | null;
+
+  @IsOptional()
+  @IsIn(['NONE', 'LIBRARY', 'IMAGE'])
+  iconSource?: 'NONE' | 'LIBRARY' | 'IMAGE';
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  iconKey?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  iconAssetId?: string | null;
 
   @IsOptional()
   @IsString()

@@ -75,6 +75,18 @@ enum TransactionAttachmentStatus {
   DELETED
 }
 
+enum CategoryIconSource {
+  NONE
+  LIBRARY
+  IMAGE
+}
+
+enum CategoryIconAssetStatus {
+  PENDING
+  ATTACHED
+  DELETED
+}
+
 model User {
   id                  String                  @id @default(uuid())
   username            String                  @unique
@@ -94,6 +106,7 @@ model User {
   paidTransactions    Transaction[]           @relation("TransactionPayer")
   ownedAccounts       Account[]               @relation("AccountOwner")
   uploadedAttachments TransactionAttachment[] @relation("AttachmentUploader")
+  uploadedCategoryIconAssets CategoryIconAsset[] @relation("CategoryIconAssetUploader")
   auditLogs           TransactionAuditLog[]   @relation("AuditOperator")
   createdAt           DateTime                @default(now()) @map("created_at")
   updatedAt           DateTime                @updatedAt @map("updated_at")
@@ -122,6 +135,7 @@ model Ledger {
   categories         Category[]
   transactions       Transaction[]
   attachments        TransactionAttachment[]
+  categoryIconAssets CategoryIconAsset[]
   budgets            Budget[]
   auditLogs          TransactionAuditLog[]
   createdAt          DateTime                @default(now()) @map("created_at")
@@ -244,28 +258,70 @@ model Account {
 }
 
 model Category {
-  id           String        @id @default(uuid())
-  ledgerId     String        @map("ledger_id")
+  id           String              @id @default(uuid())
+  ledgerId     String              @map("ledger_id")
   type         CategoryType
   name         String
-  parentId     String?       @map("parent_id")
+  parentId     String?             @map("parent_id")
   icon         String?
+  iconSource   CategoryIconSource  @default(NONE) @map("icon_source")
+  iconKey      String?             @map("icon_key")
+  iconAssetId  String?             @unique @map("icon_asset_id")
+  defaultKey   String?             @map("default_key")
   color        String?
-  sortOrder    Int           @default(0) @map("sort_order")
-  isSystem     Boolean       @default(false) @map("is_system")
-  isActive     Boolean       @default(true) @map("is_active")
-  ledger       Ledger        @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
-  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children     Category[]    @relation("CategoryHierarchy")
+  sortOrder    Int                 @default(0) @map("sort_order")
+  isSystem     Boolean             @default(false) @map("is_system")
+  isActive     Boolean             @default(true) @map("is_active")
+  ledger       Ledger              @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  parent       Category?           @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     Category[]          @relation("CategoryHierarchy")
+  iconAsset    CategoryIconAsset?  @relation("CategoryCurrentIcon", fields: [iconAssetId], references: [id], onDelete: SetNull)
   transactions Transaction[]
   budgets      Budget[]
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
 
   @@unique([ledgerId, type, parentId, name])
   @@index([ledgerId, type, isActive])
   @@index([ledgerId, type, parentId, sortOrder])
+  @@index([ledgerId, defaultKey])
   @@map("category")
+}
+
+model CategoryIconAsset {
+  id                String                   @id @default(uuid())
+  ledgerId          String                   @map("ledger_id")
+  uploadedById      String                   @map("uploaded_by_id")
+  clientRequestId   String                   @map("client_request_id")
+  objectKey         String                   @unique @map("object_key")
+  originalName      String?                  @map("original_name")
+  declaredMimeType  String                   @map("declared_mime_type")
+  declaredSizeBytes Int                      @map("declared_size_bytes")
+  mimeType          String?
+  sizeBytes         Int?                     @map("size_bytes")
+  width             Int?
+  height            Int?
+  status            CategoryIconAssetStatus  @default(PENDING)
+  uploadExpiresAt   DateTime?                @map("upload_expires_at")
+  orphanExpiresAt   DateTime?                @map("orphan_expires_at")
+  uploadedAt        DateTime?                @map("uploaded_at")
+  deletedAt         DateTime?                @map("deleted_at")
+  purgedAt          DateTime?                @map("purged_at")
+  purgeAttempts     Int                      @default(0) @map("purge_attempts")
+  lastPurgeError    String?                  @map("last_purge_error")
+  lastUploadError   String?                  @map("last_upload_error")
+  ledger            Ledger                   @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  category          Category?                @relation("CategoryCurrentIcon")
+  uploadedBy        User                     @relation("CategoryIconAssetUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  @@unique([ledgerId, clientRequestId])
+  @@index([ledgerId, status, createdAt])
+  @@index([status, uploadExpiresAt])
+  @@index([status, orphanExpiresAt])
+  @@index([deletedAt, purgedAt])
+  @@map("category_icon_asset")
 }
 
 model Transaction {
