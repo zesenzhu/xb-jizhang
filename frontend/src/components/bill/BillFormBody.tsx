@@ -51,6 +51,7 @@ export interface BillFormBodyProps {
   categoryManage?: CategoryManageSession;
   noteSuggestions?: readonly NoteSuggestion[];
   attachmentDrafts?: readonly AttachmentDraft[];
+  existingAttachmentCount?: number;
   onOpenAttachmentPicker?: () => void;
   onRemoveAttachment?: (localId: string) => void;
   onRetryAttachments?: () => void;
@@ -100,6 +101,7 @@ export function BillFormBody({
   categoryManage,
   noteSuggestions = [],
   attachmentDrafts = [],
+  existingAttachmentCount = 0,
   onOpenAttachmentPicker,
   onRemoveAttachment,
   onRetryAttachments,
@@ -256,6 +258,7 @@ export function BillFormBody({
 
       <AttachmentPicker
         drafts={attachmentDrafts}
+        existingAttachmentCount={existingAttachmentCount}
         onOpen={onOpenAttachmentPicker ?? (() => undefined)}
         onRemove={onRemoveAttachment ?? (() => undefined)}
         onRetry={onRetryAttachments}
@@ -276,7 +279,7 @@ export function BillFormBody({
             onOpenAccountPicker={onOpenAccountPicker}
             payerName={payerName}
             onOpenPayerPicker={onOpenPayerPicker}
-            attachmentCount={attachmentDrafts.length}
+            attachmentCount={existingAttachmentCount + attachmentDrafts.length}
             onOpenAttachmentPicker={onOpenAttachmentPicker}
             attachmentsDisabled={attachmentsDisabled}
           />

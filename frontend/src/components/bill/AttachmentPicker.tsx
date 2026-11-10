@@ -7,6 +7,8 @@ import { ATTACHMENT_MAX_COUNT } from '@/lib/bill/attachment-validation';
 
 export interface AttachmentPickerProps {
   drafts: readonly AttachmentDraft[];
+  /** 编辑账单时服务端已经存在的附件数量，参与单笔 5 张上限。 */
+  existingAttachmentCount?: number;
   onOpen: () => void;
   onRemove: (localId: string) => void;
   onRetry?: () => void;
@@ -15,6 +17,7 @@ export interface AttachmentPickerProps {
 
 export function AttachmentPicker({
   drafts,
+  existingAttachmentCount = 0,
   onOpen,
   onRemove,
   onRetry,
@@ -22,12 +25,18 @@ export function AttachmentPicker({
 }: AttachmentPickerProps): React.JSX.Element | null {
   if (drafts.length === 0) return null;
 
+  const totalCount = existingAttachmentCount + drafts.length;
+
   return (
     <section className="mx-3 mb-2 rounded-2xl border border-app-border bg-app-card-subtle/70 px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold text-text-main">待上传图片</p>
-          <p className="mt-0.5 text-[10px] text-text-muted">保存账单后上传，最多 {ATTACHMENT_MAX_COUNT} 张</p>
+          <p className="mt-0.5 text-[10px] text-text-muted">
+            {existingAttachmentCount > 0
+              ? `已有 ${existingAttachmentCount} 张，新增图片保存后上传`
+              : `保存账单后上传，最多 ${ATTACHMENT_MAX_COUNT} 张`}
+          </p>
         </div>
         <div className="flex items-center gap-1.5">
           {drafts.some((draft) => draft.status === 'FAILED') && onRetry && (
@@ -41,7 +50,7 @@ export function AttachmentPicker({
               重试
             </button>
           )}
-          {drafts.length < ATTACHMENT_MAX_COUNT && (
+          {totalCount < ATTACHMENT_MAX_COUNT && (
             <button
               type="button"
               onClick={onOpen}

@@ -3,8 +3,14 @@
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError } from '@/lib/api/errors';
-import type { TransactionAttachmentSummary } from '@/lib/api/attachment-types';
+import type { AttachmentDraft, TransactionAttachmentSummary } from '@/lib/api/attachment-types';
 import { deleteAttachment, getAttachmentAccessUrl } from '@/lib/api/attachment-api';
+import { uploadAttachmentQueue } from '@/lib/bill/attachment-queue';
+import {
+  ATTACHMENT_ACCEPT,
+  createAttachmentDraft,
+  validateAttachmentFiles,
+} from '@/lib/bill/attachment-validation';
 import {
   deleteTransaction,
   getTransaction,
@@ -102,8 +108,24 @@ export function BillDetailContainer({
   const [categoryError, setCategoryError] = React.useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = React.useState<string | null>(null);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
+  const [attachmentDrafts, setAttachmentDrafts] = React.useState<AttachmentDraft[]>([]);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const attachmentInputRef = React.useRef<HTMLInputElement | null>(null);
   const attachmentObjectUrlsRef = React.useRef<Set<string>>(new Set());
+
+  const clearAttachmentDrafts = React.useCallback((): void => {
+    setAttachmentDrafts((drafts) => {
+      if (drafts.length === 0) return drafts;
+      drafts.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
+      return [];
+    });
+  }, []);
+
+  const leaveEdit = React.useCallback((): void => {
+    setAttachmentError(null);
+    clearAttachmentDrafts();
+    setEditing(false);
+  }, [clearAttachmentDrafts]);
 
   // 详情不缓存：编辑后必须立刻看到新值。
   const detailQuery = useQuery({
@@ -174,7 +196,7 @@ export function BillDetailContainer({
   if (wasOpen !== open) {
     setWasOpen(open);
     if (!open) {
-      setEditing(false);
+      leaveEdit();
       setConflict(false);
       setDeleteError(null);
       setCategoryError(false);
@@ -187,7 +209,66 @@ export function BillDetailContainer({
     dispatch({ kind: 'hydrate', state: billFormFromTransaction(bill) });
     setConflict(false);
     setCategoryError(false);
+    setAttachmentError(null);
+    clearAttachmentDrafts();
     setEditing(true);
+  };
+
+  const addAttachmentFiles = (fileList: FileList | null): void => {
+    if (!fileList) return;
+    const files = Array.from(fileList);
+    const result = validateAttachmentFiles(files, attachments.length + attachmentDrafts.length);
+    const nextDrafts = result.accepted.map(createAttachmentDraft);
+    setAttachmentError(result.errors.length > 0 ? result.errors.join('；') : null);
+    setAttachmentDrafts((drafts) => [...drafts, ...nextDrafts]);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+  };
+
+  const removeAttachmentDraft = (localId: string): void => {
+    setAttachmentDrafts((drafts) => {
+      const target = drafts.find((draft) => draft.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return drafts.filter((draft) => draft.localId !== localId);
+    });
+  };
+
+  const uploadDrafts = async (transactionId: string): Promise<boolean> => {
+    const drafts = attachmentDrafts.filter((draft) => draft.status !== 'ATTACHED');
+    if (drafts.length === 0) return true;
+    let hasFailure = false;
+    await uploadAttachmentQueue({
+      ledgerId,
+      transactionId,
+      drafts,
+      onProgress: (progress) => {
+        if (progress.status === 'FAILED') hasFailure = true;
+        setAttachmentDrafts((current) =>
+          current.map((draft) =>
+            draft.localId === progress.localId
+              ? { ...draft, status: progress.status, error: progress.error }
+              : draft,
+          ),
+        );
+      },
+    });
+    return !hasFailure;
+  };
+
+  const retryAttachments = async (): Promise<void> => {
+    if (!bill || form.submitting) return;
+    dispatch({ kind: 'submitStart' });
+    const attachmentsUploaded = await uploadDrafts(bill.id);
+    if (attachmentsUploaded) {
+      setAttachmentError(null);
+      clearAttachmentDrafts();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
+      await detailQuery.refetch();
+      dispatch({ kind: 'submitFailure', error: '' });
+      setEditing(false);
+      return;
+    }
+    setAttachmentError('图片仍未全部上传成功，请稍后重试');
+    dispatch({ kind: 'submitFailure', error: '' });
   };
 
   const saveMutation = useMutation({
@@ -235,16 +316,24 @@ export function BillDetailContainer({
 
     dispatch({ kind: 'submitStart' });
     try {
-      await saveMutation.mutateAsync();
+      const savedBill = await saveMutation.mutateAsync();
+      const attachmentsUploaded = await uploadDrafts(savedBill.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all(ledgerId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.transactions.noteSuggestions(ledgerId) });
       await queryClient.invalidateQueries({ queryKey: ['ledger', ledgerId, 'statistics'] });
       await detailQuery.refetch();
+      if (!attachmentsUploaded) {
+        setAttachmentError('账单已保存，但部分图片上传失败，请稍后重试');
+        dispatch({ kind: 'submitFailure', error: '' });
+        return;
+      }
+      setAttachmentError(null);
+      clearAttachmentDrafts();
       setEditing(false);
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === 40922) {
         setConflict(true);
-        setEditing(false);
+        leaveEdit();
         return;
       }
       const message =
@@ -421,12 +510,12 @@ export function BillDetailContainer({
       <BottomSheet
         open={open && editing}
         onOpenChange={(next) => {
-          if (!next) setEditing(false);
+          if (!next) leaveEdit();
         }}
         variant="full"
         onBeforeClose={() => {
           if (form.isDirty && !form.submitting) {
-            setEditing(false);
+            leaveEdit();
             return false;
           }
           return true;
@@ -437,7 +526,7 @@ export function BillDetailContainer({
             <button
               type="button"
               aria-label="退出编辑"
-              onClick={() => setEditing(false)}
+              onClick={leaveEdit}
               className="flex size-9 shrink-0 items-center justify-center justify-self-start rounded-full bg-app-card-subtle text-text-muted active:scale-95"
             >
               <X size={18} />
@@ -453,6 +542,11 @@ export function BillDetailContainer({
           {form.error && (
             <p className="mx-4 mb-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {form.error}
+            </p>
+          )}
+          {attachmentError && (
+            <p role="alert" className="mx-4 mb-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {attachmentError}
             </p>
           )}
         </div>
@@ -478,12 +572,27 @@ export function BillDetailContainer({
           scrollRef={scrollRef}
           primaryText="保存"
           onSubmit={() => void submitEdit()}
+          attachmentDrafts={attachmentDrafts}
+          existingAttachmentCount={attachments.length}
+          onOpenAttachmentPicker={() => attachmentInputRef.current?.click()}
+          onRemoveAttachment={removeAttachmentDraft}
+          onRetryAttachments={() => void retryAttachments()}
+          attachmentsDisabled={form.submitting}
           noteSuggestions={noteSuggestionsQuery.data?.items ?? []}
           submitDisabled={
             parseAmountText(form.amountText).cents === null || Boolean(form.timeError) || !isOnline
           }
         />
       </BottomSheet>
+
+      <input
+        ref={attachmentInputRef}
+        type="file"
+        accept={ATTACHMENT_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(event) => addAttachmentFiles(event.target.files)}
+      />
 
       <AccountPickerSheet
         open={accountPickerOpen}
