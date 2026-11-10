@@ -5,6 +5,7 @@ import {
   createDevelopmentEnvironments,
   createProductionProxyEnvironment,
 } from './dev-config.mjs';
+import { shouldGeneratePrismaClient } from './prisma-client.mjs';
 
 const rootDirectory = process.cwd();
 
@@ -59,9 +60,9 @@ function signalProcessGroup(child, signal) {
   child.kill(signal);
 }
 
-function runOnce(command, args) {
+function runOnce(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawnProcess(command, args);
+    const child = spawnProcess(command, args, options);
     child.once('error', reject);
     child.once('exit', (code, signal) => {
       if (signal) {
@@ -72,6 +73,20 @@ function runOnce(command, args) {
       resolve(code ?? 1);
     });
   });
+}
+
+async function ensurePrismaClient() {
+  if (!(await shouldGeneratePrismaClient(rootDirectory))) return;
+
+  console.log('检测到 Prisma Client 缺失或 schema 已更新，正在重新生成...');
+  const generateCode = await runOnce(
+    'pnpm',
+    ['--dir', 'backend', 'run', 'prisma:generate'],
+    { env: developmentEnvironments.backend },
+  );
+  if (generateCode !== 0) {
+    throw new Error('Prisma Client 生成失败，请检查 schema 和环境变量');
+  }
 }
 
 function stopChildren(exitCode = 0) {
@@ -118,6 +133,8 @@ async function main() {
     await startFrontendOnly();
     return;
   }
+
+  await ensurePrismaClient();
 
   const infraCode = await runOnce('docker', [
     'compose',
