@@ -29,6 +29,11 @@ assert.deepEqual(
   ['ready'],
 );
 assert.deepEqual(
+  attachmentIdsNeedingUrl([attachment('ready')]),
+  ['ready'],
+  '详情首屏应主动为无访问地址的已完成附件获取预览地址',
+);
+assert.deepEqual(
   attachmentIdsNeedingUrl([attachment('ready'), attachment('other')], new Set(['ready'])),
   ['other'],
 );

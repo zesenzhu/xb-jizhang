@@ -15,6 +15,7 @@ import { CategoryGrid } from './CategoryGrid';
 import { CategoryEditorSheet } from './CategoryEditorSheet';
 import { CategoryManageBody } from './CategoryManageSheet';
 import type { CategorySummary, CategoryType } from '@/lib/api/category-types';
+import type { LedgerMemberSummary } from '@/lib/api/member-types';
 import { SheetMetaFields } from './SheetMetaFields';
 import { useVisualViewport } from '@/lib/viewport/use-visual-viewport';
 import { SheetQuickChips } from './SheetQuickChips';
@@ -35,6 +36,8 @@ export interface BillFormBodyProps {
   onSelectCategory: (categoryId: string) => void;
   accounts: readonly AccountSummary[];
   onOpenAccountPicker: () => void;
+  members: readonly LedgerMemberSummary[];
+  onOpenPayerPicker: () => void;
   isOnline: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   /** 主提交键文案，如「完成」/「保存」 */
@@ -85,6 +88,8 @@ export function BillFormBody({
   onSelectCategory,
   accounts,
   onOpenAccountPicker,
+  members,
+  onOpenPayerPicker,
   isOnline,
   scrollRef,
   primaryText,
@@ -184,6 +189,14 @@ export function BillFormBody({
 
   const categoryPath = categoryPathText(categories, state.categoryId);
   const accountName = accounts.find((account) => account.id === state.accountId)?.name ?? null;
+  const payerName =
+    state.type === 'EXPENSE'
+      ? state.payerId
+        ? members.find((member) => member.userId === state.payerId)?.user.nickname?.trim() ||
+          members.find((member) => member.userId === state.payerId)?.user.username ||
+          '已选付款人'
+        : '选择付款人'
+      : null;
 
   const handleTimeChange = (value: string): void => {
     const occurredAt = zonedDateTimeInputToIso(value);
@@ -261,6 +274,8 @@ export function BillFormBody({
           <SheetQuickChips
             accountName={accountName}
             onOpenAccountPicker={onOpenAccountPicker}
+            payerName={payerName}
+            onOpenPayerPicker={onOpenPayerPicker}
             attachmentCount={attachmentDrafts.length}
             onOpenAttachmentPicker={onOpenAttachmentPicker}
             attachmentsDisabled={attachmentsDisabled}

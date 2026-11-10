@@ -120,7 +120,13 @@ export function billFormReducer(state: BillFormState, action: BillFormAction): B
     case 'setType':
       // 支出与收入分类不可交叉使用，切换类型必须清空已选分类。
       if (state.type === action.type) return state;
-      return { ...state, type: action.type, categoryId: null, isDirty: true };
+      return {
+        ...state,
+        type: action.type,
+        categoryId: null,
+        payerId: action.type === 'INCOME' ? null : state.payerId,
+        isDirty: true,
+      };
 
     case 'setAmount':
       return { ...state, amountText: action.amountText, isDirty: isDirtyAfter(state, { amountText: action.amountText }) };

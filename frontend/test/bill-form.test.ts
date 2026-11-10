@@ -22,6 +22,12 @@ assert.equal(switched.type, 'INCOME');
 assert.equal(switched.categoryId, null);
 assert.equal(switched.amountText, '0', '切换类型应保留金额');
 
+const switchedWithPayer = billFormReducer(
+  { ...withCategory, payerId: 'user-2' },
+  { kind: 'setType', type: 'INCOME' },
+);
+assert.equal(switchedWithPayer.payerId, null, '收入不应保留实际付款人');
+
 // 同类型重复设置不产生新对象（避免多余渲染）
 assert.equal(billFormReducer(withCategory, { kind: 'setType', type: 'EXPENSE' }), withCategory);
 

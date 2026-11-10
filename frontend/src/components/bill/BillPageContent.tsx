@@ -469,8 +469,6 @@ function BillPageLedger({ currentLedgerId, searchParams }: BillPageLedgerProps):
               <BillDayCard
                 key={group.billDate}
                 group={group}
-                ledgerId={currentLedgerId ?? undefined}
-                userId={currentUser?.id ?? null}
                 onSelectBill={(bill) => setDetailBillId(bill.id)}
               />
             ))}

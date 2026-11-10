@@ -197,6 +197,22 @@ assert.deepEqual(customScope.statistics, {
   toDate: '2026-11-07',
 });
 
+// 当前自然月从统计页下钻时，月末可能是未来日期；统计接口必须继续使用 MONTH。
+const currentMonthDrilldown = withBillFilterDates(
+  createInitialBillFilter(),
+  { fromDate: '2026-11-01', toDate: '2026-11-30' },
+  'Asia/Shanghai',
+);
+const currentMonthScope = resolveBillScope(
+  currentMonthDrilldown,
+  { year: 2026, month: 11 },
+  'Asia/Shanghai',
+);
+assert.deepEqual(currentMonthScope.statistics, {
+  period: 'MONTH',
+  anchorDate: '2026-11-01',
+});
+
 // 本地日期 ↔ UTC 半开区间往返一致。
 assert.deepEqual(billFilterDates(custom, 'Asia/Shanghai'), {
   fromDate: '2026-11-01',

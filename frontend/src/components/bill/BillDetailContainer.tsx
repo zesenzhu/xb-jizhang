@@ -35,6 +35,7 @@ import { useUserAuthStore } from '@/store/userAuthStore';
 import { BillDetailSheet, BillDeleteConfirm } from './BillDetailSheet';
 import { BillFormBody } from './BillFormBody';
 import { AccountPickerSheet } from './AccountPickerSheet';
+import { PayerPickerSheet } from './PayerPickerSheet';
 import { SheetTypeSegment } from './SheetTypeSegment';
 import { X } from 'lucide-react';
 import {
@@ -95,6 +96,7 @@ export function BillDetailContainer({
     enabled: open && editing && Boolean(ledgerId),
   });
   const [accountPickerOpen, setAccountPickerOpen] = React.useState(false);
+  const [payerPickerOpen, setPayerPickerOpen] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [conflict, setConflict] = React.useState(false);
   const [categoryError, setCategoryError] = React.useState(false);
@@ -162,6 +164,10 @@ export function BillDetailContainer({
     [categories, form.type],
   );
   const accounts = accountsQuery.data?.items ?? [];
+  const members = React.useMemo(
+    () => membersQuery.data?.items.filter((member) => member.status === 'ACTIVE') ?? [],
+    [membersQuery.data],
+  );
 
   // 进入编辑态时用详情预填表单；关闭详情时退出编辑并清掉冲突提示。
   const [wasOpen, setWasOpen] = React.useState(open);
@@ -194,7 +200,7 @@ export function BillDetailContainer({
         occurredAt: form.occurredAt,
         categoryId: form.categoryId ?? undefined,
         accountId: form.accountId,
-        payerId: form.payerId,
+        payerId: form.type === 'EXPENSE' ? form.payerId : null,
         title: form.title.trim() || null,
         note: form.note.trim() || null,
       });
@@ -466,6 +472,8 @@ export function BillDetailContainer({
           }}
           accounts={accounts}
           onOpenAccountPicker={() => setAccountPickerOpen(true)}
+          members={members}
+          onOpenPayerPicker={() => setPayerPickerOpen(true)}
           isOnline={isOnline}
           scrollRef={scrollRef}
           primaryText="保存"
@@ -483,6 +491,14 @@ export function BillDetailContainer({
         accounts={accounts}
         selectedId={form.accountId}
         onSelect={(accountId) => dispatch({ kind: 'setAccount', accountId })}
+      />
+
+      <PayerPickerSheet
+        open={payerPickerOpen}
+        onOpenChange={setPayerPickerOpen}
+        members={members}
+        selectedId={form.payerId}
+        onSelect={(payerId) => dispatch({ kind: 'setPayer', payerId })}
       />
 
       <BillDeleteConfirm

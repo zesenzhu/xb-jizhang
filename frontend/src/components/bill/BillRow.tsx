@@ -4,25 +4,20 @@ import { Paperclip } from 'lucide-react';
 import type { TransactionSummary } from '@/lib/api/transaction-types';
 import { billSecondaryText, formatBillTime } from '@/lib/bill/bill-group';
 import { billCreatorName } from '@/lib/bill/bill-creator';
-import { firstAttachedAttachment } from '@/lib/bill/bill-attachments';
 import { CategoryIcon } from './CategoryIcon';
-import { BillAttachmentThumbnail } from './BillAttachmentThumbnail';
 
 export interface BillRowProps {
   bill: TransactionSummary;
-  ledgerId?: string;
-  userId?: string | null;
   onClick?: (bill: TransactionSummary) => void;
 }
 
-export function BillRow({ bill, ledgerId, userId = null, onClick }: BillRowProps): React.JSX.Element {
+export function BillRow({ bill, onClick }: BillRowProps): React.JSX.Element {
   const categoryName = bill.category?.name ?? '未分类';
   const secondary = billSecondaryText(bill);
   const time = formatBillTime(bill.occurredAt);
   const isExpense = bill.type === 'EXPENSE';
   const amountText = formatCentsToYuan(bill.amountCents);
   const creatorName = billCreatorName(bill);
-  const previewAttachment = firstAttachedAttachment(bill.attachments);
 
   return (
     <button
@@ -30,16 +25,7 @@ export function BillRow({ bill, ledgerId, userId = null, onClick }: BillRowProps
       onClick={() => onClick?.(bill)}
       className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-app-card-subtle/60"
     >
-      {previewAttachment && ledgerId ? (
-        <BillAttachmentThumbnail
-          key={previewAttachment.id}
-          ledgerId={ledgerId}
-          userId={userId}
-          attachment={previewAttachment}
-        />
-      ) : (
-        <CategoryIcon name={categoryName} color={bill.category ? undefined : null} size="md" />
-      )}
+      <CategoryIcon name={categoryName} color={bill.category ? undefined : null} size="md" />
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-main">{categoryName}</p>

@@ -1,12 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { ImagePlus, WalletCards } from 'lucide-react';
+import { ImagePlus, UserRound, WalletCards } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface SheetQuickChipsProps {
   accountName: string | null;
   onOpenAccountPicker: () => void;
+  payerName: string | null;
+  onOpenPayerPicker: () => void;
   attachmentCount?: number;
   onOpenAttachmentPicker?: () => void;
   attachmentsDisabled?: boolean;
@@ -19,12 +21,29 @@ export interface SheetQuickChipsProps {
 export function SheetQuickChips({
   accountName,
   onOpenAccountPicker,
+  payerName,
+  onOpenPayerPicker,
   attachmentCount = 0,
   onOpenAttachmentPicker,
   attachmentsDisabled = false,
 }: SheetQuickChipsProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 [scrollbar-width:none]">
+      {payerName !== null && (
+        <button
+          type="button"
+          onClick={onOpenPayerPicker}
+          className={cn(
+            'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors active:scale-95',
+            payerName === '选择付款人'
+              ? 'border-app-border bg-app-card-subtle text-text-muted'
+              : 'border-primary/40 bg-primary/10 text-primary',
+          )}
+        >
+          <UserRound size={12} />
+          {payerName}
+        </button>
+      )}
       <button
         type="button"
         onClick={onOpenAccountPicker}

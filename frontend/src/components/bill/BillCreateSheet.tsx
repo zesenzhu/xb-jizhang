@@ -16,6 +16,7 @@ import { getNoteSuggestions } from '@/lib/api/note-api'
 import { cn } from '@/lib/utils'
 import { getCategories } from '@/lib/api/category-api'
 import { getAccounts } from '@/lib/api/account-api'
+import { getLedgerMembers } from '@/lib/api/member-api'
 import { ApiRequestError } from '@/lib/api/errors'
 import { queryKeys, queryStaleTime } from '@/lib/query/query-config'
 import { parseAmountText } from '@/lib/bill/amount'
@@ -42,6 +43,7 @@ import { BottomSheet } from '@/components/ui/bottom-sheet'
 import { useOfflineStore } from '@/store/offlineStore'
 import { useBillMemoryStore } from '@/store/billMemoryStore'
 import { AccountPickerSheet } from './AccountPickerSheet'
+import { PayerPickerSheet } from './PayerPickerSheet'
 import { BillFormBody } from './BillFormBody'
 import { SheetTypeSegment } from './SheetTypeSegment'
 
@@ -69,6 +71,7 @@ export function BillCreateSheet({
     createInitialBillForm(),
   )
   const [accountPickerOpen, setAccountPickerOpen] = React.useState(false)
+  const [payerPickerOpen, setPayerPickerOpen] = React.useState(false)
   const [confirmDiscard, setConfirmDiscard] = React.useState(false)
   const [wasOpen, setWasOpen] = React.useState(open)
   const [showInactive, setShowInactive] = React.useState(false)
@@ -155,6 +158,13 @@ export function BillCreateSheet({
     enabled: open && Boolean(ledgerId),
   })
 
+  const membersQuery = useQuery({
+    queryKey: queryKeys.members(ledgerId),
+    queryFn: () => getLedgerMembers(ledgerId),
+    staleTime: queryStaleTime.members,
+    enabled: open && Boolean(ledgerId),
+  })
+
   usePersistLedgerSnapshot({
     userId: currentUser?.id ?? null,
     ledgerId,
@@ -180,6 +190,11 @@ export function BillCreateSheet({
     [categories, state.type],
   )
   const accounts = accountsQuery.data?.items ?? cachedAccounts.data?.items ?? []
+  const members = membersQuery.data?.items.filter((member) => member.status === 'ACTIVE') ?? []
+  const selectedPayer =
+    state.type === 'EXPENSE'
+      ? members.find((member) => member.userId === state.payerId) ?? null
+      : null
 
   /**
    * 有效分类 = 用户本次选的，否则回退到「上次用过的 / 该类型第一个」。
@@ -230,7 +245,7 @@ export function BillCreateSheet({
         accountId: state.accountId,
         title: state.title.trim() || null,
         note: state.note.trim() || null,
-        payerId: state.payerId,
+        payerId: state.type === 'EXPENSE' ? state.payerId : null,
       }),
   })
 
@@ -371,7 +386,9 @@ export function BillCreateSheet({
           payload,
           category,
           account,
-          payer: null,
+          payer: selectedPayer
+            ? { id: selectedPayer.userId, nickname: selectedPayer.user.nickname }
+            : null,
           attachments: offlineAttachments,
           now,
         })
@@ -385,7 +402,7 @@ export function BillCreateSheet({
         remember(ledgerId, state.type, {
           categoryId: effectiveCategoryId,
           accountId: state.accountId,
-          payerId: state.payerId,
+          payerId: state.type === 'EXPENSE' ? state.payerId : null,
         })
         clearUploadedAttachments()
         dispatch({
@@ -542,6 +559,8 @@ export function BillCreateSheet({
           }}
           accounts={accounts}
           onOpenAccountPicker={() => setAccountPickerOpen(true)}
+          members={members}
+          onOpenPayerPicker={() => setPayerPickerOpen(true)}
           isOnline={isOnline}
           scrollRef={scrollRef}
           primaryText="完成"
@@ -594,6 +613,14 @@ export function BillCreateSheet({
         accounts={accounts}
         selectedId={state.accountId}
         onSelect={(accountId) => dispatch({ kind: 'setAccount', accountId })}
+      />
+
+      <PayerPickerSheet
+        open={payerPickerOpen}
+        onOpenChange={setPayerPickerOpen}
+        members={members}
+        selectedId={state.payerId}
+        onSelect={(payerId) => dispatch({ kind: 'setPayer', payerId })}
       />
 
       <BottomSheet

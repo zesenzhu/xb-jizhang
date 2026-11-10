@@ -28,16 +28,17 @@ export function BillAttachmentGallery({
   const [resolvedUrls, setResolvedUrls] = React.useState<Record<string, string>>({});
   const autoRefreshAttemptedIds = React.useRef<Set<string>>(new Set());
   const loadingPreviewIds = React.useRef<Set<string>>(new Set());
+  const mountedRef = React.useRef(false);
 
   React.useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
     const pendingIds = attachmentIdsNeedingUrl(attachments, new Set(Object.keys(resolvedUrls)));
     for (const attachmentId of pendingIds) {
       if (loadingPreviewIds.current.has(attachmentId)) continue;
       loadingPreviewIds.current.add(attachmentId);
       void onRefreshUrl(attachmentId)
         .then((url) => {
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           setResolvedUrls((current) => ({ ...current, [attachmentId]: url }));
           setFailedIds((current) => {
             const next = new Set(current);
@@ -50,7 +51,7 @@ export function BillAttachmentGallery({
     }
 
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
   }, [attachments, onRefreshUrl, resolvedUrls]);
 

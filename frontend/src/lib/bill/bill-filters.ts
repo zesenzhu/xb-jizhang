@@ -256,6 +256,18 @@ export function withBillFilterDates(
   };
 }
 
+function fullMonthStatistics(
+  fromDate: string,
+  toDate: string,
+  month: BillFilterMonth,
+): StatisticsQuery | null {
+  const monthStart = `${month.year}-${String(month.month).padStart(2, '0')}-01`;
+  const lastDay = new Date(Date.UTC(month.year, month.month, 0)).getUTCDate();
+  const monthEnd = `${month.year}-${String(month.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  if (fromDate !== monthStart || toDate !== monthEnd) return null;
+  return { period: 'MONTH', anchorDate: monthStart };
+}
+
 /**
  * 条件胶囊。
  *
@@ -343,7 +355,14 @@ export function resolveBillScope(
       to: filter.to,
       isCustomRange: true,
       rangeLabel: `${fromDate} 至 ${toDate}`,
-      statistics: { period: 'RANGE', fromDate, toDate },
+      // 统计页当前自然月的下钻范围会覆盖到月末，月底可能还未到。
+      // 用 MONTH 保留服务端允许的「当前月含未来空日期」语义，避免把它变成非法 RANGE。
+      statistics:
+        fullMonthStatistics(fromDate, toDate, month) ?? {
+          period: 'RANGE',
+          fromDate,
+          toDate,
+        },
     };
   }
 
