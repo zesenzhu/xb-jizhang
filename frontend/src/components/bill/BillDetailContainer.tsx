@@ -17,7 +17,6 @@ import {
   updateTransaction,
 } from '@/lib/api/transaction-api';
 import { getNoteSuggestions } from '@/lib/api/note-api';
-import type { TransactionSummary } from '@/lib/api/transaction-types';
 import { getLedgerMembers } from '@/lib/api/member-api';
 import { getCategories } from '@/lib/api/category-api';
 import { getAccounts } from '@/lib/api/account-api';
@@ -112,6 +111,7 @@ export function BillDetailContainer({
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const attachmentInputRef = React.useRef<HTMLInputElement | null>(null);
   const attachmentObjectUrlsRef = React.useRef<Set<string>>(new Set());
+  const detailOpenRef = React.useRef(open);
 
   const clearAttachmentDrafts = React.useCallback((): void => {
     setAttachmentDrafts((drafts) => {
@@ -126,6 +126,15 @@ export function BillDetailContainer({
     clearAttachmentDrafts();
     setEditing(false);
   }, [clearAttachmentDrafts]);
+
+  React.useEffect(() => {
+    detailOpenRef.current = open;
+  }, [open]);
+
+  const revokeAttachmentObjectUrls = React.useCallback((): void => {
+    for (const objectUrl of attachmentObjectUrlsRef.current) URL.revokeObjectURL(objectUrl);
+    attachmentObjectUrlsRef.current.clear();
+  }, []);
 
   // 详情不缓存：编辑后必须立刻看到新值。
   const detailQuery = useQuery({
@@ -159,10 +168,10 @@ export function BillDetailContainer({
   const bill = detailQuery.data;
   const attachments = bill?.attachments ?? [];
 
-  React.useEffect(() => () => {
-    for (const objectUrl of attachmentObjectUrlsRef.current) URL.revokeObjectURL(objectUrl);
-    attachmentObjectUrlsRef.current.clear();
-  }, []);
+  React.useEffect(() => {
+    if (!open) revokeAttachmentObjectUrls();
+  }, [open, revokeAttachmentObjectUrls]);
+  React.useEffect(() => revokeAttachmentObjectUrls, [revokeAttachmentObjectUrls]);
   const directory = React.useMemo(
     () => buildMemberDirectory(membersQuery.data?.items ?? []),
     [membersQuery.data],
@@ -374,6 +383,10 @@ export function BillDetailContainer({
       const cachedBlob = await readAttachmentBlob(currentUser.id, ledgerId, attachmentId).catch(() => null);
       if (cachedBlob) {
         const objectUrl = URL.createObjectURL(cachedBlob);
+        if (!detailOpenRef.current) {
+          URL.revokeObjectURL(objectUrl);
+          throw new Error('账单详情已关闭');
+        }
         attachmentObjectUrlsRef.current.add(objectUrl);
         return objectUrl;
       }
@@ -412,40 +425,16 @@ export function BillDetailContainer({
           createdAt: now,
         }).catch(() => undefined);
         const objectUrl = URL.createObjectURL(blob);
+        if (!detailOpenRef.current) {
+          URL.revokeObjectURL(objectUrl);
+          throw new Error('账单详情已关闭');
+        }
         attachmentObjectUrlsRef.current.add(objectUrl);
-        queryClient.setQueryData<TransactionSummary>(
-          queryKeys.transactions.detail(ledgerId, billId ?? ''),
-          (current) => current
-            ? {
-                ...current,
-                attachments: current.attachments?.map((item) =>
-                  item.id === attachmentId
-                    ? { ...item, accessUrl: objectUrl, accessUrlExpiresAt: undefined }
-                    : item,
-                ),
-              }
-            : current,
-        );
         return objectUrl;
       }
     }
-    queryClient.setQueryData<TransactionSummary>(queryKeys.transactions.detail(ledgerId, billId ?? ''), (current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        attachments: current.attachments?.map((attachment) => (
-          attachment.id === attachmentId
-            ? {
-                ...attachment,
-                accessUrl: result.accessUrl,
-                accessUrlExpiresAt: result.accessUrlExpiresAt,
-              }
-            : attachment
-        )),
-      };
-    });
     return result.accessUrl;
-  }, [bill, billId, currentUser, ledgerId, queryClient]);
+  }, [bill, currentUser, ledgerId]);
 
   const removeAttachment = async (attachment: TransactionAttachmentSummary): Promise<void> => {
     if (!window.confirm('确定移除这张图片吗？')) return;

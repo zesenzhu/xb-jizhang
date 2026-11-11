@@ -12,6 +12,7 @@ const attachment = (
   id: string,
   status: TransactionAttachmentSummary['status'] = 'ATTACHED',
   accessUrl?: string,
+  accessUrlExpiresAt?: string,
 ): TransactionAttachmentSummary => ({
   id,
   status,
@@ -20,6 +21,7 @@ const attachment = (
   sizeBytes: 10,
   originalName: `${id}.jpg`,
   ...(accessUrl ? { accessUrl } : {}),
+  ...(accessUrlExpiresAt ? { accessUrlExpiresAt } : {}),
   createdAt: '2026-11-10T08:00:00.000Z',
 });
 
@@ -40,6 +42,15 @@ assert.deepEqual(
   attachmentIdsNeedingUrl([attachment('ready'), attachment('other')], new Set(['ready'])),
   ['other'],
 );
+assert.deepEqual(
+  attachmentIdsNeedingUrl([
+    attachment('blob', 'ATTACHED', 'blob:https://app.example/old-url'),
+    attachment('expired', 'ATTACHED', 'https://cdn.example/expired', '2020-01-01T00:00:00.000Z'),
+    attachment('fresh', 'ATTACHED', 'https://cdn.example/fresh', '2099-01-01T00:00:00.000Z'),
+  ]),
+  ['blob', 'expired'],
+  '详情重新打开时不得复用历史 blob URL 或过期签名地址',
+);
 assert.equal(firstAttachedAttachment([attachment('pending', 'PENDING'), attachment('ready')])?.id, 'ready');
 assert.equal(firstAttachedAttachment([attachment('pending', 'PENDING')]), undefined);
 
@@ -54,5 +65,9 @@ assert.match(
   '字段保存成功后必须上传新增附件',
 );
 assert.ok(detailContainer.includes('onRetryAttachments'), '附件上传失败后必须保留重试入口');
+assert.ok(
+  !detailContainer.includes('queryClient.setQueryData<TransactionSummary>'),
+  '附件临时访问地址不得写回账单详情缓存',
+);
 
 console.log('bill attachments contract passed');
