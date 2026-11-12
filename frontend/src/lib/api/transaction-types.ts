@@ -1,5 +1,6 @@
 import type { ApiSuccessResponse } from './auth-types';
 import type { TransactionAttachmentSummary } from './attachment-types';
+import type { CategoryIconSource } from './category-types';
 
 export type TransactionType = 'EXPENSE' | 'INCOME';
 
@@ -8,6 +9,15 @@ export interface TransactionCategoryRef {
   type: string;
   name: string;
   parentId: string | null;
+  /** 分类图标字段与分类列表/统计保持一致；旧接口响应可能暂时缺失。 */
+  icon?: string | null;
+  iconSource?: CategoryIconSource | null;
+  iconKey?: string | null;
+  iconAssetId?: string | null;
+  defaultKey?: string | null;
+  iconUrl?: string | null;
+  iconUrlExpiresAt?: string | null;
+  color?: string | null;
 }
 
 export interface TransactionAccountRef {

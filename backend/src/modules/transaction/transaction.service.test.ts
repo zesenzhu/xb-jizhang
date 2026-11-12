@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { CategoryIconService } from '../category-icon/category-icon.service';
 import { TransactionService } from './transaction.service';
 
 describe('TransactionService', () => {
@@ -61,6 +62,7 @@ describe('TransactionService', () => {
   };
 
   const createService = () => {
+    const categoryIconService = { getBoundIconUrl: jest.fn() };
     const transactionClient = {
       transaction: {
         findUnique: jest.fn(),
@@ -93,7 +95,11 @@ describe('TransactionService', () => {
     return {
       prisma,
       transactionClient,
-      service: new TransactionService(prisma as unknown as PrismaService),
+      categoryIconService,
+      service: new TransactionService(
+        prisma as unknown as PrismaService,
+        categoryIconService as unknown as CategoryIconService,
+      ),
     };
   };
 
@@ -279,6 +285,78 @@ describe('TransactionService', () => {
         createdBy: expect.objectContaining({ id: userId, username: 'xiaobao', nickname: '小宝' }),
       }),
     );
+  });
+
+  it('给定账单分类带有图标元数据，当查询详情，则返回完整分类图标字段', async () => {
+    const dependencies = createService();
+    const categoryWithIcon = {
+      ...category,
+      icon: 'tabler:bowl',
+      iconSource: 'LIBRARY',
+      iconKey: 'tabler:bowl',
+      iconAssetId: null,
+      defaultKey: 'expense.food.lunch',
+      color: '#F97316',
+    };
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue({
+      ...transaction,
+      category: categoryWithIcon,
+    });
+
+    const result = await dependencies.service.getDetail(userId, ledgerId, transactionId);
+    const select = dependencies.prisma.transaction.findFirst.mock.calls[0][0].select;
+
+    expect(select.category.select).toEqual(expect.objectContaining({
+      icon: true,
+      iconSource: true,
+      iconKey: true,
+      iconAssetId: true,
+      defaultKey: true,
+      color: true,
+    }));
+    expect(result.category).toEqual(expect.objectContaining({
+      iconSource: 'LIBRARY',
+      iconKey: 'tabler:bowl',
+      color: '#F97316',
+      iconUrl: null,
+      iconUrlExpiresAt: null,
+    }));
+  });
+
+  it('给定分类使用图片图标且资源可读取，当查询账单详情，则返回短期图标地址', async () => {
+    const dependencies = createService();
+    const expiresAt = new Date('2026-11-12T08:05:00.000Z');
+    dependencies.categoryIconService.getBoundIconUrl.mockResolvedValue({
+      url: 'https://storage.example/category.png',
+      expiresAt,
+    });
+    dependencies.prisma.ledgerMember.findUnique.mockResolvedValue({ role: 'VIEWER', status: 'ACTIVE' });
+    dependencies.prisma.transaction.findFirst.mockResolvedValue({
+      ...transaction,
+      category: {
+        ...category,
+        icon: null,
+        iconSource: 'IMAGE',
+        iconKey: null,
+        iconAssetId: 'asset-1',
+        defaultKey: null,
+        color: '#F97316',
+      },
+    });
+
+    const result = await dependencies.service.getDetail(userId, ledgerId, transactionId);
+
+    expect(dependencies.categoryIconService.getBoundIconUrl).toHaveBeenCalledWith(
+      userId,
+      ledgerId,
+      'asset-1',
+    );
+    expect(result.category).toEqual(expect.objectContaining({
+      iconSource: 'IMAGE',
+      iconUrl: 'https://storage.example/category.png',
+      iconUrlExpiresAt: expiresAt,
+    }));
   });
 
   it('给定账单不存在或不属于当前账本，当查询详情，则返回资源不存在', async () => {

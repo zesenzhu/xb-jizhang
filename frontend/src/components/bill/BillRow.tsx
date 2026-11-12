@@ -25,7 +25,17 @@ export function BillRow({ bill, onClick }: BillRowProps): React.JSX.Element {
       onClick={() => onClick?.(bill)}
       className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-app-card-subtle/60"
     >
-      <CategoryIcon name={categoryName} color={bill.category ? undefined : null} size="md" />
+      <CategoryIcon
+        name={categoryName}
+        icon={bill.category?.icon}
+        iconSource={bill.category?.iconSource}
+        iconKey={bill.category?.iconKey}
+        iconAssetId={bill.category?.iconAssetId}
+        iconUrl={bill.category?.iconUrl}
+        iconUrlExpiresAt={bill.category?.iconUrlExpiresAt}
+        color={bill.category?.color ?? (bill.category ? undefined : null)}
+        size="md"
+      />
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-main">{categoryName}</p>

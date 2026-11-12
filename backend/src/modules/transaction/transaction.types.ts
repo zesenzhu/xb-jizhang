@@ -1,4 +1,4 @@
-import type { TransactionType } from '@prisma/client';
+import type { CategoryIconSource, TransactionType } from '@prisma/client';
 
 export interface CreateTransactionInput {
   clientRequestId: string;
@@ -78,7 +78,20 @@ export interface TransactionSummary {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  category: { id: string; type: string; name: string; parentId: string | null } | null;
+  category: {
+    id: string;
+    type: string;
+    name: string;
+    parentId: string | null;
+    icon: string | null;
+    iconSource: CategoryIconSource;
+    iconKey: string | null;
+    iconAssetId: string | null;
+    defaultKey: string | null;
+    iconUrl: string | null;
+    iconUrlExpiresAt: Date | null;
+    color: string | null;
+  } | null;
   account: { id: string; name: string; visibility: string } | null;
   payer: { id: string; nickname: string | null } | null;
 }

@@ -19,6 +19,7 @@ export interface BillDetailView {
   isExpense: boolean;
   signedAmount: string;
   categoryName: string;
+  categoryIcon: TransactionSummary['category'];
   /** 发生时间、账户、商家、备注、付款人；只包含有值的项 */
   facts: BillDetailField[];
   /** 记账人、最后修改人、创建时间、更新时间 */
@@ -97,6 +98,7 @@ export function toBillDetailView(
     // 金额带符号：支出为负，收入为正；符号与账单行一致。
     signedAmount: `${isExpense ? '-' : '+'}¥${formatCentsToYuan(bill.amountCents)}`,
     categoryName: bill.category?.name ?? '未分类',
+    categoryIcon: bill.category,
     facts,
     audit,
   };

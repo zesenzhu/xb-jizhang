@@ -125,13 +125,25 @@ export function BillDetailSheet({
                 {view.signedAmount}
               </p>
               <p className="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-text-muted">
-                <CategoryIcon name={view.categoryName} size="sm" />
+                <CategoryIcon
+                  name={view.categoryName}
+                  icon={view.categoryIcon?.icon}
+                  iconSource={view.categoryIcon?.iconSource}
+                  iconKey={view.categoryIcon?.iconKey}
+                  iconAssetId={view.categoryIcon?.iconAssetId}
+                  iconUrl={view.categoryIcon?.iconUrl}
+                  iconUrlExpiresAt={view.categoryIcon?.iconUrlExpiresAt}
+                  color={view.categoryIcon?.color ?? null}
+                  size="sm"
+                />
                 {view.categoryName}
               </p>
             </div>
 
             <BillDetailFields view={view} />
             <BillAttachmentGallery
+              key={open ? 'open' : 'closed'}
+              open={open}
               attachments={attachments}
               canDelete={canEdit}
               deletingId={deletingAttachmentId}

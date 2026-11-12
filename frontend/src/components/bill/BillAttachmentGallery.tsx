@@ -7,6 +7,7 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { attachmentIdsNeedingUrl } from '@/lib/bill/bill-attachments';
 
 export interface BillAttachmentGalleryProps {
+  open: boolean;
   attachments: readonly TransactionAttachmentSummary[];
   canDelete: boolean;
   deletingId: string | null;
@@ -15,6 +16,7 @@ export interface BillAttachmentGalleryProps {
 }
 
 export function BillAttachmentGallery({
+  open,
   attachments,
   canDelete,
   deletingId,
@@ -28,10 +30,23 @@ export function BillAttachmentGallery({
   const [resolvedUrls, setResolvedUrls] = React.useState<Record<string, string>>({});
   const autoRefreshAttemptedIds = React.useRef<Set<string>>(new Set());
   const loadingPreviewIds = React.useRef<Set<string>>(new Set());
+  const previewRequestId = React.useRef(0);
   const mountedRef = React.useRef(false);
+
+  const closeViewer = React.useCallback((): void => {
+    previewRequestId.current += 1;
+    autoRefreshAttemptedIds.current.clear();
+    setViewer(null);
+    setViewerUrl(null);
+    setLoadingId(null);
+    setFailedIds(new Set());
+  }, []);
 
   React.useEffect(() => {
     mountedRef.current = true;
+    if (!open) return () => {
+      mountedRef.current = false;
+    };
     const pendingIds = attachmentIdsNeedingUrl(attachments, new Set(Object.keys(resolvedUrls)));
     for (const attachmentId of pendingIds) {
       if (loadingPreviewIds.current.has(attachmentId)) continue;
@@ -53,31 +68,41 @@ export function BillAttachmentGallery({
     return () => {
       mountedRef.current = false;
     };
-  }, [attachments, onRefreshUrl, resolvedUrls]);
+  }, [attachments, onRefreshUrl, open, resolvedUrls]);
 
   if (attachments.length === 0) return null;
 
   const openViewer = async (attachment: TransactionAttachmentSummary): Promise<void> => {
+    const requestId = ++previewRequestId.current;
+    autoRefreshAttemptedIds.current.delete(attachment.id);
+    setFailedIds((current) => {
+      const next = new Set(current);
+      next.delete(attachment.id);
+      return next;
+    });
     setViewer(attachment);
     setViewerUrl(null);
     setLoadingId(attachment.id);
     try {
       const url = await onRefreshUrl(attachment.id);
+      if (previewRequestId.current !== requestId) return;
       setResolvedUrls((current) => ({ ...current, [attachment.id]: url }));
       setViewerUrl(url);
     } catch {
-      setViewerUrl(null);
+      if (previewRequestId.current === requestId) setViewerUrl(null);
     } finally {
-      setLoadingId(null);
+      if (previewRequestId.current === requestId) setLoadingId(null);
     }
   };
 
   const refreshViewer = async (): Promise<void> => {
     if (!viewer) return;
+    const requestId = ++previewRequestId.current;
     autoRefreshAttemptedIds.current.delete(viewer.id);
     setLoadingId(viewer.id);
     try {
       const url = await onRefreshUrl(viewer.id);
+      if (previewRequestId.current !== requestId) return;
       setResolvedUrls((current) => ({ ...current, [viewer.id]: url }));
       setViewerUrl(url);
       setFailedIds((current) => {
@@ -86,9 +111,9 @@ export function BillAttachmentGallery({
         return next;
       });
     } catch {
-      setViewerUrl(null);
+      if (previewRequestId.current === requestId) setViewerUrl(null);
     } finally {
-      setLoadingId(null);
+      if (previewRequestId.current === requestId) setLoadingId(null);
     }
   };
 
@@ -96,15 +121,28 @@ export function BillAttachmentGallery({
     setFailedIds((current) => new Set(current).add(attachmentId));
     if (autoRefreshAttemptedIds.current.has(attachmentId)) return;
     autoRefreshAttemptedIds.current.add(attachmentId);
+    const requestId = previewRequestId.current;
+    if (viewer?.id === attachmentId) {
+      setViewerUrl(null);
+      setLoadingId(attachmentId);
+    }
     void onRefreshUrl(attachmentId).then((url) => {
+      if (previewRequestId.current !== requestId) return;
       setResolvedUrls((current) => ({ ...current, [attachmentId]: url }));
       setFailedIds((current) => {
         const next = new Set(current);
         next.delete(attachmentId);
         return next;
       });
-      if (viewer?.id === attachmentId) setViewerUrl(url);
-    }).catch(() => undefined);
+      if (viewer?.id === attachmentId) {
+        setViewerUrl(url);
+        setLoadingId(null);
+      }
+    }).catch(() => {
+      if (viewer?.id === attachmentId && previewRequestId.current === requestId) {
+        setLoadingId(null);
+      }
+    });
   };
 
   return (
@@ -155,10 +193,7 @@ export function BillAttachmentGallery({
       <BottomSheet
         open={viewer !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setViewer(null);
-            setViewerUrl(null);
-          }
+          if (!open) closeViewer();
         }}
         layer="nested"
         variant="full"
@@ -169,7 +204,7 @@ export function BillAttachmentGallery({
             <button
               type="button"
               aria-label="关闭图片预览"
-              onClick={() => setViewer(null)}
+              onClick={closeViewer}
               className="flex size-8 items-center justify-center rounded-full bg-white/10"
             >
               <X size={16} />
@@ -177,13 +212,18 @@ export function BillAttachmentGallery({
           </div>
           <div
             className="flex min-h-0 flex-1 items-center justify-center p-4"
-            onErrorCapture={() => {
-              if (viewer) handleImageError(viewer.id);
-            }}
           >
             {loadingId === viewer?.id && <Loader2 size={28} className="animate-spin text-white" />}
             {loadingId !== viewer?.id && viewerUrl && (
-              <img src={viewerUrl} alt={viewer?.originalName ?? '图片附件'} className="max-h-full max-w-full object-contain" />
+              <img
+                key={`${viewer?.id}:${viewerUrl}`}
+                src={viewerUrl}
+                alt={viewer?.originalName ?? '图片附件'}
+                className="max-h-full max-w-full object-contain"
+                onError={() => {
+                  if (viewer) handleImageError(viewer.id);
+                }}
+              />
             )}
             {loadingId !== viewer?.id && !viewerUrl && (
               <div className="text-center text-sm text-white/80">

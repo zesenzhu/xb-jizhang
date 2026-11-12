@@ -70,4 +70,14 @@ assert.ok(
   '附件临时访问地址不得写回账单详情缓存',
 );
 
+const galleryPath = fileURLToPath(new URL('../src/components/bill/BillAttachmentGallery.tsx', import.meta.url));
+const gallery = readFileSync(join(galleryPath), 'utf8');
+assert.ok(gallery.includes('const previewRequestId = React.useRef(0);'), '预览请求需要有序号，避免关闭后的异步结果回写');
+assert.ok(gallery.includes('autoRefreshAttemptedIds.current.clear();'), '关闭预览时应清理图片失败重试状态');
+assert.ok(gallery.includes('key={`${viewer?.id}:${viewerUrl}`}'), '预览图片需要强制重建节点，避免移动端复用失效图片节点');
+assert.ok(gallery.includes('if (!open) closeViewer();'), '预览 BottomSheet 关闭时应统一清理预览状态');
+const detailSheetPath = fileURLToPath(new URL('../src/components/bill/BillDetailSheet.tsx', import.meta.url));
+const detailSheet = readFileSync(join(detailSheetPath), 'utf8');
+assert.ok(detailSheet.includes("key={open ? 'open' : 'closed'}"), '详情关闭后不得继续复用已被父容器释放的 Blob URL');
+
 console.log('bill attachments contract passed');

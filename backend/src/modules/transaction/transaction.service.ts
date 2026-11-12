@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Temporal } from '@js-temporal/polyfill';
 import type { TransactionType } from '@prisma/client';
+import { CategoryIconService } from '../category-icon/category-icon.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateTransactionInput,
@@ -45,7 +47,20 @@ const transactionScalarSelect = {
 const transactionSelect = {
   ...transactionScalarSelect,
   createdBy: { select: { id: true, username: true, nickname: true, avatar: true } },
-  category: { select: { id: true, type: true, name: true, parentId: true } },
+  category: {
+    select: {
+      id: true,
+      type: true,
+      name: true,
+      parentId: true,
+      icon: true,
+      iconSource: true,
+      iconKey: true,
+      iconAssetId: true,
+      defaultKey: true,
+      color: true,
+    },
+  },
   account: { select: { id: true, name: true, visibility: true } },
   payer: { select: { id: true, nickname: true } },
   attachments: {
@@ -81,7 +96,10 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly categoryIconService?: CategoryIconService,
+  ) {}
 
   async create(
     userId: string,
@@ -99,7 +117,7 @@ export class TransactionService {
     const normalizedNote = this.normalizeOptionalText(input.note);
 
     const existing = await this.findByClientRequestId(ledgerId, input.clientRequestId);
-    if (existing) return this.toSummary(existing);
+    if (existing) return this.toSummary(existing, userId);
 
     if (input.accountId) {
       const account = await this.findWritableAccount(userId, ledgerId, input.accountId);
@@ -161,11 +179,11 @@ export class TransactionService {
         return createdTransaction.id;
       });
 
-      return this.toSummary(await this.readDetailRecord(userId, ledgerId, created));
+      return this.toSummary(await this.readDetailRecord(userId, ledgerId, created), userId);
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const concurrent = await this.findByClientRequestId(ledgerId, input.clientRequestId);
-        if (concurrent) return this.toSummary(concurrent);
+        if (concurrent) return this.toSummary(concurrent, userId);
         throw this.idempotencyConflictException();
       }
       throw error;
@@ -176,7 +194,7 @@ export class TransactionService {
     const member = await this.getMembership(userId, ledgerId);
     if (!member || member.status !== 'ACTIVE') throw this.notFoundException();
     const record = await this.readDetailRecord(userId, ledgerId, transactionId);
-    return this.toSummary(record);
+    return this.toSummary(record, userId);
   }
 
   /**
@@ -290,7 +308,7 @@ export class TransactionService {
       });
       return transactionId;
     });
-    return this.toSummary(await this.readDetailRecord(userId, ledgerId, updatedId));
+    return this.toSummary(await this.readDetailRecord(userId, ledgerId, updatedId), userId);
   }
 
   /**
@@ -310,7 +328,7 @@ export class TransactionService {
     if (member.role === 'VIEWER' || (member.role === 'EDITOR' && current.createdById !== userId)) {
       throw this.forbiddenException();
     }
-    if (current.deletedAt) return this.toSummary(current);
+    if (current.deletedAt) return this.toSummary(current, userId);
     if (version !== current.version) throw this.conflictException();
 
     const deletedId = await this.prisma.$transaction(async (transaction) => {
@@ -338,7 +356,10 @@ export class TransactionService {
       });
       return transactionId;
     });
-    return this.toSummary(await this.readDetailRecord(userId, ledgerId, deletedId, undefined, true));
+    return this.toSummary(
+      await this.readDetailRecord(userId, ledgerId, deletedId, undefined, true),
+      userId,
+    );
   }
 
   /**
@@ -449,7 +470,7 @@ export class TransactionService {
     ]);
 
     return {
-      items: transactions.map((item) => this.toSummary(item)),
+      items: await Promise.all(transactions.map((item) => this.toSummary(item, userId))),
       total,
       page,
       pageSize,
@@ -572,10 +593,31 @@ export class TransactionService {
     };
   }
 
-  private toSummary(record: TransactionRecord): TransactionSummary {
+  private async toSummary(record: TransactionRecord, userId: string): Promise<TransactionSummary> {
     const { _count, ...summary } = record;
+    // Prisma 查询始终带回图标元数据；类型断言同时保留旧测试/旧数据响应的兼容降级。
+    let category = record.category as TransactionSummary['category'];
+    if (category && 'iconSource' in category) {
+      let iconUrl: string | null = null;
+      let iconUrlExpiresAt: Date | null = null;
+      if (
+        category.iconSource === 'IMAGE' &&
+        category.iconAssetId &&
+        this.categoryIconService
+      ) {
+        const signed = await this.categoryIconService.getBoundIconUrl(
+          userId,
+          record.ledgerId,
+          category.iconAssetId,
+        );
+        iconUrl = signed?.url ?? null;
+        iconUrlExpiresAt = signed?.expiresAt ?? null;
+      }
+      category = { ...category, iconUrl, iconUrlExpiresAt };
+    }
     return {
       ...summary,
+      category,
       attachmentCount: _count?.attachments ?? summary.attachments?.length ?? 0,
     };
   }
